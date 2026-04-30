@@ -9,7 +9,7 @@
     },
     {
       "id": 2,
-      "prompt": "can you check this page for me? https://www.pawsvip.com/services/dog-grooming — I want to know if the content is good enough to rank",
+      "prompt": "can you check this page for me? https://www.examplepetcare.com/services/dog-grooming — I want to know if the content is good enough to rank",
       "expected_output": "A comprehensive page analysis with E-E-A-T scores, search intent analysis (transactional intent for service page), content quality assessment, competitive comparison, and specific fixes",
       "files": []
     },

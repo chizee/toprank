@@ -42,7 +42,7 @@ Runtime state lives **outside the repo** under `~/.toprank/openclaw` by default.
 ├── portfolio.json
 ├── schedule.json
 └── sites/
-    ├── pawsvip.com/
+    ├── example.com/
     │   ├── site-profile.json
     │   ├── goals.json
     │   ├── latest-state.json
@@ -51,7 +51,7 @@ Runtime state lives **outside the repo** under `~/.toprank/openclaw` by default.
     │   ├── proposals/
     │   ├── runs/
     │   └── feedback/
-    └── bestpettravel.com/
+    └── example-service.com/
         └── ...
 ```
 
