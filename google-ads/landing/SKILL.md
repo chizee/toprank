@@ -1,6 +1,6 @@
 ---
-name: ads-landing
-description: Score and diagnose Google Ads landing pages. Use when asked to audit a landing page, check landing page quality, diagnose high-CTR but low-conversion-rate ad groups, improve Quality Score's Landing Page Experience component, or compare an ad group's messaging against its landing page. Trigger on "landing page audit", "landing page score", "landing page quality", "why is my conversion rate low", "LPX", "landing page experience", "ad to page match", or when `/ads-audit` surfaces a high-CTR / low-CVR ad group.
+name: google-ads-landing
+description: Score and diagnose Google Ads landing pages. Use when asked to audit a landing page, check landing page quality, diagnose high-CTR but low-conversion-rate ad groups, improve Quality Score's Landing Page Experience component, or compare an ad group's messaging against its landing page. Trigger on "landing page audit", "landing page score", "landing page quality", "why is my conversion rate low", "LPX", "landing page experience", "ad to page match", or when `/google-ads-audit` surfaces a high-CTR / low-CVR ad group.
 argument-hint: "<landing page URL or ad group name>"
 ---
 
@@ -12,12 +12,12 @@ Read and follow `../shared/preamble.md` — it handles MCP detection, token, and
 
 Google Ads campaigns fail on the landing page more often than in the auction. A great RSA that sends traffic to a slow, unfocused, or mismatched page burns budget twice — once on the click, once on the lost conversion. This skill scores landing pages on **5 weighted dimensions** and emits concrete fixes.
 
-Only score pages that actually run ad traffic. Don't score random marketing pages. Run this on direct request, on auto-handoff from `/ads-audit` (high-CTR / low-CVR ad groups), when QS diagnosis flags "Landing Page Experience: Below Average", or as a preflight before `/ads-copy` writes new copy for a page nobody's validated.
+Only score pages that actually run ad traffic. Don't score random marketing pages. Run this on direct request, on auto-handoff from `/google-ads-audit` (high-CTR / low-CVR ad groups), when QS diagnosis flags "Landing Page Experience: Below Average", or as a preflight before `/google-ads-copy` writes new copy for a page nobody's validated.
 
 ## Reference
 
 - `references/scoring-rubric.md` — the 5-dimension weighted rubric, thresholds, and evidence fields. Read before scoring.
-- `../ads/references/quality-score-framework.md` — only when the user's explicit goal is QS improvement.
+- `../manage/references/quality-score-framework.md` — only when the user's explicit goal is QS improvement.
 
 ## Phase 1: Resolve the target pages
 
@@ -25,7 +25,7 @@ Figure out which URLs to score. In priority order:
 
 1. **User supplied a URL** — score that page, skip discovery.
 2. **User supplied an ad group or campaign name** — `runScript` a GAQL query against `ad_group_ad` filtered to that ad group; extract unique `final_urls`. Normalize (strip tracking params, preserve path + query that affects routing).
-3. **Auto-handoff from `/ads-audit`** — the handoff passes the specific ad groups flagged. Pull their final URLs the same way.
+3. **Auto-handoff from `/google-ads-audit`** — the handoff passes the specific ad groups flagged. Pull their final URLs the same way.
 4. **No arguments** — `runScript` an `ad_group_ad` query across the account ranking final URLs by last-30-day spend, propose the top 3, ask the user to confirm.
 
 **De-duplicate aggressively.** Many ads point to the same final URL — score each unique URL once, then map back to every ad group that uses it.
@@ -37,7 +37,7 @@ Do all of these in a single tool-use turn:
 1. **WebFetch the landing page** — capture visible headline, subheadline, primary CTA text, form fields, trust signals, body copy tone. Capture the full HTML so we can spot script bloat and above-the-fold content.
 2. **PageSpeed Insights API call** — `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={url}&strategy=mobile&category=performance&category=accessibility&category=best-practices&category=seo` via WebFetch. No API key needed for single-URL queries. Extract LCP, CLS, INP, TTI, performance score, and the top 3 opportunities from `lighthouseResult.audits`.
 3. **Pull the referring ad copy and the ad group's conversion metrics** — one `runScript` call with `ads.gaqlParallel` against `ad_group_ad` (for headline/description text — the message-match baseline) and `ad_group` or `keyword_view` (for clicks, conversions, CVR — used to ground the dollar-impact estimate). One call covers both.
-4. **Read `{data_dir}/business-context.json`** — for brand voice, differentiators, offers, target audience. If missing, point the user to `/ads-audit` first. Don't guess the business.
+4. **Read `{data_dir}/business-context.json`** — for brand voice, differentiators, offers, target audience. If missing, point the user to `/google-ads-audit` first. Don't guess the business.
 
 If any single call fails, continue — note the gap in the report rather than blocking. PageSpeed Insights can rate-limit; if it does, fall back to a manual timing annotation ("PSI unavailable — could not score Page Speed") and deflate the final report's confidence rather than skipping the dimension.
 
@@ -105,7 +105,7 @@ Observation: [Match / Drift / Broken] — [one-line rationale citing the specifi
 ## Handoff
 [Pick one:]
 - Page speed dominates the problem → "Share these fixes with your developer: [list]"
-- Message mismatch dominates → "Run /ads-copy to rewrite ads to match the page, or update the page to match the ads"
+- Message mismatch dominates → "Run /google-ads-copy to rewrite ads to match the page, or update the page to match the ads"
 - Form friction dominates → "Reduce form to [specific fields]. Every removed field is ~10% more conversions"
 ```
 
@@ -150,6 +150,6 @@ Append the score to `{data_dir}/landing-page-history.json` so re-audits can show
 1. **Never score a page without WebFetch'ing it.** The rubric demands evidence. No WebFetch = no score. Ask the user to help if the page is gated or requires auth.
 2. **Never report a PSI number you didn't measure.** If PSI failed, say "PSI unavailable" — don't estimate.
 3. **One page at a time unless the user asks for multiple.** Scoring three pages in one turn creates unreadable reports. Batch only when explicitly requested.
-4. **Don't rewrite copy here.** This skill diagnoses the page. Handoff to `/ads-copy` for new headlines or `/ads` for bid/negative/budget moves.
+4. **Don't rewrite copy here.** This skill diagnoses the page. Handoff to `/google-ads-copy` for new headlines or `/google-ads` for bid/negative/budget moves.
 5. **Margin-aware dollar impact requires verified unit economics.** If `unit_economics.source == "inferred_from_template"`, append `_(using industry defaults — confirm your AOV/margin for sharper estimates)_` to the lift line.
 6. **Always persist.** Every scored page goes into `landing-page-history.json`, even if the user doesn't ask — future audits depend on the baseline.

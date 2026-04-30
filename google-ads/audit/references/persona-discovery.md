@@ -16,7 +16,7 @@ Discover 2-3 customer personas from the ad data. This runs in parallel with busi
 
 ## Persona Template
 
-Use this full template for the persisted JSON file. In the **report output**, personas appear as a compact 3-column table (name, example searches, value). The JSON file has the full detail for downstream skills like `/ads-copy`:
+Use this full template for the persisted JSON file. In the **report output**, personas appear as a compact 3-column table (name, example searches, value). The JSON file has the full detail for downstream skills like `/google-ads-copy`:
 
 | Field | Description | Example |
 |-------|-------------|---------|
@@ -57,4 +57,4 @@ Save to `{data_dir}/personas/{accountId}.json`:
 }
 ```
 
-These personas feed directly into `/ads-copy` for headline generation and `/ads` for keyword strategy.
+These personas feed directly into `/google-ads-copy` for headline generation and `/google-ads` for keyword strategy.

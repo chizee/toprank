@@ -52,7 +52,7 @@ Users shouldn't have to remember to come back. Two complementary mechanisms:
      }
    }
    ```
-   When the user opens a new Claude session, any pending reviews appear as session context — the assistant can proactively offer to run a scoped `/ads-audit`.
+   When the user opens a new Claude session, any pending reviews appear as session context — the assistant can proactively offer to run a scoped `/google-ads-audit`.
 
 2. **Calendar (.ics) reminder** — after logging a change, offer to generate a calendar invite the user can drop into any calendar app:
    ```

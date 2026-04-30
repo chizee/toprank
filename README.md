@@ -23,7 +23,7 @@ Free, open-source. Install in 30 seconds.
 ### Google Ads
 
 ```
-You:    /toprank:ads-audit
+You:    /toprank:google-ads-audit
 
 Claude: Connected to your Google Ads account (MyStore).
 
@@ -45,7 +45,7 @@ Claude: Connected to your Google Ads account (MyStore).
         2. Add 12 negative keywords ($130/mo wasted on irrelevant terms)
         3. Increase bids 15% on 2 high-converting keywords losing IS
 
-        Business context saved — /toprank:ads-copy and /toprank:ads will use it.
+        Business context saved — /toprank:google-ads-copy and /toprank:google-ads will use it.
 
 You:    Do it all.
 
@@ -59,7 +59,7 @@ You:    Do it all.
 **Weekly review** — ask any time, or set it up as a recurring Coworker task:
 
 ```
-You:    /toprank:ads — "review last week's changes"
+You:    /toprank:google-ads — "review last week's changes"
 
 Claude: 12 changes in the last 7 days. 9 matured enough to judge.
 
@@ -175,10 +175,10 @@ Start here:
 
 | Skill | What it does |
 |-------|-------------|
-| [`ads-audit`](google-ads/ads-audit/) | Account audit + business context setup. Run this first. Scores 7 health dimensions, identifies wasted spend, builds business profile. |
-| [`ads`](google-ads/ads/) | Campaign management. Read performance, optimize keywords, adjust bids/budgets, add negatives, create campaigns. Ask for a **weekly review** and Claude scores every recent change (wins, losses, too-new-to-judge) — perfect for a Monday-morning Coworker task. |
-| [`ads-copy`](google-ads/ads-copy/) | RSA copy generator + A/B testing. Data-driven headlines and descriptions with character counts and pin positions. |
-| [`ads-landing`](google-ads/ads-landing/) | Landing page audit. Analyzes relevance between keywords, ads, and landing page content to improve Quality Score. |
+| [`google-ads-audit`](google-ads/audit/) | Account audit + business context setup. Run this first. Scores 7 health dimensions, identifies wasted spend, builds business profile. |
+| [`google-ads`](google-ads/manage/) | Campaign management. Read performance, optimize keywords, adjust bids/budgets, add negatives, create campaigns. Ask for a **weekly review** and Claude scores every recent change (wins, losses, too-new-to-judge) — perfect for a Monday-morning Coworker task. |
+| [`google-ads-copy`](google-ads/copy/) | RSA copy generator + A/B testing. Data-driven headlines and descriptions with character counts and pin positions. |
+| [`google-ads-landing`](google-ads/landing/) | Landing page audit. Analyzes relevance between keywords, ads, and landing page content to improve Quality Score. |
 
 ### SEO
 
@@ -200,7 +200,7 @@ Start here:
 |-------|-------------|
 | [`gemini`](gemini/) | Second opinion from Google Gemini. Review (pass/fail gate), challenge (adversarial stress test), or consult (open Q&A). Especially strong on Google Ads and SEO decisions — Gemini has native Google ecosystem knowledge. |
 
-All skills are namespaced: `/toprank:ads`, `/toprank:seo-analysis`, `/toprank:gemini`, etc.
+All skills are namespaced: `/toprank:google-ads`, `/toprank:seo-analysis`, `/toprank:gemini`, etc.
 
 ---
 
@@ -215,9 +215,10 @@ toprank/
 │   └── marketplace.json         <- registry entry
 ├── .mcp.json                    <- NotFair MCP server (auto-configured)
 ├── google-ads/
-│   ├── ads/                     <- campaign management
-│   ├── ads-audit/               <- account audit + business context
-│   └── ads-copy/                <- RSA copy generator + A/B testing
+│   ├── manage/                  <- campaign management (skill: google-ads)
+│   ├── audit/                   <- account audit + business context
+│   ├── copy/                    <- RSA copy generator + A/B testing
+│   └── landing/                 <- landing page scoring + diagnostic
 ├── seo/
 │   ├── seo-analysis/            <- full SEO audit with GSC data
 │   ├── content-writer/          <- E-E-A-T content creation
@@ -242,7 +243,7 @@ toprank/
 The Google Ads surface is also available as a standalone remote MCP server — use it from any MCP client (Claude Desktop, Cursor, Inspector, your own agent) without installing the Toprank CLI plugin.
 
 - **Registry name:** `io.github.nowork-studio/notfair` (verify: `curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=notfair"`)
-- **Endpoint:** `https://notfair.co/api/mcp` (streamable HTTP)
+- **Endpoint:** `https://notfair.co/api/mcp/google_ads` (streamable HTTP)
 - **Auth:** OAuth 2.1 with dynamic client registration — your MCP client opens a browser tab to sign in at [notfair.co](https://notfair.co) on first use; the token is stored locally (OS keychain in Claude Code)
 
 The server exposes ~100 Google Ads tools across reads (performance, search terms, impression share, keyword ideas, GAQL), writes (pause/enable, bid and budget updates, keyword and negative list management, campaign creation), and a `runScript` tool that fans out up to 20 GAQL queries in parallel for open-ended analytical questions. Source for the hosted server lives in [`nowork-studio/ads-agent`](https://github.com/nowork-studio/ads-agent).
@@ -255,14 +256,14 @@ Toprank skills reference external tools using the `~~category` placeholder patte
 
 | Category | Placeholder | Default Server | Alternatives |
 |----------|-------------|---------------|--------------|
-| Google Ads | `~~google-ads` | [NotFair MCP](https://notfair.co) (`mcp__notfair__*`; legacy `mcp__adsagent__*` still detected during the rename window) | Google Ads MCP (`mcp__google_ads_mcp__*`) |
+| Google Ads | `~~google-ads` | [NotFair-GoogleAds MCP](https://notfair.co) (legacy `mcp__notfair__*` and `mcp__adsagent__*` still detected during the rename window) | Google Ads MCP (`mcp__google_ads_mcp__*`) |
 | Search Console | `~~search-console` | gcloud CLI + Search Console API | Any GSC-compatible MCP server |
 | CMS | `~~cms` | Direct API (WordPress REST, Strapi, Contentful, Ghost) | Any CMS MCP server |
 
 Skills use conditional blocks based on available tools. If a connector is not available, the skill gracefully degrades — for example, `seo-analysis` can still run a technical crawl without GSC data.
 
 **Setup:**
-- **Google Ads:** See `google-ads/shared/preamble.md`. The `.mcp.json` registers `https://notfair.co/api/mcp` as a native HTTP MCP server; on first connection Claude Code opens a browser for OAuth sign-in to [notfair.co](https://notfair.co) and stores the token in your OS keychain — no environment variable, no bridge subprocess.
+- **Google Ads:** See `google-ads/shared/preamble.md`. The `.mcp.json` registers `https://notfair.co/api/mcp/google_ads` as a native HTTP MCP server; on first connection Claude Code opens a browser for OAuth sign-in to [notfair.co](https://notfair.co) and stores the token in your OS keychain — no environment variable, no bridge subprocess.
 - **Search Console:** See `seo/shared/preamble.md`. Requires Google Cloud SDK, Search Console API enabled, and OAuth login.
 - **CMS:** Run `/toprank:setup-cms` to configure WordPress, Strapi, Contentful, or Ghost.
 

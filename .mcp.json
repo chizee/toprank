@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "notfair": {
+    "NotFair-GoogleAds": {
       "type": "http",
-      "url": "https://notfair.co/api/mcp"
+      "url": "https://notfair.co/api/mcp/google_ads"
     }
   }
 }

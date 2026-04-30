@@ -1,5 +1,5 @@
 ---
-name: ads-copy
+name: google-ads-copy
 description: Generate and A/B test Google Ads copy. Use when asked to write ad copy, headlines, descriptions, create ad variants, test ad messaging, improve CTR, or generate RSA (Responsive Search Ad) components. Trigger on "ad copy", "write ads", "headlines", "descriptions", "RSA", "responsive search ad", "ad text", "ad creative", "improve CTR", "ad A/B test", "ad variants", "write me an ad", or when the user wants to improve click-through rate on existing ads.
 argument-hint: "<ad group name, keyword theme, or 'write new ads'>"
 ---
@@ -17,8 +17,8 @@ Write Google Ads RSA copy and run structured A/B tests to find winning messaging
 Before generating any copy, read these reference documents for expert-level context:
 
 - `references/rsa-best-practices.md` — Character limits, headline formulas, pinning strategy, A/B methodology, common mistakes
-- Read from ads skill: `../ads/references/industry-benchmarks.md` — Industry-specific CTR benchmarks to beat
-- Read from ads skill: `../ads/references/quality-score-framework.md` — How ad copy impacts Quality Score components
+- Read from manage skill: `../manage/references/industry-benchmarks.md` — Industry-specific CTR benchmarks to beat
+- Read from manage skill: `../manage/references/quality-score-framework.md` — How ad copy impacts Quality Score components
 
 These contain the specific formulas, character counts, and patterns that separate amateur ad copy from expert-level RSAs.
 
@@ -29,7 +29,7 @@ Every ad copy decision depends on understanding the business. Business context i
 ### On every invocation:
 
 1. **Read `{data_dir}/business-context.json`**. If it exists and has content, use it — skip to the next section.
-2. **If missing or empty**, follow the full intake procedure in `../ads-audit/references/business-context.md` (website crawl, data bootstrapping, JSON schema). That document is the single source of truth for gathering business context.
+2. **If missing or empty**, follow the full intake procedure in `../audit/references/business-context.md` (website crawl, data bootstrapping, JSON schema). That document is the single source of truth for gathering business context.
 3. **If the user volunteers new info** (new service, changed positioning, seasonal update), merge it into the existing file.
 
 ### How business context shapes copy
@@ -48,7 +48,7 @@ Every ad copy decision depends on understanding the business. Business context i
 
 ## Persona-Informed Copy
 
-Cross-reference `{data_dir}/personas/{accountId}.json` (created by `/ads-audit`) and `{data_dir}/business-context.json` to ground every piece of copy in real customer data.
+Cross-reference `{data_dir}/personas/{accountId}.json` (created by `/google-ads-audit`) and `{data_dir}/business-context.json` to ground every piece of copy in real customer data.
 
 ### How personas shape copy decisions
 
@@ -178,16 +178,16 @@ When the user wants to test, deploy variants as separate ads in the same ad grou
 | CTR | Conv rate | Diagnosis | Action |
 |-----|-----------|-----------|--------|
 | A higher | A higher | Clear winner | Pause B. Iterate on A's angle with fresh headlines |
-| A higher | B higher | A pulls clicks, B converts | Keep B; test A's headlines on B's landing page — message-match may need work. Offer `/ads-landing` |
+| A higher | B higher | A pulls clicks, B converts | Keep B; test A's headlines on B's landing page — message-match may need work. Offer `/google-ads-landing` |
 | Similar | Similar | No meaningful difference | Variants too similar — change the core angle, not the wording |
-| Both low | Both low | Neither works | Problem isn't A vs B — keyword intent, landing page, or offer is broken. Suggest `/ads-audit` |
+| Both low | Both low | Neither works | Problem isn't A vs B — keyword intent, landing page, or offer is broken. Suggest `/google-ads-audit` |
 
 After a winner is called: pause the loser, then create a new variant to test against the winner. Never stop testing.
 
 ## Operating principles
 
-1. **Business context is non-negotiable.** Read `{data_dir}/business-context.json` and `{data_dir}/personas/{accountId}.json` first. If they don't exist or are stale, recommend `/ads-audit` before writing anything generic.
+1. **Business context is non-negotiable.** Read `{data_dir}/business-context.json` and `{data_dir}/personas/{accountId}.json` first. If they don't exist or are stale, recommend `/google-ads-audit` before writing anything generic.
 2. **Confirm before deploying.** Show the exact copy, character counts per asset, and pin positions. Get a yes, then push.
 3. **Every write returns a `changeId`.** Tell the user it's undoable within 7 days via `undoChange` (assuming the entity hasn't been modified since).
 4. **Differentiate, don't imitate.** Read the `competitors` field. Generic copy that could belong to any competitor is a wasted ad slot.
-5. **Defer to `/ads` for account management.** This skill writes copy and deploys RSAs; bid / budget / keyword work belongs in `/ads`.
+5. **Defer to `/google-ads` for account management.** This skill writes copy and deploys RSAs; bid / budget / keyword work belongs in `/google-ads`.

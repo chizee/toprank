@@ -1,6 +1,6 @@
 # Business Context — Website Crawl & Data Collection
 
-This reference covers the website crawl procedure and business context JSON schema used by the `/ads-audit` skill.
+This reference covers the website crawl procedure and business context JSON schema used by the `/google-ads-audit` skill.
 
 ## Website Crawl
 

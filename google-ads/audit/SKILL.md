@@ -1,12 +1,12 @@
 ---
-name: ads-audit
+name: google-ads-audit
 description: Google Ads account audit and business context setup. Run this first — it gathers business information, analyzes account health, and saves context that all other ads skills reuse. Trigger on "audit my ads", "ads audit", "set up my ads", "onboard", "account overview", "how's my account", "ads health check", "what should I fix in my ads", or when the user is new to NotFair and hasn't run an audit before. Also trigger proactively when other ads skills detect that business-context.json is missing.
 argument-hint: "<account name or 'audit my ads'>"
 ---
 
 # Google Ads Audit
 
-Diagnose account health and persist business context for downstream skills (`/ads`, `/ads-copy`, `/ads-landing`). **Read-only** — never mutates the account. The user runs `/ads` to execute fixes you recommend.
+Diagnose account health and persist business context for downstream skills (`/google-ads`, `/google-ads-copy`, `/google-ads-landing`). **Read-only** — never mutates the account. The user runs `/google-ads` to execute fixes you recommend.
 
 ## Setup
 
@@ -19,7 +19,7 @@ Follow `../shared/preamble.md` — MCP detection, API key, account selection.
 | Business context | `{data_dir}/business-context.json` | First full audit, or refresh when `audit_date` is >90 days old. Skip on scoped audits if file is fresh. |
 | Personas | `{data_dir}/personas/{accountId}.json` | Every full audit. |
 
-These are the handoff to every other ads skill — write them even if the report itself is short. Otherwise `/ads-copy` and `/ads-landing` operate without business context and produce generic output.
+These are the handoff to every other ads skill — write them even if the report itself is short. Otherwise `/google-ads-copy` and `/google-ads-landing` operate without business context and produce generic output.
 
 **business-context.json schema:** `business_name, industry, website, services[], locations[], target_audience, brand_voice{tone, words_to_use[], words_to_avoid[]}, differentiators[], competitors[], seasonality{peak_months[], slow_months[], seasonal_hooks[]}, keyword_landscape{high_intent_terms[], competitive_terms[], long_tail_opportunities[]}, social_proof[], offers_or_promotions[], landing_pages{}, notes, audit_date, account_id`.
 
@@ -126,13 +126,13 @@ Discover 2–3 personas from search terms, top keywords, ad-group themes, landin
 
 Lead with the verdict, then the top 3 actions (with dollar impact when possible), then the scorecard, then evidence for dimensions scoring 0–2 only. Cite specific campaigns, keywords, and dollar amounts. Cap at ~80 lines.
 
-End with a single closing line after the handoff to `/ads`:
+End with a single closing line after the handoff to `/google-ads`:
 
 > *Your audit history is saved to your NotFair account — view it at https://notfair.co.*
 
 ## Guardrails
 
-1. **Read-only skill.** Diagnose; don't mutate. Every fix routes through `/ads` (or `/ads-copy`, `/ads-landing`). End the report with one handoff tied to the #1 action.
+1. **Read-only skill.** Diagnose; don't mutate. Every fix routes through `/google-ads` (or `/google-ads-copy`, `/google-ads-landing`). End the report with one handoff tied to the #1 action.
 2. **STOP condition** — if conversion tracking scores 0–1, recommend pausing spend until it's fixed before recommending anything else. Everything downstream is meaningless without measurement.
 3. **Always persist** `business-context.json` and `personas/{accountId}.json` even if the report itself is short — downstream skills depend on them.
 4. **Name names.** Every finding cites specific campaigns, keywords, search terms, and dollar amounts. "Some keywords are underperforming" is not a finding.

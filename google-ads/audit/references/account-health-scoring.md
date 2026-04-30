@@ -263,9 +263,9 @@ Plus any **signal/tracking/policy fix** regardless of dollar value — these qua
 
 Sort by dollar impact descending (signal fixes pinned to the top). Max 5 items. If none qualify, omit the section entirely — don't fabricate.
 
-Every Quick Win must be executable via a single `/ads` command where applicable and include the command text. Examples:
-- `Add 7 negatives to Tukwila Search — saves ~$340/mo (<5 min) · /ads add negatives to Tukwila Search: jobs, careers, salary, diy, free, reddit, training`
-- `Enable Enhanced Conversions — unblocks measurement (<15 min) · Configure in Google Ads UI (not /ads)`
+Every Quick Win must be executable via a single `/google-ads` command where applicable and include the command text. Examples:
+- `Add 7 negatives to Tukwila Search — saves ~$340/mo (<5 min) · /google-ads add negatives to Tukwila Search: jobs, careers, salary, diy, free, reddit, training`
+- `Enable Enhanced Conversions — unblocks measurement (<15 min) · Configure in Google Ads UI (not /google-ads)`
 
 ### `time_to_fix` field (kept — descriptive, not a rating)
 

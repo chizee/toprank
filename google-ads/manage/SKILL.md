@@ -1,5 +1,5 @@
 ---
-name: ads
+name: google-ads
 description: Manage Google Ads — performance, keywords, bids, budgets, negatives, campaigns, ads, search terms, QS, location targeting, bulk operations. Use for any mention of Google Ads, CPA, ROAS, ad spend, or campaign settings.
 argument-hint: "<campaign name, keyword, or 'show performance'>"
 triggers:
@@ -62,7 +62,7 @@ Pick the lens that matches the user's question. Don't pre-load all of these; loa
 | Restructure campaigns, fix ad-group bloat, name things sensibly | `references/campaign-structure-guide.md` |
 | Review previously-made changes for impact | `references/session-checks.md` + `references/change-tracking.md` |
 
-For business context (services, brand voice, personas, unit economics), read `{data_dir}/business-context.json` and `{data_dir}/personas/{accountId}.json`. If they're missing or stale (>90 days), suggest `/ads-audit`.
+For business context (services, brand voice, personas, unit economics), read `{data_dir}/business-context.json` and `{data_dir}/personas/{accountId}.json`. If they're missing or stale (>90 days), suggest `/google-ads-audit`.
 
 ## Tool surface
 
@@ -102,8 +102,8 @@ When the baseline is older than 24h, `references/session-checks.md` describes th
 
 After analysis, proactively offer the right next skill:
 
-- **Ad copy issues** (CTR below benchmark in 2+ ad groups) → `/ads-copy`
-- **No business context, or context >90 days old** → `/ads-audit` first
+- **Ad copy issues** (CTR below benchmark in 2+ ad groups) → `/google-ads-copy`
+- **No business context, or context >90 days old** → `/google-ads-audit` first
 - **Converting search terms not yet keywords** (3+) → offer to add them with `bulkAddKeywords`
-- **High CTR, low CVR on multiple ad groups** → `/ads-landing` (the page is the bottleneck, not the ad)
-- **Impression share declining or new competitor patterns** → `/ads-compete` if available, otherwise note auction-insights are now visible via GAQL `auction_insight_*` resources
+- **High CTR, low CVR on multiple ad groups** → `/google-ads-landing` (the page is the bottleneck, not the ad)
+- **Impression share declining or new competitor patterns** → auction-insights are visible via GAQL `auction_insight_*` resources

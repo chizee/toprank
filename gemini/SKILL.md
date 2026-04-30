@@ -278,7 +278,7 @@ Present Gemini's response with a clear header:
 ### 5b — Cross-model analysis (if Claude already reviewed)
 
 If Claude has already reviewed the same changes (e.g., via `/toprank:seo-analysis`
-or `/toprank:ads-audit` earlier in the conversation), produce a cross-model
+or `/toprank:google-ads-audit` earlier in the conversation), produce a cross-model
 comparison:
 
 > **Cross-Model Analysis: Claude vs Gemini**

@@ -45,10 +45,10 @@ assert_not_contains() {
 
 # Skill paths relative to repo root (name:path pairs)
 SKILL_ENTRIES=(
-  "ads:google-ads/ads"
-  "ads-audit:google-ads/ads-audit"
-  "ads-copy:google-ads/ads-copy"
-  "ads-landing:google-ads/ads-landing"
+  "google-ads:google-ads/manage"
+  "google-ads-audit:google-ads/audit"
+  "google-ads-copy:google-ads/copy"
+  "google-ads-landing:google-ads/landing"
   "seo-analysis:seo/seo-analysis"
   "content-writer:seo/content-writer"
   "keyword-research:seo/keyword-research"
@@ -154,7 +154,7 @@ assert_file "$REPO_ROOT/google-ads/shared/preamble.md" "Google Ads shared preamb
 assert_file "$REPO_ROOT/seo/shared/preamble.md" "SEO shared preamble exists"
 
 # Ads skills reference the shared preamble (not inline MCP detection)
-for skill in ads ads-audit ads-copy; do
+for skill in manage audit copy; do
   assert_contains "$REPO_ROOT/google-ads/$skill/SKILL.md" "../shared/preamble.md" \
     "$skill references shared preamble"
   assert_not_contains "$REPO_ROOT/google-ads/$skill/SKILL.md" "mcp__notfair__listConnectedAccounts" \
@@ -174,9 +174,9 @@ done
 echo ""
 echo "=== 5. MCP server config ==="
 
-assert_contains "$REPO_ROOT/.mcp.json" "\"notfair\"" ".mcp.json registers the notfair server (tool prefix mcp__notfair__*)"
+assert_contains "$REPO_ROOT/.mcp.json" "\"NotFair-GoogleAds\"" ".mcp.json registers the NotFair-GoogleAds server"
 assert_contains "$REPO_ROOT/.mcp.json" "\"type\": \"http\"" ".mcp.json uses native HTTP transport (no mcp-remote bridge)"
-assert_contains "$REPO_ROOT/.mcp.json" "notfair.co/api/mcp" ".mcp.json points at NotFair MCP endpoint"
+assert_contains "$REPO_ROOT/.mcp.json" "notfair.co/api/mcp/google_ads" ".mcp.json points at NotFair-GoogleAds MCP endpoint"
 
 # ─── Test 6: Connectors section in README ─────────────────────
 
@@ -191,9 +191,9 @@ assert_contains "$REPO_ROOT/README.md" "~~search-console" "README.md has Search 
 echo ""
 echo "=== 7. Reference documents ==="
 
-assert_dir "$REPO_ROOT/google-ads/ads/references" "ads references directory"
-assert_dir "$REPO_ROOT/google-ads/ads-audit/references" "ads-audit references directory"
-assert_dir "$REPO_ROOT/google-ads/ads-copy/references" "ads-copy references directory"
+assert_dir "$REPO_ROOT/google-ads/manage/references" "google-ads references directory"
+assert_dir "$REPO_ROOT/google-ads/audit/references" "google-ads-audit references directory"
+assert_dir "$REPO_ROOT/google-ads/copy/references" "google-ads-copy references directory"
 assert_dir "$REPO_ROOT/seo/seo-analysis/references" "seo-analysis references directory"
 
 # ─── Test 8: Eval files exist for all skills ─────────────────

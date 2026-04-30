@@ -92,27 +92,27 @@ Continue to Step 3 (MCP detection always runs).
 
 Always verify that a Google Ads MCP server is available — the MCP server could be down, unauthorized, or misconfigured even with a saved accountId.
 
-1. Check for NotFair tools. The MCP server may be exposed under several different tool-name prefixes depending on the host (and during the AdsAgent → NotFair rename, both old and new prefixes may briefly coexist):
-   - `mcp__notfair__*` — Claude Code CLI (toprank plugin default, current)
-   - `mcp__claude_ai_NotFair__*` — Claude Desktop / claude.ai plugin connector (current)
-   - `mcp__adsagent__*` — Claude Code CLI (legacy, pre-rename plugin)
-   - `mcp__claude_ai_AdsAgent__*` — Claude Desktop / claude.ai (legacy connector name)
+1. Check for NotFair tools. The MCP server may be exposed under several different tool-name prefixes depending on the host (across the AdsAgent → NotFair → NotFair-GoogleAds renames, multiple prefixes may briefly coexist):
+   - `mcp__NotFair-GoogleAds__*` / `mcp__notfair_googleads__*` / `mcp__NotFair_GoogleAds__*` — Claude Code CLI (toprank plugin default, current; exact form depends on Claude Code's key sanitization)
+   - `mcp__claude_ai_NotFairGoogleAds__*` — Claude Desktop / claude.ai plugin connector (current)
+   - `mcp__notfair__*` / `mcp__claude_ai_NotFair__*` — pre-0.16.0 plugin (legacy NotFair prefix, before the GoogleAds namespace split)
+   - `mcp__adsagent__*` / `mcp__claude_ai_AdsAgent__*` — pre-0.15.0 plugin (legacy AdsAgent prefix)
    - any other prefix matching `mcp__.*([Nn]ot[Ff]air|[Aa]ds[Aa]gent)__` (future hosts)
 
-   **How to detect:** scan your available tool list for any tool whose name ends in `listConnectedAccounts`. Take everything before `listConnectedAccounts` as the detected prefix. If multiple candidates exist, prefer them in this order: `mcp__notfair__` > `mcp__claude_ai_NotFair__` > `mcp__adsagent__` > `mcp__claude_ai_AdsAgent__` > any other match. Call `listConnectedAccounts` using that detected prefix, and save both the result and the prefix itself for reuse in Steps 4 and 5.
+   **How to detect:** scan your available tool list for any tool whose name ends in `listConnectedAccounts`. Take everything before `listConnectedAccounts` as the detected prefix. If multiple candidates exist, prefer current over legacy: any `NotFair-GoogleAds`/`NotFairGoogleAds`/`notfair_googleads` variant > `mcp__notfair__` / `mcp__claude_ai_NotFair__` > `mcp__adsagent__` / `mcp__claude_ai_AdsAgent__` > any other match. Call `listConnectedAccounts` using that detected prefix, and save both the result and the prefix itself for reuse in Steps 4 and 5.
 
-   **Legacy-prefix migration nudge:** if the chosen prefix is `mcp__adsagent__` or `mcp__claude_ai_AdsAgent__` (i.e. a legacy AdsAgent variant) and no current `mcp__notfair__*` / `mcp__claude_ai_NotFair__*` tools are visible, briefly tell the user once:
+   **Legacy-prefix migration nudge:** if the chosen prefix is a legacy `mcp__notfair__` / `mcp__adsagent__` (or their `claude_ai_*` variants) and no current NotFair-GoogleAds variant is visible, briefly tell the user once:
 
-   > Detected the legacy AdsAgent MCP server. The plugin has been renamed to NotFair — please **restart Claude Code** to pick up the new server registration (`mcp__notfair__*`). Continuing with the legacy server for this session.
+   > Detected a legacy MCP server registration. The plugin's MCP server has been renamed to NotFair-GoogleAds — please **restart Claude Code** to pick up the new server registration. Continuing with the legacy server for this session.
 
-   Then proceed normally — the legacy server still works (it points at the new notfair.co URL after the recent endpoint update); only the tool-name prefix is stale.
+   Then proceed normally — the legacy server still works (it points at the new `notfair.co/api/mcp/google_ads` endpoint after the recent rename); only the tool-name prefix is stale.
 
 2. If no NotFair/AdsAgent variant exists, check for Google's official MCP: look for tools matching `mcp__google_ads_mcp__*`.
 3. If none exists, guide the user:
 
 > No Google Ads MCP server detected.
 >
-> The MCP server may not have connected, or the OAuth sign-in didn't complete. Try restarting Claude Code — the toprank plugin's .mcp.json registers the `notfair` HTTP MCP server, and Claude Code will open a browser tab for OAuth sign-in to NotFair on first connection. You can also trigger sign-in manually with `/mcp`.
+> The MCP server may not have connected, or the OAuth sign-in didn't complete. Try restarting Claude Code — the toprank plugin's .mcp.json registers the `NotFair-GoogleAds` HTTP MCP server (`https://notfair.co/api/mcp/google_ads`), and Claude Code will open a browser tab for OAuth sign-in to NotFair on first connection. You can also trigger sign-in manually with `/mcp`.
 >
 > If the problem persists, check your MCP server settings or configure a Google Ads MCP server manually.
 
@@ -143,13 +143,13 @@ If the user explicitly asks to switch accounts, run `listConnectedAccounts`, let
 
 Use whichever MCP server prefix was detected in Step 3:
 
-- **NotFair MCP via Claude Code CLI (current):** `mcp__notfair__<toolName>`
-- **NotFair MCP via Claude Desktop / claude.ai plugin (current):** `mcp__claude_ai_NotFair__<toolName>`
-- **Legacy AdsAgent MCP via Claude Code CLI (pre-rename):** `mcp__adsagent__<toolName>`
-- **Legacy AdsAgent MCP via Claude Desktop / claude.ai plugin:** `mcp__claude_ai_AdsAgent__<toolName>`
+- **NotFair-GoogleAds MCP via Claude Code CLI (current):** `mcp__NotFair-GoogleAds__<toolName>` (or whatever sanitized form Claude Code emits — `mcp__notfair_googleads__`, `mcp__NotFair_GoogleAds__`, etc.)
+- **NotFair-GoogleAds MCP via Claude Desktop / claude.ai plugin (current):** `mcp__claude_ai_NotFairGoogleAds__<toolName>`
+- **Legacy NotFair MCP (pre-0.16.0 plugin):** `mcp__notfair__<toolName>` / `mcp__claude_ai_NotFair__<toolName>`
+- **Legacy AdsAgent MCP (pre-0.15.0 plugin):** `mcp__adsagent__<toolName>` / `mcp__claude_ai_AdsAgent__<toolName>`
 - **Google's official MCP:** `mcp__google_ads_mcp__<toolName>`
 
-Always call tools under the exact prefix detected in Step 3 — do not hardcode `mcp__notfair__` or `mcp__adsagent__`. Pass `accountId` from the resolved config (Step 2) to every tool call (except `listConnectedAccounts`).
+Always call tools under the exact prefix detected in Step 3 — do not hardcode any prefix. Pass `accountId` from the resolved config (Step 2) to every tool call (except `listConnectedAccounts`).
 
 ### Reads vs. writes
 

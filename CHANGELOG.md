@@ -14,6 +14,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.16.0] — 2026-04-30
+
+### Changed (breaking)
+- **Google Ads slash commands renamed.** `/ads` → `/google-ads`, `/ads-audit` → `/google-ads-audit`, `/ads-copy` → `/google-ads-copy`, `/ads-landing` → `/google-ads-landing`. Disambiguates the namespace ahead of future Meta Ads / LinkedIn Ads skills. Update saved prompts, Coworker tasks, and any scripts that invoke the old names.
+- **Skill folder layout reorganized.** Inside `google-ads/`, sub-folders are now platform-agnostic short names (`manage/`, `audit/`, `copy/`, `landing/`) — the platform context lives in the parent dir, not duplicated in every child. Skill `name:` frontmatter carries the fully-qualified slash command (e.g. `name: google-ads-audit`). New ad platforms will follow the same template (`meta-ads/{manage,audit,copy,...}`).
+- **MCP server renamed to NotFair-GoogleAds.** `server.json` `title` is now `NotFair-GoogleAds` and the streamable-HTTP endpoint moved from `https://notfair.co/api/mcp` to `https://notfair.co/api/mcp/google_ads`, namespacing the route ahead of future per-platform MCP endpoints. The plugin's `.mcp.json` is updated automatically on upgrade; existing OAuth tokens still apply.
+
+---
+
 ## [0.15.2] — 2026-04-29
 
 ### Changed

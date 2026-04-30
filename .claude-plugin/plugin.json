@@ -1,16 +1,16 @@
 {
   "name": "toprank",
-  "version": "0.15.2",
+  "version": "0.16.0",
   "description": "The official Google Ads + SEO + GEO plugin from NotFair. SEO analysis, Google Ads management, keyword research, content optimization, schema markup tools, broken link checker, single-page deep audit, and Generative Engine Optimization (GEO) for AI search engines — powered by Google Search Console and Google Ads APIs.",
   "author": {
     "name": "NotFair",
     "url": "https://notfair.co"
   },
   "skills": [
-    "./google-ads/ads",
-    "./google-ads/ads-audit",
-    "./google-ads/ads-copy",
-    "./google-ads/ads-landing",
+    "./google-ads/manage",
+    "./google-ads/audit",
+    "./google-ads/copy",
+    "./google-ads/landing",
     "./seo/seo-analysis",
     "./seo/content-writer",
     "./seo/keyword-research",
