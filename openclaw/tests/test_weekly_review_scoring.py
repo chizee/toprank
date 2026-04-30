@@ -50,13 +50,18 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         top_action = payload["action_plan"]["actions"][0]
         issues = payload["audit"]["issues"]
 
-        self.assertEqual(top_action["type"], "meta_tags")
+        self.assertEqual(top_action["type"], "snippet_content_packaging")
         self.assertEqual(top_action["target"], "https://www.example.com/blog/dog-boarding-cost")
+        self.assertIn("business_intent_score", top_action["score_components"])
         self.assertGreater(issues[0]["priority_score"], issues[1]["priority_score"])
         self.assertIn("score_components", issues[0])
-        self.assertEqual(payload["queue_items"][0]["type"], "action_proposal")
-        self.assertEqual(payload["queue_items"][0]["status"], "pending_approval")
-        self.assertNotIn("due_at", payload["queue_items"][0])
+        context_request = next(item for item in payload["queue_items"] if item["type"] == "business_context_request")
+        proposal = next(item for item in payload["queue_items"] if item["type"] == "action_proposal")
+        self.assertEqual(context_request["status"], "pending_input")
+        self.assertTrue(context_request["business_context_questions"])
+        self.assertEqual(proposal["status"], "pending_approval")
+        self.assertIn("complete_business_context", proposal["approval_preconditions"])
+        self.assertNotIn("due_at", proposal)
 
     def test_tracking_url_decline_keeps_raw_target_but_canonicalizes_action_target(self) -> None:
         issue = weekly_review.decline_issue(
@@ -97,6 +102,82 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         self.assertEqual(top_action["target"], "https://www.example.com/blog/dog-sitting-costs")
         self.assertEqual(top_action["type"], "page_improvement")
         self.assertIn("45", top_action["expected_impact"])
+
+    def test_local_commercial_ctr_gap_can_stay_metadata_action(self) -> None:
+        issue = weekly_review.ctr_gap_issue(
+            {
+                "query": "dog boarding seattle",
+                "page": "https://www.example.com/dog-boarding-seattle",
+                "clicks": 13,
+                "impressions": 664,
+                "ctr": 1.96,
+                "position": 10.7,
+            },
+            [],
+        )
+
+        self.assertEqual(issue["recommended_action_type"], "meta_tags")
+        self.assertEqual(issue["score_components"]["business_intent_score"], 1.0)
+        self.assertFalse(any("metadata alone is unproven" in note for note in issue["operator_judgment_notes"]))
+
+    def test_informational_ctr_gap_is_not_metadata_only(self) -> None:
+        issue = weekly_review.ctr_gap_issue(
+            {
+                "query": "how much does it cost to board a dog",
+                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "clicks": 2,
+                "impressions": 1681,
+                "ctr": 0.12,
+                "position": 2.8,
+            },
+            [],
+        )
+
+        self.assertEqual(issue["recommended_action_type"], "snippet_content_packaging")
+        self.assertLess(issue["score_components"]["business_intent_score"], 1.0)
+        self.assertTrue(any("metadata alone is unproven" in note for note in issue["operator_judgment_notes"]))
+
+    def test_query_only_ctr_gap_is_mapping_not_metadata_action(self) -> None:
+        issue = weekly_review.query_ctr_issue(
+            {
+                "query": "how much does it cost to board a dog",
+                "clicks": 2,
+                "impressions": 1804,
+                "ctr": 0.11,
+                "position": 3.5,
+            },
+            [],
+        )
+
+        self.assertEqual(issue["recommended_action_type"], "query_intent_mapping")
+        self.assertIn("business_intent_score", issue["score_components"])
+        self.assertTrue(any("concrete page" in note for note in issue["operator_judgment_notes"]))
+
+    def test_action_proposal_surfaces_business_context_gaps(self) -> None:
+        analysis = self.base_analysis()
+        analysis["ctr_gaps_by_page"] = [
+            {
+                "query": "dog boarding cost",
+                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "clicks": 2,
+                "impressions": 1681,
+                "ctr": 0.12,
+                "position": 2.8,
+            }
+        ]
+
+        payload = weekly_review.build_payload("example.com", analysis, {"priors": {}}, None, {"business_name": "Example"})
+        context_request = next(item for item in payload["queue_items"] if item["type"] == "business_context_request")
+        queue_item = next(item for item in payload["queue_items"] if item["type"] == "action_proposal")
+        context_check = next(check for check in payload["verification"]["checks"] if check["name"] == "business impact context")
+
+        self.assertEqual(context_check["status"], "warning")
+        self.assertEqual(context_request["status"], "pending_input")
+        self.assertEqual(context_request["output_path"], "~/.toprank/business-context/example.com.json")
+        self.assertLess(queue_item["business_context_score"], 0.75)
+        self.assertIn("complete_business_context", queue_item["approval_preconditions"])
+        self.assertTrue(any(gap["field"] == "service_value_weights" for gap in context_request["business_context_gaps"]))
+        self.assertTrue(context_request["business_context_questions"])
 
 
 if __name__ == "__main__":

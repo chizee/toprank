@@ -14,6 +14,7 @@ Each recommendation should expose the inputs that drove ranking:
 - `confidence_score` — sample size and signal stability
 - `goal_alignment_score` — whether the signal supports the active goal, especially non-brand growth
 - `actionability_score` — whether there is a clear SEO lever vs a vague investigation
+- `business_intent_score` — whether the query likely maps to revenue, not just informational visits
 - `url_quality_score` — whether the URL is canonical/actionable or a tracking/parameter variant
 - `learned_multiplier` — site-local prior from previous outcomes
 
@@ -26,14 +27,17 @@ These are not hard approval rules. They are decision levers for the operator and
 - Branded/navigational query noise outranking non-brand growth opportunities
 - Cannibalization reports where the “winner” is not actually the intended page
 - Query-level opportunities that have not been mapped to a concrete page
+- Treating high-impression informational/price queries as metadata-only wins without checking zero-click SERP behavior
 
 ## Preferred behavior
 
 - Preserve the raw signal in evidence.
 - Canonicalize the action target when the raw URL is a tracking variant.
 - Reclassify tracking-param traffic drops as investigation work instead of content/page edits.
-- Let high-impression, high-position, low-CTR opportunities outrank low-volume noisy regressions.
+- Let high-impression, high-position, low-CTR opportunities outrank low-volume noisy regressions only when business intent and actionability are also strong.
+- For informational price queries, classify the action as snippet/content packaging or query-intent mapping unless a SERP diagnosis proves metadata is the main lever.
 - Explain why the top action is actionable and what would make it unsafe or low-confidence.
+- If business-impact context is incomplete, create an explicit `business_context_request` queue item and surface the questions in the runner result instead of burying them in verification warnings.
 
 ## Approval boundary
 

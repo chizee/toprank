@@ -189,6 +189,70 @@ def make_issue(
 
 
 
+
+
+LOCAL_INTENT_TERMS = {
+    "near me",
+    "seattle",
+    "seatac",
+    "tukwila",
+    "ballard",
+    "west seattle",
+}
+COMMERCIAL_SERVICE_TERMS = {
+    "board",
+    "boarding",
+    "daycare",
+    "grooming",
+    "kennel",
+    "pet hotel",
+}
+INFORMATIONAL_SERP_TERMS = {
+    "how much",
+    "average",
+    "cost",
+    "price",
+    "prices",
+    "per day",
+    "per night",
+    "for a week",
+}
+
+
+def business_intent_for_query(query: str | None) -> tuple[float, str, list[str]]:
+    """Estimate whether click upside is likely to map to revenue, not just visits.
+
+    This is deliberately a soft judgment lever, not a hard rule. Informational
+    price queries can be valuable, but they often have zero-click SERPs and need
+    content/CTA packaging, not metadata-only edits.
+    """
+    if not query:
+        return 0.7, "unknown", ["query intent unknown; validate before editing metadata"]
+
+    q = query.lower()
+    has_local = any(term in q for term in LOCAL_INTENT_TERMS)
+    has_service = any(term in q for term in COMMERCIAL_SERVICE_TERMS)
+    has_info = any(term in q for term in INFORMATIONAL_SERP_TERMS)
+
+    if has_local and has_service:
+        return 1.0, "local_commercial", []
+    if "near me" in q:
+        return 0.95, "local_commercial", []
+    if has_service and not has_info:
+        return 0.85, "commercial", []
+    if has_info and has_service:
+        return 0.7, "commercial_research", [
+            "commercial research query; metadata alone is unproven",
+            "possible zero-click/SERP-answer behavior; inspect SERP before assuming CTR lift",
+        ]
+    if has_info:
+        return 0.55, "informational", [
+            "informational query; click upside may not convert",
+            "possible zero-click/SERP-answer behavior; inspect SERP before assuming CTR lift",
+        ]
+    return 0.75, "mixed", ["mixed intent; validate business value before content edits"]
+
+
 def is_branded_query(query: str | None, brand_terms: list[str] | None) -> bool:
     if not query or not brand_terms:
         return False
@@ -259,14 +323,25 @@ def ctr_gap_issue(gap: dict[str, Any], brand_terms: list[str] | None = None) -> 
     incremental_clicks = max(impressions * ((expected_ctr - ctr) / 100), 0.0)
     impact_score = clamp(incremental_clicks / 50, 0.05, 2.0)
     confidence = sample_confidence(clicks=clicks, impressions=impressions)
-    actionability_score = 0.95
-    url_quality = float(url_context(raw_target)["url_quality_score"])
     query = gap.get("query")
+    business_intent_score, intent_class, intent_notes = business_intent_for_query(query)
+    actionability_score = 0.95
+    action_type = "meta_tags"
+    action_notes = ["clear snippet/title lever with measurable upside"]
+    if intent_class in {"commercial_research", "informational", "mixed", "unknown"}:
+        action_type = "snippet_content_packaging"
+        actionability_score = 0.75
+        action_notes = [
+            "low CTR is a hypothesis, not proof of bad metadata",
+            "recommend SERP + snippet + above-the-fold content diagnosis before editing",
+        ]
+    url_quality = float(url_context(raw_target)["url_quality_score"])
     goal_alignment_score, goal_notes = goal_alignment_for_query(query, brand_terms)
-    score = impact_score * confidence * goal_alignment_score * actionability_score * url_quality
+    score = impact_score * confidence * goal_alignment_score * actionability_score * url_quality * business_intent_score
     evidence = [
         f"{impressions:g} impressions with CTR {ctr}%.",
-        f"Average position {position:g}; conservative expected CTR {expected_ctr}% suggests ~{incremental_clicks:.0f} incremental-click upside.",
+        f"Average position {position:g}; conservative expected CTR {expected_ctr}% suggests ~{incremental_clicks:.0f} incremental-click upside before intent/zero-click discount.",
+        f"Query intent classified as {intent_class} with business intent score {business_intent_score:g}.",
     ]
     if query:
         evidence.append(f"Underperforming query: {query}")
@@ -275,19 +350,20 @@ def ctr_gap_issue(gap: dict[str, Any], brand_terms: list[str] | None = None) -> 
         severity_from_score(score),
         confidence,
         evidence,
-        "meta_tags",
+        action_type,
         target=raw_target,
         base_priority=impact_score,
-        expected_click_delta=round(incremental_clicks, 1),
+        expected_click_delta=round(incremental_clicks * business_intent_score, 1),
         priority_score=round(score, 3),
         score_components={
             "expected_impact": round(impact_score, 3),
             "confidence_score": confidence,
             "goal_alignment_score": goal_alignment_score,
+            "business_intent_score": business_intent_score,
             "actionability_score": actionability_score,
             "url_quality_score": url_quality,
         },
-        operator_judgment_notes=["clear snippet/title lever with measurable upside", *goal_notes],
+        operator_judgment_notes=[*action_notes, *intent_notes, *goal_notes],
     )
 
 
@@ -337,28 +413,32 @@ def query_ctr_issue(opp: dict[str, Any], brand_terms: list[str] | None = None) -
     impact_score = clamp(incremental_clicks / 65, 0.05, 1.3)
     confidence = sample_confidence(clicks=clicks, impressions=impressions)
     actionability_score = 0.55  # Query-only; needs page mapping before editing.
-    goal_alignment_score, goal_notes = goal_alignment_for_query(opp.get("query"), brand_terms)
-    score = impact_score * confidence * goal_alignment_score * actionability_score
+    query = opp.get("query")
+    business_intent_score, intent_class, intent_notes = business_intent_for_query(query)
+    goal_alignment_score, goal_notes = goal_alignment_for_query(query, brand_terms)
+    score = impact_score * confidence * goal_alignment_score * actionability_score * business_intent_score
     return make_issue(
-        f"Query-level CTR opportunity: {opp.get('query')}",
+        f"Query-level CTR opportunity: {query}",
         severity_from_score(score),
         confidence,
         [
             f"{impressions:g} impressions with CTR {ctr}%.",
-            f"Average position {position:g}; conservative expected CTR {expected_ctr}% suggests ~{incremental_clicks:.0f} incremental-click upside.",
+            f"Average position {position:g}; conservative expected CTR {expected_ctr}% suggests ~{incremental_clicks:.0f} incremental-click upside before intent/zero-click discount.",
+            f"Query intent classified as {intent_class} with business intent score {business_intent_score:g}.",
         ],
-        "meta_tags",
+        "query_intent_mapping",
         base_priority=impact_score,
-        expected_click_delta=round(incremental_clicks, 1),
+        expected_click_delta=round(incremental_clicks * business_intent_score, 1),
         priority_score=round(score, 3),
         score_components={
             "expected_impact": round(impact_score, 3),
             "confidence_score": confidence,
             "goal_alignment_score": goal_alignment_score,
+            "business_intent_score": business_intent_score,
             "actionability_score": actionability_score,
             "url_quality_score": 1.0,
         },
-        operator_judgment_notes=["query-level signal; map to a page before editing", *goal_notes],
+        operator_judgment_notes=["query-level signal; map to a concrete page before editing", *intent_notes, *goal_notes],
     )
 
 
@@ -438,7 +518,84 @@ def apply_prioritization(candidates: list[dict[str, Any]], learned: dict[str, An
     ranked.sort(key=lambda issue: issue["priority_score"], reverse=True)
     return ranked
 
-def build_payload(site_id: str, analysis: dict[str, Any], learned: dict[str, Any], goal: dict[str, Any] | None) -> dict[str, Any]:
+
+
+BUSINESS_IMPACT_CONTEXT_FIELDS = {
+    "service_value_weights": "Relative revenue/margin value by service (boarding, daycare, grooming, airport layover, etc.)",
+    "target_customer_priority": "Priority customer segments (locals, travelers, airport layover, long-stay boarding, etc.)",
+    "location_priorities": "Location-level priority/capacity/margin context",
+    "conversion_events": "Organic conversion events or booking funnel signals",
+    "booking_intent_hierarchy": "Which query intents are most likely to become bookings",
+    "local_proof_points": "Local differentiators to use in snippets/content",
+    "serp_competitor_positioning": "Competitor/SERP positioning for priority queries",
+    "page_role_map": "Transactional vs informational role for important pages",
+}
+
+
+def business_context_gaps(business_context: dict[str, Any] | None) -> list[dict[str, str]]:
+    context = business_context or {}
+    gaps = []
+    for field, reason in BUSINESS_IMPACT_CONTEXT_FIELDS.items():
+        value = context.get(field)
+        if value in (None, "", [], {}):
+            gaps.append({"field": field, "why_it_matters": reason})
+    return gaps
+
+
+def business_context_questions(gaps: list[dict[str, str]]) -> list[str]:
+    wanted = {gap["field"] for gap in gaps}
+    questions = []
+    if "service_value_weights" in wanted:
+        questions.append("Rank services by business value/margin: boarding, daycare, grooming, airport layover, pet taxi, etc.")
+    if "target_customer_priority" in wanted:
+        questions.append("Which customers matter most: locals, SeaTac travelers, airport layover/import/export customers, long-stay boarding, recurring daycare, grooming?")
+    if "location_priorities" in wanted:
+        questions.append("Which locations should SEO prioritize right now, and are any capacity-constrained: Tukwila, Ballard, West Seattle?")
+    if "conversion_events" in wanted:
+        questions.append("What organic conversion signals should count: booking form starts, completed bookings, calls, quote requests, Gingr reservations, GA4 events?")
+    if "booking_intent_hierarchy" in wanted:
+        questions.append("Give a rough intent ranking: e.g. dog boarding Seatac > dog boarding Seattle > dog boarding cost > dog boarding near me.")
+    if "local_proof_points" in wanted:
+        questions.append("What proof points should snippets emphasize: 5am-9pm pickup, 24/7 supervision, airport proximity, photo updates, private suites, multi-location coverage?")
+    if "serp_competitor_positioning" in wanted:
+        questions.append("For priority queries, who must we beat or differentiate from: Rover, Wag, Camp Bow Wow, Dogtopia, local kennels, Google Business Profile results?")
+    if "page_role_map" in wanted:
+        questions.append("Which pages are transactional landing pages vs informational support pages?")
+    return questions
+
+
+def context_quality_check(business_context: dict[str, Any] | None) -> dict[str, Any]:
+    gaps = business_context_gaps(business_context)
+    missing = len(gaps)
+    total = len(BUSINESS_IMPACT_CONTEXT_FIELDS)
+    score = round((total - missing) / total, 3)
+    status = "pass" if score >= 0.75 else "warning"
+    return {
+        "score": score,
+        "status": status,
+        "missing_fields": gaps,
+        "questions": business_context_questions(gaps),
+    }
+
+
+def build_business_context_request(site_id: str, context_check: dict[str, Any]) -> dict[str, Any] | None:
+    if context_check["score"] >= 0.75:
+        return None
+    return {
+        "item_id": f"context_request_{site_id}_business_impact",
+        "type": "business_context_request",
+        "status": "pending_input",
+        "priority": "high",
+        "notes": "Complete business-impact context before approving SEO content, snippet, metadata, redirect, or internal-link actions.",
+        "business_context_score": context_check["score"],
+        "business_context_gaps": context_check["missing_fields"],
+        "business_context_questions": context_check["questions"],
+        "output_path": f"~/.toprank/business-context/{site_id}.json",
+        "blocks_auto_approval": True,
+    }
+
+
+def build_payload(site_id: str, analysis: dict[str, Any], learned: dict[str, Any], goal: dict[str, Any] | None, business_context: dict[str, Any] | None = None) -> dict[str, Any]:
     metrics = metric_snapshot_from_analysis(analysis)
     primary_metric = None
     if goal and goal.get("primary_metric"):
@@ -446,6 +603,7 @@ def build_payload(site_id: str, analysis: dict[str, Any], learned: dict[str, Any
     if not primary_metric:
         primary_metric = DEFAULT_PRIMARY_METRIC if DEFAULT_PRIMARY_METRIC in metrics else next(iter(metrics.keys()), DEFAULT_PRIMARY_METRIC)
 
+    context_check = context_quality_check(business_context)
     candidates = derive_candidate_issues(analysis)
     ranked = apply_prioritization(candidates, learned, primary_metric)
     top_issues = ranked[:3] if ranked else [
@@ -471,6 +629,9 @@ def build_payload(site_id: str, analysis: dict[str, Any], learned: dict[str, Any
     non_brand_clicks = metrics.get(primary_metric)
     action_entries = []
     queue_items = []
+    context_request = build_business_context_request(site_id, context_check)
+    if context_request:
+        queue_items.append(context_request)
     for idx, issue in enumerate(top_issues, start=1):
         action_id = f"weekly_action_{idx:02d}"
         action_type = issue["recommended_action_type"]
@@ -495,6 +656,7 @@ def build_payload(site_id: str, analysis: dict[str, Any], learned: dict[str, Any
                 "canonical_target": issue.get("canonical_target"),
                 "score_components": issue.get("score_components", {}),
                 "operator_judgment_notes": issue.get("operator_judgment_notes", []),
+                "needs_business_context": context_check["score"] < 0.75,
                 "learned_multiplier": issue.get("learned_multiplier", 1.0),
             }
         )
@@ -519,6 +681,10 @@ def build_payload(site_id: str, analysis: dict[str, Any], learned: dict[str, Any
                     "approval_required": True,
                     "score_components": issue.get("score_components", {}),
                     "operator_judgment_notes": issue.get("operator_judgment_notes", []),
+                    "business_context_score": context_check["score"],
+                    "business_context_gaps": context_check["missing_fields"],
+                    "business_context_questions": context_check["questions"],
+                    "approval_preconditions": ["complete_business_context"] if context_check["score"] < 0.75 else [],
                 }
             )
 
@@ -561,6 +727,12 @@ def build_payload(site_id: str, analysis: dict[str, Any], learned: dict[str, Any
                     "name": "recommendation quality gate",
                     "status": "pass" if top_issues[0].get("priority_score", 0) >= 0.35 else "warning",
                     "notes": "; ".join(top_issues[0].get("operator_judgment_notes", [])) or "Top action has explicit score components for operator review.",
+                },
+                {
+                    "name": "business impact context",
+                    "status": context_check["status"],
+                    "notes": f"Business-impact context completeness: {context_check['score']:.0%}. Missing: {', '.join(gap['field'] for gap in context_check['missing_fields']) or 'none'}.",
+                    "questions": context_check["questions"],
                 },
             ],
             "follow_up_due": None,
@@ -606,9 +778,20 @@ def main(argv: list[str]) -> int:
         analysis = run_analysis(site_property, args.days, brand_terms)
 
     analysis["_brand_terms"] = profile.get("brand_terms", [])
-    payload = build_payload(site_id, analysis, learned, active_goal)
+    business_context_path = Path.home() / ".toprank" / "business-context" / f"{site_id}.json"
+    business_context = load_json(business_context_path, {})
+    payload = build_payload(site_id, analysis, learned, active_goal, business_context)
     result = persist_payload(args.site, payload, root=root)
-    result["primary_metric"] = payload["queue_items"][0]["primary_metric"] if payload.get("queue_items") else None
+    metric_item = next((item for item in payload.get("queue_items", []) if item.get("primary_metric")), None)
+    result["primary_metric"] = metric_item["primary_metric"] if metric_item else None
+    context_request = next((item for item in payload.get("queue_items", []) if item.get("type") == "business_context_request"), None)
+    if context_request:
+        result["business_context_request"] = {
+            "status": context_request["status"],
+            "business_context_score": context_request["business_context_score"],
+            "output_path": context_request["output_path"],
+            "questions": context_request["business_context_questions"],
+        }
     print(json.dumps(result, indent=2))
     return 0
 
