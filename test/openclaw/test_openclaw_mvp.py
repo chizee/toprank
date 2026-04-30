@@ -413,13 +413,18 @@ def test_weekly_review_uses_learned_priors_and_seeds_followup(tmp_path):
     run_dirs = sorted((tmp_path / 'runtime' / 'sites' / 'example.com' / 'runs').iterdir())
     run_dir = run_dirs[-1]
     action_plan = json.loads((run_dir / 'action-plan.json').read_text())
-    assert action_plan['actions'][0]['type'] == 'meta_tags'
+    assert action_plan['actions'][0]['type'] == 'snippet_content_packaging'
     queue_files = list((tmp_path / 'runtime' / 'sites' / 'example.com' / 'queue').glob('*.json'))
-    assert len(queue_files) == 1
-    queue_item = json.loads(queue_files[0].read_text())
+    queue_items = [json.loads(path.read_text()) for path in queue_files]
+    queue_by_type = {item['type']: item for item in queue_items}
+    assert set(queue_by_type) == {'business_context_request', 'action_proposal'}
+    assert queue_by_type['business_context_request']['status'] == 'pending_input'
+    assert queue_by_type['business_context_request']['business_context_questions']
+    queue_item = queue_by_type['action_proposal']
     assert queue_item['baseline_metrics']['non_brand_clicks_28d'] == 110.0
     assert queue_item['primary_metric'] == 'non_brand_clicks_28d'
-    assert queue_item['action_type'] == 'meta_tags'
+    assert queue_item['action_type'] == 'snippet_content_packaging'
+    assert 'complete_business_context' in queue_item['approval_preconditions']
 
 
 def test_portfolio_review_ranks_sites(tmp_path):

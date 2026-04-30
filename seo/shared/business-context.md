@@ -63,7 +63,7 @@ From GSC + homepage, extract:
 
 ### Step 2 — Ask minimal targeted questions
 
-Ask all three in a single message. Questions 1 and 2 are optional — if the user skips them, fall back to your inferences from Step 1 (note this in the saved `notes` field).
+Ask the short base profile questions first. Questions 1 and 2 are optional — if the user skips them, fall back to your inferences from Step 1 (note this in the saved `notes` field).
 
 > I'm building a business profile for **$DOMAIN** to make future audit recommendations more specific. Three quick questions — press Enter to skip any and I'll infer from your data:
 >
@@ -71,6 +71,18 @@ Ask all three in a single message. Questions 1 and 2 are optional — if the use
 > 2. **Primary goal of this website** — pick the closest or describe your own:
 >    `lead generation` · `ecommerce` · `SaaS / subscription` · `local business` · `content / media` · `other`
 > 3. **Main competitors** — 2–5 URLs or names *(optional)*
+
+Then ask the business-impact profile questions when the operator needs to rank by value, not just traffic. Ask them as one compact checklist and let the user answer roughly; partial answers are better than no context:
+
+> To rank SEO work by business impact instead of clicks, I also need these if you know them:
+>
+> 1. **Service value / margin ranking** — e.g. boarding > grooming > daycare > airport layover.
+> 2. **Priority customers** — locals, SeaTac travelers, airport layover/import/export, long-stay boarding, recurring daycare, grooming, etc.
+> 3. **Location priorities / capacity** — Tukwila, Ballard, West Seattle; note any capacity constraints.
+> 4. **Conversion events** — booking starts, completed bookings, calls, quote requests, Gingr reservations, GA4 events.
+> 5. **Booking-intent hierarchy** — e.g. `dog boarding seatac` > `dog boarding seattle` > `dog boarding cost`.
+> 6. **Local proof points** — hours, 24/7 supervision, photo updates, airport proximity, pickup/dropoff flexibility, private suites.
+> 7. **Transactional vs informational pages** — which pages are meant to book customers vs support research.
 
 If `CACHE_STATUS=stale`, pre-fill the question with the cached values so the user can confirm or correct rather than re-enter from scratch.
 
@@ -103,6 +115,14 @@ target_locations = ["<top countries from GSC country split>"]
 brand_terms      = ["<name variations from user answer 1 + GSC brand signal queries>"]
 competitors      = ["<from user answer 3, or []>"]
 key_topics       = ["<top 5-8 query clusters from GSC>"]
+service_value_weights = {"<service>": "<relative value/margin/priority>"}
+target_customer_priority = ["<highest-value customer segments>"]
+location_priorities = {"<location>": {"priority": "high|medium|low", "notes": "<capacity/margin/strategic context>"}}
+conversion_events = ["<events that indicate organic business value>"]
+booking_intent_hierarchy = ["<highest-intent query patterns first>"]
+local_proof_points = ["<differentiators to use in snippets/content>"]
+serp_competitor_positioning = {"<priority query>": ["<competitors or SERP features to beat>"]}
+page_role_map = {"<url or path>": "transactional|informational|supporting|unknown"}
 notes            = "<note if answers were inferred rather than user-provided>"
 # ---------------------------------------------
 
@@ -119,6 +139,14 @@ data = {
     "brand_terms":      brand_terms,
     "competitors":      competitors,
     "key_topics":       key_topics,
+    "service_value_weights": service_value_weights,
+    "target_customer_priority": target_customer_priority,
+    "location_priorities": location_priorities,
+    "conversion_events": conversion_events,
+    "booking_intent_hierarchy": booking_intent_hierarchy,
+    "local_proof_points": local_proof_points,
+    "serp_competitor_positioning": serp_competitor_positioning,
+    "page_role_map": page_role_map,
     "notes":            notes,
 }
 
@@ -147,6 +175,14 @@ Once loaded or generated, these values inform every phase that follows:
 | `target_audience` | Cross-reference with Phase 3.7 personas — flag tension if personas don't match the stated audience |
 | `key_topics` | Anchor content gap recommendations to confirmed topics, not speculative ones |
 | `business_summary` | Open Phase 6 report with a one-liner so all recommendations read as contextual, not generic |
+| `service_value_weights` | Convert SEO opportunity into business-impact priority instead of click priority |
+| `target_customer_priority` | Penalize low-value segments and promote strategic customer journeys |
+| `location_priorities` | Avoid pushing demand to locations that are capacity-constrained or lower priority |
+| `conversion_events` | Define what success means after a proposed SEO action is approved |
+| `booking_intent_hierarchy` | Score query opportunities by booking likelihood, not just impression volume |
+| `local_proof_points` | Ground titles/snippets/content packaging in real differentiators |
+| `serp_competitor_positioning` | Decide whether CTR gaps are metadata, SERP feature, competitor, or zero-click problems |
+| `page_role_map` | Avoid treating informational blog pages like transactional landing pages |
 
 ---
 
