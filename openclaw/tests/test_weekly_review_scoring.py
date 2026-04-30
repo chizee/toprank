@@ -154,6 +154,46 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         self.assertIn("business_intent_score", issue["score_components"])
         self.assertTrue(any("concrete page" in note for note in issue["operator_judgment_notes"]))
 
+    def test_business_context_reframes_national_cost_ctr_as_local_intent_ownership(self) -> None:
+        analysis = self.base_analysis()
+        analysis["ctr_gaps_by_page"] = [
+            {
+                "query": "how much does it cost to board a dog",
+                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "clicks": 2,
+                "impressions": 1681,
+                "ctr": 0.12,
+                "position": 2.8,
+            }
+        ]
+        business_context = {
+            "target_customer_priority": {
+                "primary": ["Seattle-area local dog owners"],
+                "deprioritized": ["national informational readers outside service area"],
+            },
+            "booking_intent_hierarchy": {
+                "highest_priority": ["dog boarding seattle", "dog boarding seatac"],
+                "supporting_only": ["how much does it cost to board a dog", "dog boarding cost"],
+            },
+            "page_role_map": {
+                "/blog/dog-boarding-cost": "supporting informational page",
+                "/blog/dog-boarding-price-seattle": "local commercial-research page",
+                "/dog-boarding-seattle": "transactional local landing page",
+            },
+        }
+
+        payload = weekly_review.build_payload("example.com", analysis, {"priors": {}}, None, business_context)
+        top_action = payload["action_plan"]["actions"][0]
+        proposal = next(item for item in payload["queue_items"] if item["type"] == "action_proposal")
+
+        self.assertEqual(top_action["type"], "local_intent_ownership")
+        self.assertEqual(top_action["target"], "https://www.example.com/blog/dog-boarding-price-seattle")
+        self.assertEqual(top_action["source_target"], "https://www.example.com/blog/dog-boarding-cost")
+        self.assertEqual(proposal["action_type"], "local_intent_ownership")
+        self.assertIn("national_click_discount", proposal["score_components"])
+        self.assertEqual(proposal["consolidation_targets"]["conversion_target"], "https://www.example.com/dog-boarding-seattle")
+        self.assertTrue(any("national informational" in note for note in top_action["operator_judgment_notes"]))
+
     def test_action_proposal_includes_deep_dive_diagnostics_before_approval(self) -> None:
         analysis = self.base_analysis()
         analysis["ctr_gaps_by_page"] = [

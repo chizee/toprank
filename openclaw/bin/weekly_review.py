@@ -808,17 +808,44 @@ def analyze_page_packaging(page_snapshot: dict[str, Any], query: str | None) -> 
     }
 
 
+def matching_serp_result(serp: dict[str, Any], target: str | None) -> dict[str, Any] | None:
+    if not target:
+        return None
+    parsed_target = urlparse(target)
+    target_domain = parsed_target.netloc.lower().removeprefix("www.")
+    target_path = parsed_target.path.rstrip("/")
+    for result in serp.get("results") or []:
+        parsed_result = urlparse(result.get("url") or "")
+        result_domain = parsed_result.netloc.lower().removeprefix("www.")
+        result_path = parsed_result.path.rstrip("/")
+        if target_domain and target_domain == result_domain and target_path == result_path:
+            return result
+    return None
+
+
 def deep_dive_diagnostic(issue: dict[str, Any], site_id: str, site_profile: dict[str, Any] | None = None, live: bool = False) -> dict[str, Any]:
     query = issue.get("primary_query")
     intent_class = issue.get("intent_class")
     target = issue.get("target") or issue.get("canonical_target") or issue.get("raw_target")
+    if isinstance(target, str) and target.startswith("/"):
+        target = f"https://www.{site_id}{target}"
     serp = serp_snapshot_for_query(query, site_id, live=live)
     page_snapshot = page_snapshot_for_url(target, site_profile, live=live)
+    serp_result = matching_serp_result(serp, target)
+    snippet_snapshot = page_snapshot
+    if page_snapshot.get("status") != "ok" and serp_result:
+        snippet_snapshot = {
+            "source": "serp_result",
+            "status": "ok",
+            "title": serp_result.get("title"),
+            "meta_description": serp_result.get("snippet"),
+            "h1": None,
+        }
     packaging = analyze_page_packaging(page_snapshot, query)
     zero_click_risk, zero_click_notes = zero_click_risk_for_query(query, intent_class)
     checks = {
         "serp_inspected": serp.get("status") == "ok" and bool(serp.get("results")),
-        "current_snippet_inspected": page_snapshot.get("status") == "ok",
+        "current_snippet_inspected": snippet_snapshot.get("status") == "ok",
         "above_the_fold_inspected": packaging.get("status") in {"ok", "partial"},
         "zero_click_risk_accounted_for": True,
     }
@@ -829,12 +856,12 @@ def deep_dive_diagnostic(issue: dict[str, Any], site_id: str, site_profile: dict
         "checks": checks,
         "serp": serp,
         "current_snippet": {
-            "source": page_snapshot.get("source"),
-            "source_path": page_snapshot.get("source_path"),
-            "status": page_snapshot.get("status"),
-            "title": page_snapshot.get("title"),
-            "meta_description": page_snapshot.get("meta_description"),
-            "h1": page_snapshot.get("h1"),
+            "source": snippet_snapshot.get("source"),
+            "source_path": snippet_snapshot.get("source_path"),
+            "status": snippet_snapshot.get("status"),
+            "title": snippet_snapshot.get("title"),
+            "meta_description": snippet_snapshot.get("meta_description"),
+            "h1": snippet_snapshot.get("h1"),
         },
         "above_the_fold": packaging,
         "zero_click_risk": {"level": zero_click_risk, "notes": zero_click_notes},
@@ -845,10 +872,118 @@ def add_deep_dive_diagnostics(issues: list[dict[str, Any]], site_id: str, site_p
     enriched = []
     for issue in issues:
         updated = dict(issue)
-        if issue.get("recommended_action_type") in {"snippet_content_packaging", "meta_tags", "page_improvement", "query_intent_mapping"}:
+        if issue.get("recommended_action_type") in {"snippet_content_packaging", "meta_tags", "page_improvement", "query_intent_mapping", "local_intent_ownership"}:
             updated["deep_dive"] = deep_dive_diagnostic(issue, site_id, site_profile, live=live)
         enriched.append(updated)
     return enriched
+
+
+def url_for_context_path(reference_url: str | None, path: str) -> str:
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    parsed = urlparse(reference_url or "")
+    scheme = parsed.scheme or "https"
+    netloc = parsed.netloc
+    if not netloc:
+        return path
+    return urlunparse((scheme, netloc, path if path.startswith("/") else f"/{path}", "", "", ""))
+
+
+def query_matches_any(query: str | None, terms: Any) -> bool:
+    q = (query or "").lower()
+    if not q:
+        return False
+    if isinstance(terms, dict):
+        iterable = [item for values in terms.values() for item in (values if isinstance(values, list) else [values])]
+    elif isinstance(terms, list):
+        iterable = terms
+    else:
+        iterable = [terms]
+    return any(str(term).lower() in q for term in iterable if term)
+
+
+def context_page_candidates(business_context: dict[str, Any] | None, reference_url: str | None) -> dict[str, str | None]:
+    page_roles = (business_context or {}).get("page_role_map") or {}
+    local_research = None
+    transactional = None
+    support = None
+    for path, role in page_roles.items():
+        role_text = str(role).lower()
+        url = url_for_context_path(reference_url, str(path))
+        if local_research is None and "local" in role_text and any(term in role_text for term in ["commercial", "research", "price", "cost"]):
+            local_research = url
+        if transactional is None and "transactional" in role_text:
+            transactional = url
+        if support is None and ("support" in role_text or "informational" in role_text):
+            support = url
+    return {"local_research": local_research, "transactional": transactional, "support": support}
+
+
+def business_context_says_national_deprioritized(business_context: dict[str, Any] | None) -> bool:
+    priority = (business_context or {}).get("target_customer_priority") or {}
+    deprioritized = priority.get("deprioritized", []) if isinstance(priority, dict) else []
+    text = " ".join(str(item).lower() for item in (deprioritized if isinstance(deprioritized, list) else [deprioritized]))
+    return "national" in text or "outside service area" in text
+
+
+def apply_business_context_to_issue(issue: dict[str, Any], business_context: dict[str, Any] | None, site_id: str | None = None) -> dict[str, Any]:
+    if not business_context:
+        return issue
+    query = issue.get("primary_query")
+    hierarchy = business_context.get("booking_intent_hierarchy") or {}
+    supporting_terms = hierarchy.get("supporting_only", []) if isinstance(hierarchy, dict) else []
+    high_priority_terms = hierarchy.get("highest_priority", []) if isinstance(hierarchy, dict) else []
+    page_roles = business_context.get("page_role_map") or {}
+    target = issue.get("target") or issue.get("canonical_target") or issue.get("raw_target")
+    reference_url = target or (business_context or {}).get("target_url") or (f"https://www.{site_id}" if site_id else None)
+    target_path = urlparse(target or "").path
+    role_text = str(page_roles.get(target_path, "")).lower()
+    is_support_query = query_matches_any(query, supporting_terms)
+    is_high_priority_query = query_matches_any(query, high_priority_terms)
+    is_support_page = "support" in role_text or "informational" in role_text
+    national_deprioritized = business_context_says_national_deprioritized(business_context)
+
+    if issue.get("recommended_action_type") in {"snippet_content_packaging", "meta_tags", "query_intent_mapping"} and is_support_query and not is_high_priority_query and (is_support_page or national_deprioritized):
+        candidates = context_page_candidates(business_context, reference_url)
+        preferred_owner = candidates.get("local_research") or candidates.get("transactional") or target
+        updated = dict(issue)
+        updated["recommended_action_type"] = "local_intent_ownership"
+        updated["title"] = f"Resolve Seattle/local intent ownership for '{query}'"
+        updated["target"] = preferred_owner
+        updated["canonical_target"] = preferred_owner
+        updated["source_target"] = target or reference_url
+        updated["consolidation_targets"] = {
+            "source_support_page": target or reference_url,
+            "preferred_local_owner": preferred_owner,
+            "conversion_target": candidates.get("transactional"),
+        }
+        updated["expected_click_delta"] = None
+        updated["expected_impact"] = "Clarify which local page should own this intent; optimize for Seattle bookings, not national informational CTR."
+        updated.setdefault("operator_judgment_notes", [])
+        updated["operator_judgment_notes"] = [
+            *updated["operator_judgment_notes"],
+            "business context deprioritizes national informational clicks",
+            "do not optimize the support page for broad national CTR unless it routes Seattle intent",
+            "decide whether to consolidate, canonicalize, redirect, or internally link from the support page to the local owner",
+        ]
+        score_components = dict(updated.get("score_components", {}))
+        score_components["business_context_goal_score"] = 1.0
+        score_components["national_click_discount"] = 0.25
+        updated["score_components"] = score_components
+        updated["business_context_adjustment"] = {
+            "from_action_type": issue.get("recommended_action_type"),
+            "reason": "supporting/national cost query is not the business goal; prioritize Seattle/local ownership",
+            "preferred_local_owner": preferred_owner,
+            "source_support_page": target or reference_url,
+        }
+        # Keep this visible despite discounting raw national-click upside; it is now an ownership/consolidation decision.
+        updated["priority_score"] = round(max(float(issue.get("priority_score", 0)), 0.5), 3)
+        return updated
+    return issue
+
+
+def apply_business_context(candidates: list[dict[str, Any]], business_context: dict[str, Any] | None, site_id: str | None = None) -> list[dict[str, Any]]:
+    return [apply_business_context_to_issue(candidate, business_context, site_id=site_id) for candidate in candidates]
 
 
 BUSINESS_IMPACT_CONTEXT_FIELDS = {
@@ -943,7 +1078,7 @@ def build_payload(
         primary_metric = DEFAULT_PRIMARY_METRIC if DEFAULT_PRIMARY_METRIC in metrics else next(iter(metrics.keys()), DEFAULT_PRIMARY_METRIC)
 
     context_check = context_quality_check(business_context)
-    candidates = derive_candidate_issues(analysis)
+    candidates = apply_business_context(derive_candidate_issues(analysis), business_context, site_id=site_id)
     ranked = apply_prioritization(candidates, learned, primary_metric)
     top_issues = ranked[:3] if ranked else [
         make_issue(
@@ -976,7 +1111,7 @@ def build_payload(
         action_id = f"weekly_action_{idx:02d}"
         action_type = issue["recommended_action_type"]
         expected_delta = issue.get("expected_click_delta")
-        expected_impact = f"Address {action_type.replace('_', ' ')} opportunity surfaced in the weekly review."
+        expected_impact = issue.get("expected_impact") or f"Address {action_type.replace('_', ' ')} opportunity surfaced in the weekly review."
         if isinstance(expected_delta, (int, float)) and expected_delta > 0:
             expected_impact = f"Estimated upside: ~{expected_delta:g} incremental clicks if the opportunity is fixed."
         elif isinstance(expected_delta, (int, float)) and expected_delta < 0:
@@ -997,6 +1132,9 @@ def build_payload(
                 "score_components": issue.get("score_components", {}),
                 "operator_judgment_notes": issue.get("operator_judgment_notes", []),
                 "deep_dive": issue.get("deep_dive"),
+                "business_context_adjustment": issue.get("business_context_adjustment"),
+                "consolidation_targets": issue.get("consolidation_targets"),
+                "source_target": issue.get("source_target"),
                 "needs_business_context": context_check["score"] < 0.75,
                 "learned_multiplier": issue.get("learned_multiplier", 1.0),
             }
@@ -1023,6 +1161,9 @@ def build_payload(
                     "score_components": issue.get("score_components", {}),
                     "operator_judgment_notes": issue.get("operator_judgment_notes", []),
                     "deep_dive": issue.get("deep_dive"),
+                    "business_context_adjustment": issue.get("business_context_adjustment"),
+                    "consolidation_targets": issue.get("consolidation_targets"),
+                    "source_target": issue.get("source_target"),
                     "business_context_score": context_check["score"],
                     "business_context_gaps": context_check["missing_fields"],
                     "business_context_questions": context_check["questions"],
