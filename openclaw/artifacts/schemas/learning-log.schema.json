@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toprank OpenClaw Learning Log",
+  "type": "object",
+  "properties": {
+    "site_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pattern",
+          "confidence",
+          "notes"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "site_id",
+    "generated_at",
+    "observations"
+  ],
+  "additionalProperties": true
+}

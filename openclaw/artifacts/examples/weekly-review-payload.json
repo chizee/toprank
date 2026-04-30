@@ -1,0 +1,79 @@
+{
+  "generated_at": "2026-04-29T22:00:00Z",
+  "trigger": {
+    "type": "weekly_review",
+    "notes": "Scheduled weekly review for example.com."
+  },
+  "state_snapshot": {
+    "summary": "Homepage CTR is lagging and one service page has indexation risk.",
+    "open_issues": [
+      {
+        "title": "Homepage CTR lag",
+        "severity": "warning",
+        "confidence": 0.78
+      },
+      {
+        "title": "Service page not consistently indexed",
+        "severity": "warning",
+        "confidence": 0.66
+      }
+    ],
+    "recent_actions": [],
+    "metrics": {
+      "organic_clicks_28d": 100,
+      "organic_impressions_28d": 4000,
+      "organic_ctr_28d": 2.5,
+      "avg_position_28d": 11.2,
+      "non_brand_clicks_28d": 72,
+      "branded_clicks_28d": 28
+    }
+  },
+  "audit": {
+    "summary": "Two high-leverage SEO issues were identified during the weekly review.",
+    "issues": [
+      {
+        "title": "Homepage title does not align with top impression queries.",
+        "severity": "warning",
+        "confidence": 0.81,
+        "evidence": [
+          "High impressions with below-baseline CTR.",
+          "Current title misses the primary service term."
+        ],
+        "recommended_action_type": "meta_tags"
+      }
+    ]
+  },
+  "action_plan": {
+    "actions": [
+      {
+        "action_id": "action_001",
+        "title": "Draft three homepage title/meta variants for approval.",
+        "type": "meta_tags",
+        "priority_score": 0.87,
+        "expected_impact": "Improve CTR on the site's highest-impression page.",
+        "requires_approval": true,
+        "reversibility": "high",
+        "owner": "operator"
+      }
+    ]
+  },
+  "verification": {
+    "checks": [
+      {
+        "name": "artifact completeness",
+        "status": "pass",
+        "notes": "Audit, action plan, and verification artifacts were written."
+      }
+    ],
+    "follow_up_due": "2026-05-13T22:00:00Z"
+  },
+  "queue_items": [
+    {
+      "item_id": "followup_example_homepage_ctr_14d",
+      "type": "feedback_check",
+      "status": "pending",
+      "due_at": "2026-05-13T22:00:00Z",
+      "notes": "Re-check homepage CTR after any approved metadata update."
+    }
+  ]
+}

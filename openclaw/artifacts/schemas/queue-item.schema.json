@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toprank OpenClaw Queue Item",
+  "type": "object",
+  "properties": {
+    "item_id": {
+      "type": "string"
+    },
+    "site_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "blocked",
+        "done"
+      ]
+    },
+    "due_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "item_id",
+    "site_id",
+    "type",
+    "status"
+  ],
+  "additionalProperties": true
+}

@@ -150,6 +150,23 @@ Add the marketplace and enable the plugin in `~/.claude/settings.json`:
 
 </details>
 
+
+---
+
+## OpenClaw (alpha)
+
+This repo now includes an **OpenClaw adaptive layer** under [`openclaw/`](openclaw/). It keeps the existing Toprank SEO skills intact, then adds:
+
+- multi-site portfolio state,
+- a per-site work folder for each website,
+- OpenClaw wrapper skills,
+- structured JSON artifacts for reviews, plans, and feedback.
+
+Start here:
+
+- [`openclaw/README.md`](openclaw/README.md)
+- [`docs/openclaw-adaptive-layer.md`](docs/openclaw-adaptive-layer.md)
+
 ---
 
 ## Skills
@@ -212,6 +229,7 @@ toprank/
 │   ├── geo-optimizer/           <- GEO for AI search engines
 │   └── setup-cms/               <- CMS connector
 ├── gemini/                      <- cross-model review via Gemini CLI
+├── openclaw/                    <- OpenClaw adaptive layer (multi-site wrappers, artifacts, installers)
 ├── toprank-upgrade-skill/       <- self-updater
 ├── test/                        <- unit + LLM-judge eval tests
 └── VERSION

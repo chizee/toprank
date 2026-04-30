@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toprank OpenClaw Site Profile",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "site_id": {
+      "type": "string"
+    },
+    "canonical_url": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "brand_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cms": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "business_context": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "archived"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "site_id",
+    "canonical_url",
+    "brand_terms",
+    "status"
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,4 @@
+# Run the Toprank OpenClaw scheduler every hour.
+# Edit TOPRANK_OPENCLAW_HOME if you keep runtime state elsewhere.
+
+0 * * * * TOPRANK_OPENCLAW_HOME="$HOME/.toprank/openclaw" /usr/bin/env python3 /ABSOLUTE/PATH/TO/toprank/openclaw/bin/run_scheduler.py >> "$HOME/.toprank/openclaw/logs/cron.log" 2>&1

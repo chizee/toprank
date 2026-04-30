@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+
+## [Unreleased]
+
+### Added
+- **OpenClaw adaptive layer (working MVP).** Added a new `openclaw/` repo surface that wraps the existing Toprank SEO skills for OpenClaw without duplicating them. The MVP includes multi-site portfolio docs, per-site work-folder conventions, wrapper skills (`toprank-site-onboard`, `toprank-portfolio-review`, `toprank-weekly-review`, `toprank-improve-page`, `toprank-investigate-drop`), JSON artifact schemas, helper scripts to bootstrap a portfolio and per-site workspace, onboarding persistence, weekly-review run persistence, portfolio review ranking, page-improvement persistence, drop-investigation persistence, follow-up discovery, a simple scheduler runner that processes due `feedback_check` items and surfaces manual-attention work, automatic baseline snapshot inheritance for feedback queue items, a first-pass feedback scorer that classifies follow-ups as `win`, `neutral`, `loss`, or `inconclusive` from before/after metric snapshots, learned-prior updates in `learned-patterns.json`, and a helper to hydrate observed metrics from real Google Search Console data.
+
+---
+
 ## [0.15.2] — 2026-04-29
 
 ### Changed

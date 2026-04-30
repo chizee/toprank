@@ -1,0 +1,26 @@
+{
+  "item_id": "followup_example_homepage_ctr_14d",
+  "site_id": "example.com",
+  "type": "feedback_check",
+  "status": "pending",
+  "due_at": "2026-05-13T22:00:00Z",
+  "notes": "Review homepage CTR after approved metadata changes.",
+  "primary_metric": "organic_clicks_28d",
+  "primary_direction": "higher_better",
+  "success_threshold_pct": 0.1,
+  "baseline_metrics": {
+    "organic_clicks_28d": 100,
+    "conversions_28d": 10
+  },
+  "observed_metrics": {
+    "organic_clicks_28d": 121,
+    "conversions_28d": 11
+  },
+  "guardrail_metrics": [
+    {
+      "metric": "conversions_28d",
+      "direction": "higher_better",
+      "max_worsen_pct": 0.05
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toprank OpenClaw Patch Set",
+  "type": "object",
+  "properties": {
+    "site_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "patches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "change_type": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "change_type",
+          "summary"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "site_id",
+    "generated_at",
+    "patches"
+  ],
+  "additionalProperties": true
+}

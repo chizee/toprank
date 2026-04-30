@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toprank OpenClaw Goal",
+  "type": "object",
+  "properties": {
+    "goal_id": {
+      "type": "string"
+    },
+    "site_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "primary_metric": {
+      "type": "string"
+    },
+    "target_delta": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "archived"
+      ]
+    }
+  },
+  "required": [
+    "goal_id",
+    "site_id",
+    "type",
+    "primary_metric",
+    "status"
+  ],
+  "additionalProperties": true
+}

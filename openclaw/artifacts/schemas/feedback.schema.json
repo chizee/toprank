@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toprank OpenClaw Feedback",
+  "type": "object",
+  "properties": {
+    "site_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "action_id": {
+      "type": "string"
+    },
+    "window_days": {
+      "type": "integer"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "win",
+        "neutral",
+        "loss",
+        "inconclusive"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "site_id",
+    "generated_at",
+    "action_id",
+    "window_days",
+    "outcome",
+    "summary"
+  ],
+  "additionalProperties": true
+}

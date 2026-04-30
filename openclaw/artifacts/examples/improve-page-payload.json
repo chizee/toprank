@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-04-29T22:00:00Z",
+  "trigger": {
+    "type": "improve_page",
+    "target": "https://example.com/services/dog-daycare",
+    "notes": "Improve a service page with weak CTR and missing schema."
+  },
+  "audit": {
+    "summary": "The service page has good impressions but weak CTR and limited structured context.",
+    "issues": [
+      {
+        "title": "Title and meta description do not match top service-intent queries.",
+        "severity": "warning",
+        "confidence": 0.79,
+        "evidence": [
+          "Page receives impressions but CTR is below site baseline.",
+          "Current title misses the city + service modifier."
+        ],
+        "recommended_action_type": "meta_tags"
+      }
+    ]
+  },
+  "action_plan": {
+    "actions": [
+      {
+        "action_id": "action_001",
+        "title": "Draft new title/meta and local-service schema for the page.",
+        "type": "page_improvement",
+        "priority_score": 0.84,
+        "expected_impact": "Improve CTR and clarify page relevance.",
+        "requires_approval": true,
+        "reversibility": "high",
+        "owner": "operator"
+      }
+    ]
+  },
+  "proposal": {
+    "proposal_type": "page_improvement",
+    "target": "https://example.com/services/dog-daycare",
+    "summary": "Generate 3 title/meta candidates and add schema markup recommendations.",
+    "requires_approval": true
+  },
+  "verification": {
+    "checks": [
+      {
+        "name": "proposal persisted",
+        "status": "pass",
+        "notes": "Proposal artifact stored."
+      }
+    ],
+    "follow_up_due": "2026-05-13T22:00:00Z"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-04-29T22:00:00Z",
+  "trigger": {
+    "type": "traffic_drop_detected",
+    "notes": "Organic clicks fell 28% week over week on the primary service cluster."
+  },
+  "audit": {
+    "summary": "Traffic drop investigation identified one likely technical issue and one likely intent/CTR issue.",
+    "issues": [
+      {
+        "title": "A high-value service page may have fallen out of the index.",
+        "severity": "critical",
+        "confidence": 0.82,
+        "evidence": [
+          "Primary service page lost impressions sharply.",
+          "Recent crawl reported inconsistent indexation."
+        ],
+        "recommended_action_type": "drop_recovery"
+      },
+      {
+        "title": "Homepage CTR declined after a recent copy change.",
+        "severity": "warning",
+        "confidence": 0.68,
+        "evidence": [
+          "CTR down on high-impression brand-adjacent queries."
+        ],
+        "recommended_action_type": "drop_recovery"
+      }
+    ]
+  },
+  "action_plan": {
+    "actions": [
+      {
+        "action_id": "action_001",
+        "title": "Investigate indexation and request recrawl if needed.",
+        "type": "drop_recovery",
+        "priority_score": 0.92,
+        "expected_impact": "Recover lost visibility from a likely indexation issue.",
+        "requires_approval": true,
+        "reversibility": "high",
+        "owner": "operator"
+      }
+    ]
+  },
+  "verification": {
+    "checks": [
+      {
+        "name": "drop investigation persisted",
+        "status": "pass",
+        "notes": "Recovery plan stored."
+      }
+    ],
+    "follow_up_due": "2026-05-06T22:00:00Z"
+  }
+}

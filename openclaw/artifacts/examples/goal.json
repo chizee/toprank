@@ -1,0 +1,8 @@
+{
+  "goal_id": "goal_example_001",
+  "site_id": "example.com",
+  "type": "grow_non_brand_clicks",
+  "primary_metric": "non_brand_clicks_28d",
+  "target_delta": 0.2,
+  "status": "active"
+}

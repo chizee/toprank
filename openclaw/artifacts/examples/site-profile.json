@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "site_id": "example.com",
+  "canonical_url": "https://example.com",
+  "display_name": "Example",
+  "brand_terms": [
+    "Example"
+  ],
+  "cms": "nextjs",
+  "business_context": "Demo site profile for the OpenClaw adaptive layer.",
+  "status": "active"
+}

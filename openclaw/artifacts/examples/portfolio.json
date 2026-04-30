@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "portfolio_id": "default",
+  "sites": [
+    {
+      "site_id": "example.com",
+      "display_name": "Example",
+      "business_weight": 1.0,
+      "cadence": "weekly",
+      "status": "active"
+    }
+  ]
+}

@@ -22,6 +22,17 @@ Each skill lives in its own folder under a category directory (e.g., `seo/`, `go
     *   `VERSION`
 6.  **Update Changelog**: Add a brief description of your new skill to `CHANGELOG.md`.
 
+
+### 1A. OpenClaw adaptive layer
+
+The repo also ships an OpenClaw-specific surface under `openclaw/`.
+
+- Keep the existing `seo/` and `google-ads/` skills canonical.
+- Add runtime-specific wrappers under `openclaw/skills/` instead of duplicating skill logic.
+- Put schemas under `openclaw/artifacts/schemas/` and shared docs under `openclaw/shared/`.
+- **Do not register OpenClaw wrapper skills in `.claude-plugin/plugin.json`** — they are not part of the Claude plugin surface.
+- Runtime state belongs under `~/.toprank/openclaw`, not in git.
+
 ### 2. Improving Existing Skills
 
 *   Refine prompts in `SKILL.md` for better accuracy.

@@ -1,0 +1,17 @@
+{
+  "site_id": "example.com",
+  "generated_at": "2026-04-29T22:00:00Z",
+  "goal_id": "goal_example_001",
+  "actions": [
+    {
+      "action_id": "action_001",
+      "title": "Rewrite the homepage title and meta description to match high-impression queries.",
+      "type": "meta_tags",
+      "priority_score": 0.87,
+      "expected_impact": "Improve CTR on a high-impression page.",
+      "requires_approval": true,
+      "reversibility": "high",
+      "owner": "operator"
+    }
+  ]
+}

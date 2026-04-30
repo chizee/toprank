@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toprank OpenClaw Proposal",
+  "type": "object",
+  "properties": {
+    "site_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "proposal_type": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "requires_approval": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "site_id",
+    "generated_at",
+    "proposal_type",
+    "target",
+    "summary",
+    "requires_approval"
+  ],
+  "additionalProperties": true
+}
