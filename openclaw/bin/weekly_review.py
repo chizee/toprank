@@ -1345,8 +1345,56 @@ def run_analysis(site_property: str, days: int, brand_terms: str | None) -> dict
     cmd = [sys.executable, str(ANALYZE_GSC), "--site", site_property, "--days", str(days), "--output", str(output_path)]
     if brand_terms:
         cmd.extend(["--brand-terms", brand_terms])
-    subprocess.run(cmd, check=True)
+    completed = subprocess.run(cmd, check=True, text=True, capture_output=True)
+    if completed.stdout:
+        print(completed.stdout, file=sys.stderr, end="")
+    if completed.stderr:
+        print(completed.stderr, file=sys.stderr, end="")
     return json.loads(output_path.read_text())
+
+
+def build_user_message(site_id: str, result: dict[str, Any], payload: dict[str, Any], context_request: dict[str, Any] | None) -> str:
+    summary = payload.get("state_snapshot", {}).get("summary") or "Weekly review complete."
+    actions = (payload.get("action_plan") or {}).get("actions") or []
+    top_action = actions[0] if actions else {}
+    queue_items = result.get("queue_items_written") or []
+    proposal_path = next((path for path in queue_items if "/proposal_" in path), None)
+    lines = [
+        f"Weekly SEO review complete for `{site_id}`.",
+        "",
+        f"Run: `{result.get('run_dir')}`",
+        f"Summary: {summary}",
+    ]
+    if top_action:
+        lines.extend([
+            "",
+            "Top proposed next action:",
+            f"- Type: `{top_action.get('type')}`",
+            f"- Target: `{top_action.get('target')}`",
+            f"- Why: {top_action.get('expected_impact')}",
+            f"- Requires approval: {'yes' if top_action.get('requires_approval') else 'no'}",
+        ])
+        deep_dive = top_action.get("deep_dive") or {}
+        checks = deep_dive.get("checks") or {}
+        if deep_dive:
+            lines.append(
+                f"- Deep dive: {deep_dive.get('status')} "
+                f"(SERP {'yes' if checks.get('serp_inspected') else 'no'}, "
+                f"snippet {'yes' if checks.get('current_snippet_inspected') else 'no'}, "
+                f"above-fold {'yes' if checks.get('above_the_fold_inspected') else 'no'})"
+            )
+    if proposal_path:
+        lines.extend(["", f"Proposal file: `{proposal_path}`"])
+    if context_request:
+        questions = context_request.get("business_context_questions") or []
+        score = context_request.get("business_context_score")
+        percent = round(float(score or 0) * 100)
+        lines.extend([
+            "",
+            f"Before I can recommend/approve edits, business context is only {percent}% complete. Please answer these, roughly is fine:",
+        ])
+        lines.extend(f"{idx}. {question}" for idx, question in enumerate(questions, start=1))
+    return "\n".join(lines)
 
 
 def main(argv: list[str]) -> int:
@@ -1390,6 +1438,7 @@ def main(argv: list[str]) -> int:
             "output_path": context_request["output_path"],
             "questions": context_request["business_context_questions"],
         }
+    result["user_message"] = build_user_message(site_id, result, payload, context_request)
     print(json.dumps(result, indent=2))
     return 0
 

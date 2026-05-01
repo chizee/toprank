@@ -150,7 +150,7 @@ for i in "${!sites[@]}"; do
   # Cron day-of-week: 1=Monday. Spread sites across weekdays, then wrap.
   dow=$(( (i % 5) + 1 ))
   cron_expr="$minute $hour * * $dow"
-  weekly_msg="Run the automated Toprank weekly SEO review for $site. Execute exactly: TOPRANK_OPENCLAW_HOME=\"$RUNTIME_HOME\" python3 \"$REPO_ROOT/openclaw/bin/weekly_review.py\" \"$site\". Then inspect the generated run_dir from stdout. Summarize the top issue, proposed next action, whether it requires approval, and the artifact path. Do not edit websites, CMS, repos, or publish anything. If the command fails, report the blocker."
+  weekly_msg="Run the automated Toprank weekly SEO review for $site. Execute exactly: TOPRANK_OPENCLAW_HOME=\"$RUNTIME_HOME\" python3 \"$REPO_ROOT/openclaw/bin/weekly_review.py\" \"$site\". Parse the JSON stdout. If it contains user_message, send that user_message to the user as the main visible update. If business_context_request is present, explicitly ask those questions; do not bury them behind artifact paths. Otherwise summarize the top issue, proposed next action, whether it requires approval, and the artifact path. Do not edit websites, CMS, repos, or publish anything. If the command fails, report the blocker."
 
   weekly_args=(
     --cron "$cron_expr"
