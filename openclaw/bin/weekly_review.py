@@ -935,7 +935,16 @@ def business_context_local_label(business_context: dict[str, Any] | None) -> str
     geography = str(context.get("primary_geography") or "").strip()
     if geography:
         return geography
-    locations = context.get("location_priorities") or context.get("locations") or []
+    location_priorities = context.get("location_priorities")
+    if isinstance(location_priorities, dict):
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        ranked_locations = sorted(
+            location_priorities.items(),
+            key=lambda item: priority_order.get(str((item[1] or {}).get("priority", "") if isinstance(item[1], dict) else "").lower(), 3),
+        )
+        if ranked_locations:
+            return "/".join(str(location) for location, _details in ranked_locations[:3])
+    locations = context.get("target_locations") or context.get("locations") or location_priorities or []
     values = context_values(locations)
     if values:
         return "/".join(str(value) for value in values[:3])
@@ -981,13 +990,26 @@ def business_context_says_national_deprioritized(business_context: dict[str, Any
     return "national" in text or "outside service area" in text or "non-local" in text
 
 
+def booking_intent_terms(hierarchy: Any) -> tuple[list[Any], list[Any]]:
+    if isinstance(hierarchy, dict):
+        return context_values(hierarchy.get("highest_priority", [])), context_values(hierarchy.get("supporting_only", []))
+    ordered = context_values(hierarchy)
+    if not ordered:
+        return [], []
+    high_priority = ordered[:1]
+    supporting = ordered[1:]
+    informational_markers = ("cost", "price", "how much", "average", "guide", "research", "compare")
+    for term in ordered:
+        if any(marker in str(term).lower() for marker in informational_markers) and term not in supporting:
+            supporting.append(term)
+    return high_priority, supporting
+
 def apply_business_context_to_issue(issue: dict[str, Any], business_context: dict[str, Any] | None, site_id: str | None = None) -> dict[str, Any]:
     if not business_context:
         return issue
     query = issue.get("primary_query")
     hierarchy = business_context.get("booking_intent_hierarchy") or {}
-    supporting_terms = hierarchy.get("supporting_only", []) if isinstance(hierarchy, dict) else []
-    high_priority_terms = hierarchy.get("highest_priority", []) if isinstance(hierarchy, dict) else []
+    high_priority_terms, supporting_terms = booking_intent_terms(hierarchy)
     page_roles = business_context.get("page_role_map") or {}
     target = issue.get("target") or issue.get("canonical_target") or issue.get("raw_target")
     reference_url = target or (business_context or {}).get("target_url") or (f"https://www.{site_id}" if site_id else None)

@@ -15,7 +15,7 @@ Each recommendation should expose the inputs that drove ranking:
 - `goal_alignment_score` — whether the signal supports the active goal, especially non-brand growth
 - `actionability_score` — whether there is a clear SEO lever vs a vague investigation
 - `business_intent_score` — whether the query likely maps to revenue, not just informational visits
-- `business_context_goal_score` — whether the opportunity matches the site-specific business goal, e.g. Seattle/local bookings over national informational traffic
+- `business_context_goal_score` — whether the opportunity matches the site-specific business goal, e.g. local qualified outcomes over national informational traffic
 - `url_quality_score` — whether the URL is canonical/actionable or a tracking/parameter variant
 - `learned_multiplier` — site-local prior from previous outcomes
 
@@ -39,7 +39,7 @@ These are not hard approval rules. They are decision levers for the operator and
 - For informational price queries, classify the action as snippet/content packaging or query-intent mapping unless a SERP diagnosis proves metadata is the main lever.
 - Explain why the top action is actionable and what would make it unsafe or low-confidence.
 - Before proposing an edit for CTR/snippet/content opportunities, automatically run a deep-dive diagnostic: SERP snapshot, current title/meta/H1, above-the-fold content packaging, CTA/price-answer check, and zero-click risk classification.
-- If business context deprioritizes a traffic class, reframe the recommendation instead of chasing raw clicks. Example: for a local service business that only values Seattle bookings, broad national cost-query CTR should become a local intent ownership / consolidation proposal, not a national blog CTR optimization.
+- If business context deprioritizes a traffic class, reframe the recommendation instead of chasing raw clicks. Example: for a local service business that only values local qualified outcomes, broad national cost-query CTR should become a local intent ownership / consolidation proposal, not a national blog CTR optimization.
 - If business-impact context is incomplete, create an explicit `business_context_request` queue item and surface the questions in the runner result instead of burying them in verification warnings. Missing business context blocks approval/editing, but should not block the diagnostic deep dive.
 
 ## Approval boundary

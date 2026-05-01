@@ -115,10 +115,10 @@ MER captures organic, brand, and retention — so it's higher than paid ROAS and
 ## Usage in Findings
 
 **Before (account-average framing):**
-> "Keyword 'emergency plumber seattle' has CPA of $72, which is 150% of account average."
+> "Keyword 'emergency plumber example-city' has CPA of $72, which is 150% of account average."
 
 **After (margin-aware framing, requires `margin=0.4`, `aov=$180` from business-context.json):**
-> "Keyword 'emergency plumber seattle' has CPA of $72. Your Break-Even CPA is $72 (AOV $180 × 40% margin) — every conversion from this keyword nets $0 profit. Either improve CVR or pause."
+> "Keyword 'emergency plumber example-city' has CPA of $72. Your Break-Even CPA is $72 (AOV $180 × 40% margin) — every conversion from this keyword nets $0 profit. Either improve CVR or pause."
 
 **Headroom example:**
 > "Example City Search is profitable: CPA $18, Break-Even $72, **~$2,700/mo headroom** at 50 conversions. Budget-Lost IS is 35% — raising budget by $1,500/mo could capture ~$5,000 more revenue."

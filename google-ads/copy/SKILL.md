@@ -111,7 +111,7 @@ Read `{data_dir}/business-context.json` `competitors` and `differentiators` fiel
 | DO use specific features competitors lack | "Same-Day Service" beats "Better Service". Specificity implies superiority without claiming it |
 | DO use pricing advantage if real | "Flat-Rate Pricing" or "From $99" differentiates against competitors with opaque pricing |
 | DO use trust signals aggressively | "25+ Years", "4.9★ Google Rating", "500+ 5-Star Reviews" — these are verifiable and powerful |
-| DO use location specificity | "Seattle's Own [Service]" or "Locally Owned Since 1998" differentiates against national chains |
+| DO use location specificity | "Example City's Own [Service]" or "Locally Owned Since 1998" differentiates against national chains |
 | DO use speed/convenience | "Same-Day", "24/7", "Book Online in 60 Seconds" — operational advantages competitors may not match |
 | DO use guarantees | "Satisfaction Guaranteed", "Free Re-Service", "No Fix, No Fee" — risk reversal converts |
 
