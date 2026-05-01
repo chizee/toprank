@@ -116,10 +116,16 @@ brand_terms      = ["<name variations from user answer 1 + GSC brand signal quer
 competitors      = ["<from user answer 3, or []>"]
 key_topics       = ["<top 5-8 query clusters from GSC>"]
 service_value_weights = {"<service>": "<relative value/margin/priority>"}
-target_customer_priority = ["<highest-value customer segments>"]
+target_customer_priority = {
+    "primary": ["<highest-value customer segments>"],
+    "deprioritized": ["<segments that should not drive SEO prioritization>"],
+}
 location_priorities = {"<location>": {"priority": "high|medium|low", "notes": "<capacity/margin/strategic context>"}}
 conversion_events = ["<events that indicate organic business value>"]
-booking_intent_hierarchy = ["<highest-intent query patterns first>"]
+booking_intent_hierarchy = {
+    "highest_priority": ["<highest-intent query patterns>"],
+    "supporting_only": ["<research/support queries that need routing, not direct CTR optimization>"],
+}
 local_proof_points = ["<differentiators to use in snippets/content>"]
 serp_competitor_positioning = {"<priority query>": ["<competitors or SERP features to beat>"]}
 page_role_map = {"<url or path>": "transactional|informational|supporting|unknown"}
@@ -161,6 +167,40 @@ Output `CACHE_STATUS=fresh_loaded` after saving so downstream phases know contex
 
 Confirm to the user: "Business profile saved for **$DOMAIN** — I'll use this automatically in all future SEO audits."
 
+### Compatibility examples
+
+Preferred schema with explicit prioritization:
+
+```json
+{
+  "target_customer_priority": {
+    "primary": ["local buyers", "urgent-need customers"],
+    "deprioritized": ["national informational readers outside service area"]
+  },
+  "booking_intent_hierarchy": {
+    "highest_priority": ["emergency roof repair near me", "roof repair company"],
+    "supporting_only": ["how much does roof repair cost", "roof repair price guide"]
+  },
+  "page_role_map": {
+    "/roof-repair": "transactional local landing page",
+    "/blog/roof-repair-cost": "supporting informational page"
+  }
+}
+```
+
+Legacy list schema remains accepted, but list values are treated as positive/ordered priorities only:
+
+```json
+{
+  "target_customer_priority": ["local buyers", "recurring customers"],
+  "booking_intent_hierarchy": ["roof repair near me", "roof repair cost"],
+  "page_role_map": [
+    {"path": "/roof-repair", "role": "transactional local landing page"},
+    {"path": "/blog/roof-repair-cost", "role": "supporting informational page"}
+  ]
+}
+```
+
 ---
 
 ## Using business context in analysis
@@ -176,10 +216,10 @@ Once loaded or generated, these values inform every phase that follows:
 | `key_topics` | Anchor content gap recommendations to confirmed topics, not speculative ones |
 | `business_summary` | Open Phase 6 report with a one-liner so all recommendations read as contextual, not generic |
 | `service_value_weights` | Convert SEO opportunity into business-impact priority instead of click priority |
-| `target_customer_priority` | Penalize low-value segments and promote strategic customer journeys |
+| `target_customer_priority` | Penalize low-value segments and promote strategic customer journeys. Preferred shape: `{primary: [...], deprioritized: [...]}`; legacy list shape is treated as priority-only, never as deprioritized. |
 | `location_priorities` | Avoid pushing demand to locations that are capacity-constrained or lower priority |
 | `conversion_events` | Define what success means after a proposed SEO action is approved |
-| `booking_intent_hierarchy` | Score query opportunities by booking likelihood, not just impression volume |
+| `booking_intent_hierarchy` | Score query opportunities by booking likelihood, not just impression volume. Preferred shape: `{highest_priority: [...], supporting_only: [...]}`; legacy list shape is interpreted in order with likely research terms treated as supporting. |
 | `local_proof_points` | Ground titles/snippets/content packaging in real differentiators |
 | `serp_competitor_positioning` | Decide whether CTR gaps are metadata, SERP feature, competitor, or zero-click problems |
 | `page_role_map` | Avoid treating informational blog pages like transactional landing pages |

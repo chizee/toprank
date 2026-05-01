@@ -12,7 +12,7 @@
         "All headlines are <= 30 characters",
         "Every description shows a character count",
         "All descriptions are <= 90 characters",
-        "At least one headline includes Example City (location specificity)",
+        "At least one headline includes Portland (location specificity)",
         "At least one headline references the 4.8 star rating or 200+ reviews (social proof)",
         "At least one headline references 12 years in business (trust signal)",
         "Pin positions are indicated (at least H1 pinned to position 1)"

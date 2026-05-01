@@ -39,7 +39,7 @@
     },
 
     "healthcare": {
-      "aliases": ["dental", "dentist", "dermatology", "medical", "clinic", "urgent care", "physical therapy", "chiropractor", "veterinary"],
+      "aliases": ["dental", "dentist", "dermatology", "medical", "clinic", "urgent care", "physical therapy", "chiropractor"],
       "typical_margin": 0.35,
       "margin_range": [0.25, 0.5],
       "aov_range_usd": [150, 2000],

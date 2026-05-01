@@ -1,3 +1,4 @@
+import os
 import sys
 import tempfile
 import unittest
@@ -214,6 +215,82 @@ class WeeklyReviewScoringTest(unittest.TestCase):
 
         self.assertEqual(updated["recommended_action_type"], "snippet_content_packaging")
         self.assertNotIn("national_click_discount", updated.get("score_components", {}))
+
+    def test_support_page_retargeting_without_national_deprioritization_keeps_score(self) -> None:
+        issue = {
+            "recommended_action_type": "snippet_content_packaging",
+            "primary_query": "how much does roof repair cost",
+            "target": "https://www.example.com/blog/roof-repair-cost",
+            "canonical_target": "https://www.example.com/blog/roof-repair-cost",
+            "priority_score": 0.6,
+            "score_components": {},
+            "operator_judgment_notes": [],
+        }
+        business_context = {
+            "target_customer_priority": ["local homeowners", "researchers"],
+            "booking_intent_hierarchy": {"supporting_only": ["how much does roof repair cost"]},
+            "page_role_map": {
+                "/blog/roof-repair-cost": "supporting informational page",
+                "/roof-repair-prices": "local commercial-research page",
+            },
+        }
+
+        updated = weekly_review.apply_business_context_to_issue(issue, business_context, site_id="example.com")
+
+        self.assertEqual(updated["recommended_action_type"], "local_intent_ownership")
+        self.assertEqual(updated["priority_score"], 0.6)
+        self.assertNotIn("national_click_discount", updated.get("score_components", {}))
+        self.assertFalse(any("national informational" in note for note in updated["operator_judgment_notes"]))
+
+    def test_query_only_retargeting_uses_context_support_page_as_source(self) -> None:
+        issue = {
+            "recommended_action_type": "query_intent_mapping",
+            "primary_query": "how much does roof repair cost",
+            "priority_score": 0.6,
+            "score_components": {},
+            "operator_judgment_notes": [],
+        }
+        business_context = {
+            "target_customer_priority": {"deprioritized": ["national informational readers outside service area"]},
+            "booking_intent_hierarchy": {"supporting_only": ["how much does roof repair cost"]},
+            "page_role_map": [
+                {"path": "/blog/roof-repair-cost", "role": "supporting informational page"},
+                {"path": "/roof-repair-prices", "role": "local commercial-research page"},
+            ],
+        }
+
+        updated = weekly_review.apply_business_context_to_issue(issue, business_context, site_id="example.com")
+
+        self.assertEqual(updated["recommended_action_type"], "local_intent_ownership")
+        self.assertEqual(updated["source_target"], "https://www.example.com/blog/roof-repair-cost")
+        self.assertEqual(updated["consolidation_targets"]["source_support_page"], "https://www.example.com/blog/roof-repair-cost")
+        self.assertEqual(updated["target"], "https://www.example.com/roof-repair-prices")
+
+    def test_live_fetch_headers_include_vercel_bypass_from_env(self) -> None:
+        previous = os.environ.get("TOPRANK_VERCEL_PROTECTION_BYPASS")
+        os.environ["TOPRANK_VERCEL_PROTECTION_BYPASS"] = "test-bypass-secret"
+        try:
+            headers = weekly_review.live_fetch_headers()
+        finally:
+            if previous is None:
+                os.environ.pop("TOPRANK_VERCEL_PROTECTION_BYPASS", None)
+            else:
+                os.environ["TOPRANK_VERCEL_PROTECTION_BYPASS"] = previous
+
+        self.assertEqual(headers["x-vercel-protection-bypass"], "test-bypass-secret")
+
+    def test_live_fetch_headers_support_site_profile_header_env(self) -> None:
+        previous = os.environ.get("CUSTOM_FETCH_TOKEN")
+        os.environ["CUSTOM_FETCH_TOKEN"] = "custom-token"
+        try:
+            headers = weekly_review.live_fetch_headers({"live_fetch_header_env": {"x-custom-token": "CUSTOM_FETCH_TOKEN"}})
+        finally:
+            if previous is None:
+                os.environ.pop("CUSTOM_FETCH_TOKEN", None)
+            else:
+                os.environ["CUSTOM_FETCH_TOKEN"] = previous
+
+        self.assertEqual(headers["x-custom-token"], "custom-token")
 
     def test_national_click_discount_demotes_ranking_score_without_floor_boost(self) -> None:
         issue = {

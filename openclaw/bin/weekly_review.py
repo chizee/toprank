@@ -8,6 +8,7 @@ import html
 from html.parser import HTMLParser
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -607,14 +608,35 @@ class PageSnapshotParser(HTMLParser):
                 self.cta_texts.append(text)
 
 
-def fetch_url_text(url: str, timeout: int = 12) -> tuple[str | None, dict[str, Any]]:
-    request = Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (compatible; ToprankOpenClawSEOOperator/1.0; +https://openclaw.ai)",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-    )
+def live_fetch_headers(site_profile: dict[str, Any] | None = None) -> dict[str, str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; ToprankOpenClawSEOOperator/1.0; +https://openclaw.ai)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    profile = site_profile or {}
+    for name, value in (profile.get("live_fetch_headers") or {}).items():
+        if value:
+            headers[str(name)] = str(value)
+    for name, env_name in (profile.get("live_fetch_header_env") or {}).items():
+        value = os.environ.get(str(env_name))
+        if value:
+            headers[str(name)] = value
+
+    bypass_env_names = [
+        profile.get("vercel_protection_bypass_env"),
+        "TOPRANK_VERCEL_PROTECTION_BYPASS",
+        "VERCEL_PROTECTION_BYPASS",
+        "VERCEL_AUTOMATION_BYPASS_SECRET",
+    ]
+    for env_name in bypass_env_names:
+        if env_name and os.environ.get(str(env_name)):
+            headers["x-vercel-protection-bypass"] = os.environ[str(env_name)]
+            break
+    return headers
+
+
+def fetch_url_text(url: str, timeout: int = 12, site_profile: dict[str, Any] | None = None) -> tuple[str | None, dict[str, Any]]:
+    request = Request(url, headers=live_fetch_headers(site_profile))
     try:
         with urlopen(request, timeout=timeout) as response:
             content_type = response.headers.get("content-type", "")
@@ -721,7 +743,7 @@ def page_snapshot_for_url(url: str | None, site_profile: dict[str, Any] | None =
     if source_path:
         return parse_frontmatter_snapshot(source_path.read_text(errors="ignore"), source_path)
     if live and url:
-        raw_html, meta = fetch_url_text(url)
+        raw_html, meta = fetch_url_text(url, site_profile=site_profile)
         if raw_html:
             return parse_html_snapshot(raw_html, "live_fetch")
         return {"source": "live_fetch", **meta}
@@ -1018,44 +1040,52 @@ def apply_business_context_to_issue(issue: dict[str, Any], business_context: dic
     is_high_priority_query = query_matches_any(query, high_priority_terms)
     is_support_page = "support" in role_text or "informational" in role_text
     national_deprioritized = business_context_says_national_deprioritized(business_context)
+    candidates = context_page_candidates(business_context, reference_url)
+    context_support_page = candidates.get("support")
 
-    if issue.get("recommended_action_type") in {"snippet_content_packaging", "meta_tags", "query_intent_mapping"} and is_support_query and not is_high_priority_query and (is_support_page or national_deprioritized):
-        candidates = context_page_candidates(business_context, reference_url)
-        preferred_owner = candidates.get("local_research") or candidates.get("transactional") or target
+    if issue.get("recommended_action_type") in {"snippet_content_packaging", "meta_tags", "query_intent_mapping"} and is_support_query and not is_high_priority_query and (is_support_page or context_support_page or national_deprioritized):
+        source_support_page = target or context_support_page or reference_url
+        preferred_owner = candidates.get("local_research") or candidates.get("transactional") or source_support_page
         updated = dict(issue)
         updated["recommended_action_type"] = "local_intent_ownership"
         locality = business_context_local_label(business_context)
         updated["title"] = f"Resolve {locality} intent ownership for '{query}'"
         updated["target"] = preferred_owner
         updated["canonical_target"] = preferred_owner
-        updated["source_target"] = target or reference_url
+        updated["source_target"] = source_support_page
         updated["consolidation_targets"] = {
-            "source_support_page": target or reference_url,
+            "source_support_page": source_support_page,
             "preferred_local_owner": preferred_owner,
             "conversion_target": candidates.get("transactional"),
         }
         updated["expected_click_delta"] = None
-        updated["expected_impact"] = f"Clarify which {locality} page should own this intent; optimize for qualified local outcomes, not national informational CTR."
+        updated["expected_impact"] = f"Clarify which {locality} page should own this intent; optimize for qualified local outcomes, not raw support-page CTR."
         updated.setdefault("operator_judgment_notes", [])
-        updated["operator_judgment_notes"] = [
-            *updated["operator_judgment_notes"],
-            "business context deprioritizes national informational clicks",
-            "do not optimize the support page for broad national CTR unless it routes qualified local intent",
+        ownership_notes = [
+            "supporting intent should route qualified demand to the best local owner",
             "decide whether to consolidate, canonicalize, redirect, or internally link from the support page to the local owner",
         ]
+        if national_deprioritized:
+            ownership_notes = [
+                "business context deprioritizes national informational clicks",
+                "do not optimize the support page for broad national CTR unless it routes qualified local intent",
+                *ownership_notes,
+            ]
+        updated["operator_judgment_notes"] = [*updated["operator_judgment_notes"], *ownership_notes]
         score_components = dict(updated.get("score_components", {}))
         score_components["business_context_goal_score"] = 1.0
-        score_components["national_click_discount"] = 0.25
+        if national_deprioritized:
+            score_components["national_click_discount"] = 0.25
         updated["score_components"] = score_components
         updated["business_context_adjustment"] = {
             "from_action_type": issue.get("recommended_action_type"),
-            "reason": f"supporting/national query is not the business goal; prioritize {locality} ownership",
+            "reason": f"supporting query is not the direct business goal; prioritize {locality} ownership",
             "preferred_local_owner": preferred_owner,
-            "source_support_page": target or reference_url,
+            "source_support_page": source_support_page,
         }
-        national_discount = score_components["national_click_discount"]
         raw_priority = float(issue.get("priority_score", 0))
-        updated["priority_score"] = round(raw_priority * national_discount, 3)
+        if national_deprioritized:
+            updated["priority_score"] = round(raw_priority * score_components["national_click_discount"], 3)
         return updated
     return issue
 
