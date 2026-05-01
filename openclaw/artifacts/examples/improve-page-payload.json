@@ -2,7 +2,7 @@
   "generated_at": "2026-04-29T22:00:00Z",
   "trigger": {
     "type": "improve_page",
-    "target": "https://example.com/services/dog-daycare",
+    "target": "https://example.com/services/roof-repair",
     "notes": "Improve a service page with weak CTR and missing schema."
   },
   "audit": {
@@ -36,7 +36,7 @@
   },
   "proposal": {
     "proposal_type": "page_improvement",
-    "target": "https://example.com/services/dog-daycare",
+    "target": "https://example.com/services/roof-repair",
     "summary": "Generate 3 title/meta candidates and add schema markup recommendations.",
     "requires_approval": true
   },

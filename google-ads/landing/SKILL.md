@@ -132,7 +132,7 @@ Append the score to `{data_dir}/landing-page-history.json` so re-audits can show
           "psi_mobile_cls": 0.15,
           "psi_mobile_inp_ms": 320,
           "estimated_lift_usd_per_month": 380,
-          "ad_groups": ["Tukwila Search - Roofing"],
+          "ad_groups": ["Example City Search - Roofing"],
           "monthly_spend": 1240.50,
           "monthly_cvr": 2.1,
           "biggest_leak": "Page Speed — LCP 4.2s on mobile"

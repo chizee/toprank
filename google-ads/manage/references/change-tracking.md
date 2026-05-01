@@ -11,7 +11,7 @@ Append to the `changes` array:
   "id": "chg_<unix_timestamp_ms>",
   "timestamp": "<ISO 8601>",
   "action": "<action_type>",
-  "summary": "<specific one-liner, e.g. 'Paused 5 non-converting keywords in Pet Daycare - Seattle saving ~$340/month'>",
+  "summary": "<specific one-liner, e.g. 'Paused 5 non-converting keywords in Example Service - Local saving ~$340/month'>",
   "details": {
     "campaignId": "<if applicable>",
     "campaignName": "<if applicable>",

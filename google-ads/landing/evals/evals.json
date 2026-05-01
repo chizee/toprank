@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "audit this landing page for my Google Ads traffic: https://example.com/dog-training. CTR is solid but conversions are weak — tell me what's hurting the page and what to fix first.",
+      "prompt": "audit this landing page for my Google Ads traffic: https://example.com/roof-repair. CTR is solid but conversions are weak — tell me what's hurting the page and what to fix first.",
       "expected_output": "A landing-page diagnostic covering message match, speed/mobile UX, trust signals, CTA/form friction, and the single highest-impact fix.",
       "files": [],
       "expectations": [

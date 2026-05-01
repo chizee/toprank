@@ -479,7 +479,7 @@ From these signals, identify the 2-3 most distinct visitor segments. For each:
 | **Language** | Specific words, phrases, jargon they use | Direct input to title/description rewrites |
 | **Decision trigger** | What makes them convert or return | Shapes CTA and landing page copy |
 
-Be specific. "Small business owner comparing dog boarding software for a 3-location
+Be specific. "Small business owner comparing field-service software for a 3-location
 operation" is useful. "Users who want to learn more" is not. Ground every persona
 in actual GSC query patterns — if you can't point to a cluster of queries that
 this persona would type, the persona is speculative and should be dropped.

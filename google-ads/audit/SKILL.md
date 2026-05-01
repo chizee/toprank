@@ -59,7 +59,7 @@ If a critical query errors out (auth, schema), surface the error and stop — do
 
 ## Phase 2 — Scope handling
 
-If the user narrows the audit ("focus on grooming", "campaign X", "just check waste"):
+If the user narrows the audit ("focus on one campaign", "campaign X", "just check waste"):
 
 - Match campaign names by case-insensitive substring. If no match, list available campaigns and ask.
 - Filter the in-memory dataset before scoring — no extra API calls.

@@ -13,7 +13,7 @@
   },
   "ctr_gaps_by_page": [
     {
-      "page": "https://example.com/services/dog-daycare",
+      "page": "https://example.com/services/roof-repair",
       "clicks": 20,
       "impressions": 1200,
       "ctr": 1.67,
@@ -22,7 +22,7 @@
   ],
   "ctr_opportunities": [
     {
-      "query": "dog daycare seattle",
+      "query": "roof repair local",
       "clicks": 12,
       "impressions": 900,
       "ctr": 1.33,
@@ -31,8 +31,8 @@
   ],
   "cannibalization": [
     {
-      "query": "dog daycare pricing",
-      "winner_page": "https://example.com/services/dog-daycare",
+      "query": "roof repair pricing",
+      "winner_page": "https://example.com/services/roof-repair",
       "loser_pages": [
         "https://example.com/pricing"
       ]
@@ -41,7 +41,7 @@
   "comparison": {
     "declining_pages": [
       {
-        "page": "https://example.com/services/dog-boarding",
+        "page": "https://example.com/services/roof-repair",
         "change_pct": -35.0,
         "clicks_now": 18,
         "clicks_prev": 28
@@ -49,7 +49,7 @@
     ],
     "declining_queries": [
       {
-        "query": "overnight dog boarding",
+        "query": "emergency roof repair",
         "change_pct": -28.0,
         "clicks_now": 9,
         "clicks_prev": 13

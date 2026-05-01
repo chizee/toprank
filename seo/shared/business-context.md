@@ -76,12 +76,12 @@ Then ask the business-impact profile questions when the operator needs to rank b
 
 > To rank SEO work by business impact instead of clicks, I also need these if you know them:
 >
-> 1. **Service value / margin ranking** — e.g. boarding > grooming > daycare > airport layover.
-> 2. **Priority customers** — locals, SeaTac travelers, airport layover/import/export, long-stay boarding, recurring daycare, grooming, etc.
-> 3. **Location priorities / capacity** — Tukwila, Ballard, West Seattle; note any capacity constraints.
-> 4. **Conversion events** — booking starts, completed bookings, calls, quote requests, Gingr reservations, GA4 events.
-> 5. **Booking-intent hierarchy** — e.g. `dog boarding seatac` > `dog boarding seattle` > `dog boarding cost`.
-> 6. **Local proof points** — hours, 24/7 supervision, photo updates, airport proximity, pickup/dropoff flexibility, private suites.
+> 1. **Service value / margin ranking** — e.g. emergency service > recurring service > one-time consultation.
+> 2. **Priority customers** — local buyers, high-margin segments, urgent-need customers, recurring customers, enterprise accounts, etc.
+> 3. **Location priorities / capacity** — priority markets, service areas, or regions; note any capacity constraints.
+> 4. **Conversion events** — form starts, completed purchases/bookings, calls, quote requests, CRM events, GA4 events.
+> 5. **Booking-intent hierarchy** — e.g. `emergency service near me` > `service in city` > `service cost`.
+> 6. **Local proof points** — hours, certifications, response time, warranty, reviews, local coverage, pickup/dropoff flexibility.
 > 7. **Transactional vs informational pages** — which pages are meant to book customers vs support research.
 
 If `CACHE_STATUS=stale`, pre-fill the question with the cached values so the user can confirm or correct rather than re-enter from scratch.

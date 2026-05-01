@@ -3,14 +3,14 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Find keyword opportunities for a boutique pet boarding facility in Austin, TX. We specialize in cage-free boarding and dog daycare.",
-      "expected_output": "A keyword research report with seed keywords expanded into clusters, intent classification for each keyword, difficulty assessment, and prioritized recommendations. Should include local keywords (Austin-specific), service keywords (cage-free, daycare), and long-tail opportunities.",
+      "prompt": "Find keyword opportunities for a boutique roof repair company in Austin, TX. We specialize in emergency leak repair and roof inspections.",
+      "expected_output": "A keyword research report with seed keywords expanded into clusters, intent classification for each keyword, difficulty assessment, and prioritized recommendations. Should include local keywords (Austin-specific), service keywords (emergency leak repair, inspections), and long-tail opportunities.",
       "files": [],
       "expectations": [
         "Generates 20+ keyword suggestions organized into topic clusters",
         "Classifies each keyword by search intent (informational, commercial, transactional)",
         "Includes local keyword variants with 'Austin' and 'near me'",
-        "Identifies long-tail opportunities (e.g., 'cage-free dog boarding austin tx')",
+        "Identifies long-tail opportunities (e.g., 'emergency roof repair austin tx')",
         "Prioritizes keywords by a scoring framework (not just listed randomly)",
         "Suggests content types for each cluster (blog post, landing page, FAQ)"
       ]

@@ -508,10 +508,10 @@ Based on findings, offer relevant next steps:
 1. **Every score needs evidence.** Don't assign a 7/10 without citing what earned
    the 7 and what prevented an 8. Quote actual content from the page.
 2. **Fixes must be specific.** "Improve the title tag" is useless. "Change the
-   title from 'Services' to 'Dog Grooming Services in Portland — Same-Day
-   Appointments | Example Pet Care' (68 chars)" is actionable.
+   title from 'Services' to 'Emergency Roof Repair in Portland — Same-Day
+   Appointments | Example Roofing' (68 chars)" is actionable.
 3. **Use GSC data to ground recommendations.** If you know the page ranks #7 for
-   "dog grooming portland" with 1,200 impressions and 2.1% CTR, say that — and
+   "roof repair portland" with 1,200 impressions and 2.1% CTR, say that — and
    estimate the click gain from moving to #3.
 4. **Compare to competitors.** A "good" page can still be below the bar if every
    competitor is better. Context matters.

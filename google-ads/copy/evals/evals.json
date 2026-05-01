@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Write ad copy for a dog grooming business in Seattle called 'Pawfect Grooming'. They offer full grooming, nail trims, and teeth cleaning. They have 4.8 stars on Google with 200+ reviews. They've been in business for 12 years. Target ad group: 'Dog Grooming - Seattle'.",
+      "prompt": "Write ad copy for a roof repair business in Portland called 'Acme Roofing'. They offer leak repair, shingle replacement, and roof inspections. They have 4.8 stars on Google with 200+ reviews. They've been in business for 12 years. Target ad group: 'Roof Repair - Portland'.",
       "expected_output": "RSA copy with 2-3 variants, each with a distinct messaging angle. Every headline must show character count and be <= 30 chars. Every description must show character count and be <= 90 chars. Pin positions should be indicated. Variants should be named by their angle (e.g., 'Trust & Experience', 'Value & Convenience').",
       "files": [],
       "expectations": [

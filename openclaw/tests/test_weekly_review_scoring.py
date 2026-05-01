@@ -38,8 +38,8 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         ]
         analysis["ctr_gaps_by_page"] = [
             {
-                "query": "dog boarding cost",
-                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "query": "roof repair cost",
+                "page": "https://www.example.com/blog/roof-repair-cost",
                 "clicks": 2,
                 "impressions": 1681,
                 "ctr": 0.12,
@@ -52,7 +52,7 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         issues = payload["audit"]["issues"]
 
         self.assertEqual(top_action["type"], "snippet_content_packaging")
-        self.assertEqual(top_action["target"], "https://www.example.com/blog/dog-boarding-cost")
+        self.assertEqual(top_action["target"], "https://www.example.com/blog/roof-repair-cost")
         self.assertIn("business_intent_score", top_action["score_components"])
         self.assertGreater(issues[0]["priority_score"], issues[1]["priority_score"])
         self.assertIn("score_components", issues[0])
@@ -90,7 +90,7 @@ class WeeklyReviewScoringTest(unittest.TestCase):
                 "change_pct": -76.9,
             },
             {
-                "page": "https://www.example.com/blog/dog-sitting-costs",
+                "page": "https://www.example.com/blog/roof-repair-costs",
                 "clicks_now": 58,
                 "clicks_prev": 103,
                 "change_pct": -43.7,
@@ -100,15 +100,15 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         payload = weekly_review.build_payload("example.com", analysis, {"priors": {}}, None)
         top_action = payload["action_plan"]["actions"][0]
 
-        self.assertEqual(top_action["target"], "https://www.example.com/blog/dog-sitting-costs")
+        self.assertEqual(top_action["target"], "https://www.example.com/blog/roof-repair-costs")
         self.assertEqual(top_action["type"], "page_improvement")
         self.assertIn("45", top_action["expected_impact"])
 
     def test_local_commercial_ctr_gap_can_stay_metadata_action(self) -> None:
         issue = weekly_review.ctr_gap_issue(
             {
-                "query": "dog boarding seattle",
-                "page": "https://www.example.com/dog-boarding-seattle",
+                "query": "roof repair near me",
+                "page": "https://www.example.com/roof-repair",
                 "clicks": 13,
                 "impressions": 664,
                 "ctr": 1.96,
@@ -124,8 +124,8 @@ class WeeklyReviewScoringTest(unittest.TestCase):
     def test_informational_ctr_gap_is_not_metadata_only(self) -> None:
         issue = weekly_review.ctr_gap_issue(
             {
-                "query": "how much does it cost to board a dog",
-                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "query": "how much does roof repair cost",
+                "page": "https://www.example.com/blog/roof-repair-cost",
                 "clicks": 2,
                 "impressions": 1681,
                 "ctr": 0.12,
@@ -141,7 +141,7 @@ class WeeklyReviewScoringTest(unittest.TestCase):
     def test_query_only_ctr_gap_is_mapping_not_metadata_action(self) -> None:
         issue = weekly_review.query_ctr_issue(
             {
-                "query": "how much does it cost to board a dog",
+                "query": "how much does roof repair cost",
                 "clicks": 2,
                 "impressions": 1804,
                 "ctr": 0.11,
@@ -158,8 +158,8 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         analysis = self.base_analysis()
         analysis["ctr_gaps_by_page"] = [
             {
-                "query": "how much does it cost to board a dog",
-                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "query": "how much does roof repair cost",
+                "page": "https://www.example.com/blog/roof-repair-cost",
                 "clicks": 2,
                 "impressions": 1681,
                 "ctr": 0.12,
@@ -168,17 +168,17 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         ]
         business_context = {
             "target_customer_priority": {
-                "primary": ["Seattle-area local dog owners"],
+                "primary": ["local homeowners"],
                 "deprioritized": ["national informational readers outside service area"],
             },
             "booking_intent_hierarchy": {
-                "highest_priority": ["dog boarding seattle", "dog boarding seatac"],
-                "supporting_only": ["how much does it cost to board a dog", "dog boarding cost"],
+                "highest_priority": ["emergency roof repair portland", "roof repair near me"],
+                "supporting_only": ["how much does roof repair cost", "roof repair cost"],
             },
             "page_role_map": {
-                "/blog/dog-boarding-cost": "supporting informational page",
-                "/blog/dog-boarding-price-seattle": "local commercial-research page",
-                "/dog-boarding-seattle": "transactional local landing page",
+                "/blog/roof-repair-cost": "supporting informational page",
+                "/blog/roof-repair-prices-portland": "local commercial-research page",
+                "/emergency-roof-repair-portland": "transactional local landing page",
             },
         }
 
@@ -187,19 +187,144 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         proposal = next(item for item in payload["queue_items"] if item["type"] == "action_proposal")
 
         self.assertEqual(top_action["type"], "local_intent_ownership")
-        self.assertEqual(top_action["target"], "https://www.example.com/blog/dog-boarding-price-seattle")
-        self.assertEqual(top_action["source_target"], "https://www.example.com/blog/dog-boarding-cost")
+        self.assertEqual(top_action["target"], "https://www.example.com/blog/roof-repair-prices-portland")
+        self.assertEqual(top_action["source_target"], "https://www.example.com/blog/roof-repair-cost")
         self.assertEqual(proposal["action_type"], "local_intent_ownership")
         self.assertIn("national_click_discount", proposal["score_components"])
-        self.assertEqual(proposal["consolidation_targets"]["conversion_target"], "https://www.example.com/dog-boarding-seattle")
+        self.assertEqual(proposal["consolidation_targets"]["conversion_target"], "https://www.example.com/emergency-roof-repair-portland")
         self.assertTrue(any("national informational" in note for note in top_action["operator_judgment_notes"]))
+
+
+    def test_priority_list_does_not_mean_national_is_deprioritized(self) -> None:
+        issue = {
+            "recommended_action_type": "snippet_content_packaging",
+            "primary_query": "how much does roof repair cost",
+            "target": "https://www.example.com/blog/roof-repair-cost",
+            "canonical_target": "https://www.example.com/blog/roof-repair-cost",
+            "priority_score": 0.6,
+            "score_components": {},
+            "operator_judgment_notes": [],
+        }
+        business_context = {
+            "target_customer_priority": ["national customers", "local customers"],
+            "booking_intent_hierarchy": {"supporting_only": ["how much does roof repair cost"]},
+        }
+
+        updated = weekly_review.apply_business_context_to_issue(issue, business_context, site_id="example.com")
+
+        self.assertEqual(updated["recommended_action_type"], "snippet_content_packaging")
+        self.assertNotIn("national_click_discount", updated.get("score_components", {}))
+
+    def test_national_click_discount_demotes_ranking_score_without_floor_boost(self) -> None:
+        issue = {
+            "recommended_action_type": "snippet_content_packaging",
+            "primary_query": "how much does roof repair cost",
+            "target": "https://www.example.com/blog/roof-repair-cost",
+            "canonical_target": "https://www.example.com/blog/roof-repair-cost",
+            "priority_score": 0.007,
+            "score_components": {},
+            "operator_judgment_notes": [],
+        }
+        business_context = {
+            "target_customer_priority": {"deprioritized": ["national informational readers outside service area"]},
+            "booking_intent_hierarchy": {"supporting_only": ["how much does roof repair cost"]},
+            "page_role_map": {
+                "/blog/roof-repair-cost": "supporting informational page",
+                "/roof-repair-prices": "local commercial-research page",
+            },
+        }
+
+        updated = weekly_review.apply_business_context_to_issue(issue, business_context, site_id="example.com")
+
+        self.assertEqual(updated["recommended_action_type"], "local_intent_ownership")
+        self.assertEqual(updated["score_components"]["national_click_discount"], 0.25)
+        self.assertEqual(updated["priority_score"], 0.002)
+
+    def test_discounted_support_query_does_not_outrank_local_candidate(self) -> None:
+        candidates = [
+            {
+                "recommended_action_type": "snippet_content_packaging",
+                "primary_query": "how much does roof repair cost",
+                "target": "https://www.example.com/blog/roof-repair-cost",
+                "canonical_target": "https://www.example.com/blog/roof-repair-cost",
+                "priority_score": 0.8,
+                "score_components": {},
+                "operator_judgment_notes": [],
+            },
+            {
+                "recommended_action_type": "meta_tags",
+                "primary_query": "roof repair near me",
+                "target": "https://www.example.com/roof-repair",
+                "canonical_target": "https://www.example.com/roof-repair",
+                "priority_score": 0.3,
+                "score_components": {},
+                "operator_judgment_notes": [],
+            },
+        ]
+        business_context = {
+            "target_customer_priority": {"deprioritized": ["national informational readers outside service area"]},
+            "booking_intent_hierarchy": {
+                "highest_priority": ["roof repair near me"],
+                "supporting_only": ["how much does roof repair cost"],
+            },
+            "page_role_map": {
+                "/blog/roof-repair-cost": "supporting informational page",
+                "/roof-repair-prices": "local commercial-research page",
+                "/roof-repair": "transactional local landing page",
+            },
+        }
+
+        adjusted = weekly_review.dedupe_candidates(weekly_review.apply_business_context(candidates, business_context, site_id="example.com"))
+        ranked = weekly_review.apply_prioritization(adjusted, {"priors": {}}, "non_brand_clicks_28d")
+
+        self.assertEqual(ranked[0]["primary_query"], "roof repair near me")
+        self.assertEqual(ranked[1]["recommended_action_type"], "local_intent_ownership")
+
+    def test_retargeted_business_context_issues_are_deduped(self) -> None:
+        candidates = [
+            {
+                "recommended_action_type": "snippet_content_packaging",
+                "primary_query": "how much does roof repair cost",
+                "target": "https://www.example.com/blog/roof-repair-cost",
+                "canonical_target": "https://www.example.com/blog/roof-repair-cost",
+                "priority_score": 0.6,
+                "score_components": {},
+                "operator_judgment_notes": [],
+                "title": "Support query A",
+            },
+            {
+                "recommended_action_type": "query_intent_mapping",
+                "primary_query": "roof repair cost",
+                "target": "https://www.example.com/blog/roof-repair-pricing",
+                "canonical_target": "https://www.example.com/blog/roof-repair-pricing",
+                "priority_score": 0.5,
+                "score_components": {},
+                "operator_judgment_notes": [],
+                "title": "Support query B",
+            },
+        ]
+        business_context = {
+            "target_customer_priority": {"deprioritized": ["national informational readers outside service area"]},
+            "booking_intent_hierarchy": {"supporting_only": ["how much does roof repair cost", "roof repair cost"]},
+            "page_role_map": [
+                {"path": "/blog/roof-repair-cost", "role": "supporting informational page"},
+                {"path": "/blog/roof-repair-pricing", "role": "supporting informational page"},
+                {"path": "/roof-repair-prices", "role": "local commercial-research page"},
+            ],
+        }
+
+        adjusted = weekly_review.apply_business_context(candidates, business_context, site_id="example.com")
+        deduped = weekly_review.dedupe_candidates(adjusted)
+
+        self.assertEqual(len(deduped), 1)
+        self.assertEqual(deduped[0]["canonical_target"], "https://www.example.com/roof-repair-prices")
 
     def test_action_proposal_includes_deep_dive_diagnostics_before_approval(self) -> None:
         analysis = self.base_analysis()
         analysis["ctr_gaps_by_page"] = [
             {
-                "query": "how much does it cost to board a dog",
-                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "query": "how much does roof repair cost",
+                "page": "https://www.example.com/blog/roof-repair-cost",
                 "clicks": 2,
                 "impressions": 1681,
                 "ctr": 0.12,
@@ -210,14 +335,14 @@ class WeeklyReviewScoringTest(unittest.TestCase):
             root = Path(tmp)
             source = root / "content" / "blogs"
             source.mkdir(parents=True)
-            (source / "dog-boarding-cost.mdx").write_text(
+            (source / "roof-repair-cost.mdx").write_text(
                 "---\n"
-                "title: \"Dog Boarding Cost in 2026\"\n"
-                "description: \"Compare dog boarding prices and hidden fees.\"\n"
+                "title: \"Roof Repair Cost in 2026\"\n"
+                "description: \"Compare roof repair prices and hidden fees.\"\n"
                 "---\n\n"
-                "# Dog Boarding Cost in 2026\n\n"
-                "This guide explains fees first. Book a boarding visit when ready.\n\n"
-                "Prices are $55-$90 per night in Seattle.\n",
+                "# Roof Repair Cost in 2026\n\n"
+                "This guide explains fees first. Request a repair quote when ready.\n\n"
+                "Prices are $55-$90 per project in the local market.\n",
                 encoding="utf-8",
             )
             original = weekly_review.serp_snapshot_for_query
@@ -225,7 +350,7 @@ class WeeklyReviewScoringTest(unittest.TestCase):
                 "source": "test_serp",
                 "status": "ok",
                 "query": query,
-                "results": [{"title": "Dog Boarding Cost", "domain": "example.com", "snippet": "$55-$90 per night"}],
+                "results": [{"title": "Roof Repair Cost", "domain": "example.com", "snippet": "$55-$90 per project"}],
                 "answer_like_serp": True,
             }
             try:
@@ -247,7 +372,7 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         self.assertTrue(deep_dive["checks"]["current_snippet_inspected"])
         self.assertTrue(deep_dive["checks"]["above_the_fold_inspected"])
         self.assertTrue(deep_dive["checks"]["zero_click_risk_accounted_for"])
-        self.assertEqual(deep_dive["current_snippet"]["title"], "Dog Boarding Cost in 2026")
+        self.assertEqual(deep_dive["current_snippet"]["title"], "Roof Repair Cost in 2026")
         self.assertTrue(deep_dive["above_the_fold"]["has_fast_price_answer_above_fold"])
         self.assertIn("complete_business_context", proposal["approval_preconditions"])
 
@@ -255,8 +380,8 @@ class WeeklyReviewScoringTest(unittest.TestCase):
         analysis = self.base_analysis()
         analysis["ctr_gaps_by_page"] = [
             {
-                "query": "dog boarding cost",
-                "page": "https://www.example.com/blog/dog-boarding-cost",
+                "query": "roof repair cost",
+                "page": "https://www.example.com/blog/roof-repair-cost",
                 "clicks": 2,
                 "impressions": 1681,
                 "ctr": 0.12,

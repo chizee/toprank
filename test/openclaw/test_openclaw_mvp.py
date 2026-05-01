@@ -122,13 +122,13 @@ def test_improve_page_persists_proposal_and_patch_set(tmp_path):
             str(REPO_ROOT / 'openclaw' / 'bin' / 'improve_page.py'),
             'example.com',
             '--url',
-            'https://example.com/services/dog-daycare',
+            'https://example.com/services/roof-repair',
             '--issue-summary',
             'Service page CTR is low and schema is missing.',
             '--proposal-summary',
             'Draft new title/meta candidates and add LocalBusiness schema.',
             '--patch-path',
-            'pages/services/dog-daycare.tsx',
+            'pages/services/roof-repair.tsx',
             '--patch-summary',
             'Add schema and update metadata fields.',
         ],
@@ -141,9 +141,9 @@ def test_improve_page_persists_proposal_and_patch_set(tmp_path):
     assert (run_dir / 'proposal.json').exists()
     assert (run_dir / 'patch-set.json').exists()
     proposal = json.loads((run_dir / 'proposal.json').read_text())
-    assert proposal['target'] == 'https://example.com/services/dog-daycare'
+    assert proposal['target'] == 'https://example.com/services/roof-repair'
     patch_set = json.loads((run_dir / 'patch-set.json').read_text())
-    assert patch_set['patches'][0]['path'] == 'pages/services/dog-daycare.tsx'
+    assert patch_set['patches'][0]['path'] == 'pages/services/roof-repair.tsx'
 
 
 def test_investigate_drop_creates_recovery_plan_and_followups(tmp_path):
@@ -162,7 +162,7 @@ def test_investigate_drop_creates_recovery_plan_and_followups(tmp_path):
             '--likely-cause',
             'Homepage CTR declined after a copy update.',
             '--target-url',
-            'https://example.com/services/dog-daycare',
+            'https://example.com/services/roof-repair',
         ],
         check=True,
         env=env,

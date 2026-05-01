@@ -27,11 +27,11 @@
 #       {
 #         "id": "chg_1729872000000",
 #         "timestamp": "2026-04-14T12:00:00Z",
-#         "summary": "Paused 3 zombie keywords in Tukwila Search",
+#         "summary": "Paused 3 zombie keywords in Example City Search",
 #         "reviewAfter": "2026-04-21",   # 7d for bid/keyword, 14d for structural
 #         "reviewWindow": "7d",
 #         "reviewed": false,
-#         "details": { "campaignName": "Tukwila Search" }
+#         "details": { "campaignName": "Example City Search" }
 #       }
 #     ]
 #   }

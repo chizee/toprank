@@ -18,7 +18,7 @@
     },
     {
       "id": 2,
-      "prompt": "Improve this landing page content for our dog grooming service. Target keyword: 'dog grooming austin'. Here's the current page:\n\n# Dog Grooming\n\nWe groom dogs. Our groomers are experienced. We offer baths, haircuts, and nail trims.\n\nCall us today!\n\nPrices start at $40.",
+      "prompt": "Improve this landing page content for our roof repair service. Target keyword: 'roof repair austin'. Here's the current page:\n\n# Roof Repair\n\nWe fix roofs. Our technicians are experienced. We offer leak repair, shingle replacement, and inspections.\n\nCall us today!\n\nPrices start at $400.",
       "expected_output": "A rewritten landing page that is conversion-focused, includes the target keyword naturally, adds social proof sections, has a clear CTA, includes service details with pricing structure, and addresses customer pain points. Should identify that the original is thin content with no location specificity, no trust signals, and no differentiation.",
       "files": [],
       "expectations": [

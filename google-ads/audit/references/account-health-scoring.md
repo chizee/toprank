@@ -264,7 +264,7 @@ Plus any **signal/tracking/policy fix** regardless of dollar value — these qua
 Sort by dollar impact descending (signal fixes pinned to the top). Max 5 items. If none qualify, omit the section entirely — don't fabricate.
 
 Every Quick Win must be executable via a single `/google-ads` command where applicable and include the command text. Examples:
-- `Add 7 negatives to Tukwila Search — saves ~$340/mo (<5 min) · /google-ads add negatives to Tukwila Search: jobs, careers, salary, diy, free, reddit, training`
+- `Add 7 negatives to Example City Search — saves ~$340/mo (<5 min) · /google-ads add negatives to Example City Search: jobs, careers, salary, diy, free, reddit, training`
 - `Enable Enhanced Conversions — unblocks measurement (<15 min) · Configure in Google Ads UI (not /google-ads)`
 
 ### `time_to_fix` field (kept — descriptive, not a rating)
@@ -287,12 +287,12 @@ Persist the pulse metrics with their top contributors. No verdict, no grade, no 
     "waste": {
       "usd_per_month": 1240,
       "pct_of_spend": 8.7,
-      "top_contributor": "keyword 'free dog food' — $340/mo",
+      "top_contributor": "keyword 'free estimate' — $340/mo",
       "tracking_blocker": false
     },
     "demand_captured": {
       "pct": 42.7,
-      "top_opportunity": "Tukwila Search — ~$2,100/mo headroom at 35% budget-lost IS",
+      "top_opportunity": "Example City Search — ~$2,100/mo headroom at 35% budget-lost IS",
       "rank_lost_blocker": false
     },
     "cpa": {
@@ -304,8 +304,8 @@ Persist the pulse metrics with their top contributors. No verdict, no grade, no 
     }
   },
   "top_actions": [
-    "Paused 'free dog food' keyword ($120 waste)",
-    "Budget-lost IS 40% on Tukwila Search at $14 CPA"
+    "Paused 'free estimate' keyword ($120 waste)",
+    "Budget-lost IS 40% on Example City Search at $14 CPA"
   ],
   "next_milestone": null
 }
@@ -314,7 +314,7 @@ Persist the pulse metrics with their top contributors. No verdict, no grade, no 
 On re-audits, diff the three metric lines directly — no abstract bucket movement:
 
 - `Waste: $640/mo (4.1%) _(was $1,240/mo — 3 fixes applied)_`
-- `Demand captured: 58% _(was 42% — Tukwila budget increased)_`
+- `Demand captured: 58% _(was 42% — Example City budget increased)_`
 - `CPA: $18.40 _(was $19.88 — stable)_`
 
 Three numbers, three deltas, zero artificial ratings. If a number didn't move, say "unchanged." If it moved the wrong way, show the delta without sugar-coating.

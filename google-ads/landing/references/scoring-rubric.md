@@ -28,7 +28,7 @@ The ad promises something. The page must deliver it within 3 seconds of scroll-f
 |-------|--------|
 | 90-100 | Page H1 contains the ad's promise word-for-word or a tight synonym. Subhead reinforces. CTA matches the ad's action verb. Offer in ad (if any) is front-and-center on the page |
 | 75-89 | H1 clearly relates to the ad's service and location. Primary CTA matches ad intent. Minor drift in tone or offer language |
-| 60-74 | Page is on-topic but generic — H1 says "Quality Roofing Services" when the ad said "Emergency Roof Repair in Tukwila". User has to infer the connection |
+| 60-74 | Page is on-topic but generic — H1 says "Quality Roofing Services" when the ad said "Emergency Roof Repair in Example City". User has to infer the connection |
 | 45-59 | Page is about the business but not about the ad's specific angle. Ad pushed urgency, page is evergreen. Ad pushed a specific service, page is a services overview |
 | <45 | Homepage, category page, or completely mismatched content. Ad said "free quote", page has no quote CTA. Ad said "24/7", page shows business hours |
 

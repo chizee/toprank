@@ -121,7 +121,7 @@ MER captures organic, brand, and retention — so it's higher than paid ROAS and
 > "Keyword 'emergency plumber seattle' has CPA of $72. Your Break-Even CPA is $72 (AOV $180 × 40% margin) — every conversion from this keyword nets $0 profit. Either improve CVR or pause."
 
 **Headroom example:**
-> "Tukwila Search is profitable: CPA $18, Break-Even $72, **~$2,700/mo headroom** at 50 conversions. Budget-Lost IS is 35% — raising budget by $1,500/mo could capture ~$5,000 more revenue."
+> "Example City Search is profitable: CPA $18, Break-Even $72, **~$2,700/mo headroom** at 50 conversions. Budget-Lost IS is 35% — raising budget by $1,500/mo could capture ~$5,000 more revenue."
 
 The second framing is concretely actionable. The first is a number without a verdict.
 

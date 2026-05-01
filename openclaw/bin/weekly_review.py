@@ -198,19 +198,22 @@ def make_issue(
 
 LOCAL_INTENT_TERMS = {
     "near me",
-    "seattle",
-    "seatac",
-    "tukwila",
-    "ballard",
-    "west seattle",
+    "nearby",
+    "local",
+    "open now",
 }
 COMMERCIAL_SERVICE_TERMS = {
-    "board",
-    "boarding",
-    "daycare",
-    "grooming",
-    "kennel",
-    "pet hotel",
+    "service",
+    "services",
+    "repair",
+    "installation",
+    "contractor",
+    "company",
+    "provider",
+    "appointment",
+    "booking",
+    "quote",
+    "consultation",
 }
 INFORMATIONAL_SERP_TERMS = {
     "how much",
@@ -268,7 +271,7 @@ def zero_click_risk_for_query(query: str | None, intent_class: str | None = None
     if any(term in q for term in INFORMATIONAL_SERP_TERMS):
         risk_score += 1
         notes.append("price/how-much wording can trigger answer boxes or calculator-style snippets")
-    if any(term in q for term in {"near me", "seattle", "seatac", "tukwila", "ballard", "west seattle"}):
+    if any(term in q for term in LOCAL_INTENT_TERMS):
         risk_score -= 1
         notes.append("local modifier increases booking intent and reduces pure zero-click risk")
     if risk_score >= 2:
@@ -846,7 +849,7 @@ def deep_dive_diagnostic(issue: dict[str, Any], site_id: str, site_profile: dict
     checks = {
         "serp_inspected": serp.get("status") == "ok" and bool(serp.get("results")),
         "current_snippet_inspected": snippet_snapshot.get("status") == "ok",
-        "above_the_fold_inspected": packaging.get("status") in {"ok", "partial"},
+        "above_the_fold_inspected": packaging.get("status") == "ok",
         "zero_click_risk_accounted_for": True,
     }
     return {
@@ -973,7 +976,7 @@ def context_page_candidates(business_context: dict[str, Any] | None, reference_u
 
 def business_context_says_national_deprioritized(business_context: dict[str, Any] | None) -> bool:
     priority = (business_context or {}).get("target_customer_priority") or {}
-    deprioritized = priority.get("deprioritized", []) if isinstance(priority, dict) else priority
+    deprioritized = priority.get("deprioritized", []) if isinstance(priority, dict) else []
     text = context_text(deprioritized)
     return "national" in text or "outside service area" in text or "non-local" in text
 
@@ -1030,7 +1033,7 @@ def apply_business_context_to_issue(issue: dict[str, Any], business_context: dic
         }
         national_discount = score_components["national_click_discount"]
         raw_priority = float(issue.get("priority_score", 0))
-        updated["priority_score"] = round(max(raw_priority * national_discount, 0.35), 3)
+        updated["priority_score"] = round(raw_priority * national_discount, 3)
         return updated
     return issue
 
@@ -1040,8 +1043,8 @@ def apply_business_context(candidates: list[dict[str, Any]], business_context: d
 
 
 BUSINESS_IMPACT_CONTEXT_FIELDS = {
-    "service_value_weights": "Relative revenue/margin value by service (boarding, daycare, grooming, airport layover, etc.)",
-    "target_customer_priority": "Priority customer segments (locals, travelers, airport layover, long-stay boarding, etc.)",
+    "service_value_weights": "Relative revenue/margin value by service or product line",
+    "target_customer_priority": "Priority customer segments (local buyers, high-margin segments, urgent-need customers, recurring customers, etc.)",
     "location_priorities": "Location-level priority/capacity/margin context",
     "conversion_events": "Organic conversion events or booking funnel signals",
     "booking_intent_hierarchy": "Which query intents are most likely to become bookings",
@@ -1065,19 +1068,19 @@ def business_context_questions(gaps: list[dict[str, str]]) -> list[str]:
     wanted = {gap["field"] for gap in gaps}
     questions = []
     if "service_value_weights" in wanted:
-        questions.append("Rank services by business value/margin: boarding, daycare, grooming, airport layover, pet taxi, etc.")
+        questions.append("Rank services or product lines by business value/margin.")
     if "target_customer_priority" in wanted:
-        questions.append("Which customers matter most: locals, SeaTac travelers, airport layover/import/export customers, long-stay boarding, recurring daycare, grooming?")
+        questions.append("Which customer segments matter most: local buyers, high-margin services, recurring customers, urgent-need customers, enterprise accounts, etc.?")
     if "location_priorities" in wanted:
-        questions.append("Which locations should SEO prioritize right now, and are any capacity-constrained: Tukwila, Ballard, West Seattle?")
+        questions.append("Which markets or service areas should SEO prioritize right now, and are any capacity-constrained?")
     if "conversion_events" in wanted:
-        questions.append("What organic conversion signals should count: booking form starts, completed bookings, calls, quote requests, Gingr reservations, GA4 events?")
+        questions.append("What organic conversion signals should count: form starts, completed purchases/bookings, calls, quote requests, CRM events, GA4 events?")
     if "booking_intent_hierarchy" in wanted:
-        questions.append("Give a rough intent ranking: e.g. dog boarding Seatac > dog boarding Seattle > dog boarding cost > dog boarding near me.")
+        questions.append("Give a rough intent ranking: e.g. high-intent local/service query > category query > cost/research query > broad informational query.")
     if "local_proof_points" in wanted:
-        questions.append("What proof points should snippets emphasize: 5am-9pm pickup, 24/7 supervision, airport proximity, photo updates, private suites, multi-location coverage?")
+        questions.append("What proof points should snippets emphasize: response time, certifications, warranty, reviews, pricing transparency, local coverage, multi-location coverage?")
     if "serp_competitor_positioning" in wanted:
-        questions.append("For priority queries, who must we beat or differentiate from: Rover, Wag, Camp Bow Wow, Dogtopia, local kennels, Google Business Profile results?")
+        questions.append("For priority queries, who must we beat or differentiate from: direct competitors, marketplaces/directories, map-pack results, review sites, or national brands?")
     if "page_role_map" in wanted:
         questions.append("Which pages are transactional landing pages vs informational support pages?")
     return questions
