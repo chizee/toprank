@@ -878,6 +878,66 @@ def add_deep_dive_diagnostics(issues: list[dict[str, Any]], site_id: str, site_p
     return enriched
 
 
+def context_values(value: Any) -> list[Any]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, dict)) and not value:
+        return []
+    if isinstance(value, list):
+        return [item for nested in value for item in context_values(nested)]
+    if isinstance(value, dict):
+        return [item for nested in value.values() for item in context_values(nested)]
+    return [value]
+
+
+def context_text(value: Any) -> str:
+    return " ".join(str(item).lower() for item in context_values(value))
+
+
+def page_role_entries(business_context: dict[str, Any] | None) -> list[tuple[str, str]]:
+    page_roles = (business_context or {}).get("page_role_map") or {}
+    entries: list[tuple[str, str]] = []
+    if isinstance(page_roles, dict):
+        for locator, role in page_roles.items():
+            entries.append((str(locator), context_text(role)))
+    elif isinstance(page_roles, list):
+        for item in page_roles:
+            if isinstance(item, dict):
+                locator = item.get("url") or item.get("path") or item.get("page") or item.get("target")
+                role = item.get("role") or item.get("page_role") or item.get("type") or item
+                if locator:
+                    entries.append((str(locator), context_text(role)))
+            else:
+                entries.append((str(item), str(item).lower()))
+    return entries
+
+
+def matching_page_role(reference_url: str | None, page_roles: Any) -> str:
+    if not reference_url:
+        return ""
+    parsed = urlparse(reference_url)
+    target_path = parsed.path.rstrip("/") or "/"
+    target_url = reference_url.rstrip("/")
+    pseudo_context = {"page_role_map": page_roles}
+    for locator, role_text in page_role_entries(pseudo_context):
+        locator_url = url_for_context_path(reference_url, locator).rstrip("/")
+        locator_path = urlparse(locator_url).path.rstrip("/") or "/"
+        if locator_url == target_url or locator_path == target_path:
+            return role_text
+    return ""
+
+
+def business_context_local_label(business_context: dict[str, Any] | None) -> str:
+    context = business_context or {}
+    geography = str(context.get("primary_geography") or "").strip()
+    if geography:
+        return geography
+    locations = context.get("location_priorities") or context.get("locations") or []
+    values = context_values(locations)
+    if values:
+        return "/".join(str(value) for value in values[:3])
+    return "local"
+
 def url_for_context_path(reference_url: str | None, path: str) -> str:
     if path.startswith("http://") or path.startswith("https://"):
         return path
@@ -893,23 +953,15 @@ def query_matches_any(query: str | None, terms: Any) -> bool:
     q = (query or "").lower()
     if not q:
         return False
-    if isinstance(terms, dict):
-        iterable = [item for values in terms.values() for item in (values if isinstance(values, list) else [values])]
-    elif isinstance(terms, list):
-        iterable = terms
-    else:
-        iterable = [terms]
-    return any(str(term).lower() in q for term in iterable if term)
+    return any(str(term).lower() in q for term in context_values(terms) if term)
 
 
 def context_page_candidates(business_context: dict[str, Any] | None, reference_url: str | None) -> dict[str, str | None]:
-    page_roles = (business_context or {}).get("page_role_map") or {}
     local_research = None
     transactional = None
     support = None
-    for path, role in page_roles.items():
-        role_text = str(role).lower()
-        url = url_for_context_path(reference_url, str(path))
+    for locator, role_text in page_role_entries(business_context):
+        url = url_for_context_path(reference_url, locator)
         if local_research is None and "local" in role_text and any(term in role_text for term in ["commercial", "research", "price", "cost"]):
             local_research = url
         if transactional is None and "transactional" in role_text:
@@ -921,9 +973,9 @@ def context_page_candidates(business_context: dict[str, Any] | None, reference_u
 
 def business_context_says_national_deprioritized(business_context: dict[str, Any] | None) -> bool:
     priority = (business_context or {}).get("target_customer_priority") or {}
-    deprioritized = priority.get("deprioritized", []) if isinstance(priority, dict) else []
-    text = " ".join(str(item).lower() for item in (deprioritized if isinstance(deprioritized, list) else [deprioritized]))
-    return "national" in text or "outside service area" in text
+    deprioritized = priority.get("deprioritized", []) if isinstance(priority, dict) else priority
+    text = context_text(deprioritized)
+    return "national" in text or "outside service area" in text or "non-local" in text
 
 
 def apply_business_context_to_issue(issue: dict[str, Any], business_context: dict[str, Any] | None, site_id: str | None = None) -> dict[str, Any]:
@@ -936,8 +988,7 @@ def apply_business_context_to_issue(issue: dict[str, Any], business_context: dic
     page_roles = business_context.get("page_role_map") or {}
     target = issue.get("target") or issue.get("canonical_target") or issue.get("raw_target")
     reference_url = target or (business_context or {}).get("target_url") or (f"https://www.{site_id}" if site_id else None)
-    target_path = urlparse(target or "").path
-    role_text = str(page_roles.get(target_path, "")).lower()
+    role_text = matching_page_role(target, page_roles)
     is_support_query = query_matches_any(query, supporting_terms)
     is_high_priority_query = query_matches_any(query, high_priority_terms)
     is_support_page = "support" in role_text or "informational" in role_text
@@ -948,7 +999,8 @@ def apply_business_context_to_issue(issue: dict[str, Any], business_context: dic
         preferred_owner = candidates.get("local_research") or candidates.get("transactional") or target
         updated = dict(issue)
         updated["recommended_action_type"] = "local_intent_ownership"
-        updated["title"] = f"Resolve Seattle/local intent ownership for '{query}'"
+        locality = business_context_local_label(business_context)
+        updated["title"] = f"Resolve {locality} intent ownership for '{query}'"
         updated["target"] = preferred_owner
         updated["canonical_target"] = preferred_owner
         updated["source_target"] = target or reference_url
@@ -958,12 +1010,12 @@ def apply_business_context_to_issue(issue: dict[str, Any], business_context: dic
             "conversion_target": candidates.get("transactional"),
         }
         updated["expected_click_delta"] = None
-        updated["expected_impact"] = "Clarify which local page should own this intent; optimize for Seattle bookings, not national informational CTR."
+        updated["expected_impact"] = f"Clarify which {locality} page should own this intent; optimize for qualified local outcomes, not national informational CTR."
         updated.setdefault("operator_judgment_notes", [])
         updated["operator_judgment_notes"] = [
             *updated["operator_judgment_notes"],
             "business context deprioritizes national informational clicks",
-            "do not optimize the support page for broad national CTR unless it routes Seattle intent",
+            "do not optimize the support page for broad national CTR unless it routes qualified local intent",
             "decide whether to consolidate, canonicalize, redirect, or internally link from the support page to the local owner",
         ]
         score_components = dict(updated.get("score_components", {}))
@@ -972,12 +1024,13 @@ def apply_business_context_to_issue(issue: dict[str, Any], business_context: dic
         updated["score_components"] = score_components
         updated["business_context_adjustment"] = {
             "from_action_type": issue.get("recommended_action_type"),
-            "reason": "supporting/national cost query is not the business goal; prioritize Seattle/local ownership",
+            "reason": f"supporting/national query is not the business goal; prioritize {locality} ownership",
             "preferred_local_owner": preferred_owner,
             "source_support_page": target or reference_url,
         }
-        # Keep this visible despite discounting raw national-click upside; it is now an ownership/consolidation decision.
-        updated["priority_score"] = round(max(float(issue.get("priority_score", 0)), 0.5), 3)
+        national_discount = score_components["national_click_discount"]
+        raw_priority = float(issue.get("priority_score", 0))
+        updated["priority_score"] = round(max(raw_priority * national_discount, 0.35), 3)
         return updated
     return issue
 
@@ -1078,7 +1131,7 @@ def build_payload(
         primary_metric = DEFAULT_PRIMARY_METRIC if DEFAULT_PRIMARY_METRIC in metrics else next(iter(metrics.keys()), DEFAULT_PRIMARY_METRIC)
 
     context_check = context_quality_check(business_context)
-    candidates = apply_business_context(derive_candidate_issues(analysis), business_context, site_id=site_id)
+    candidates = dedupe_candidates(apply_business_context(derive_candidate_issues(analysis), business_context, site_id=site_id))
     ranked = apply_prioritization(candidates, learned, primary_metric)
     top_issues = ranked[:3] if ranked else [
         make_issue(
