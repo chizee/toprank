@@ -123,7 +123,7 @@ Run these two commands in Claude Code:
 
 That's it. All skills are now available as `/toprank:*` commands.
 
-**Google Ads (optional):** The first time Claude Code connects to the NotFair MCP server, it opens a browser tab and asks you to sign in to [notfair.co](https://notfair.co) — authorize once and the token is stored in your OS keychain. No API key to copy, no `mcp-remote` bridge to install.
+**Google Ads + Meta Ads (optional):** The first time Claude Code connects to either NotFair MCP server (`NotFair-GoogleAds` or `NotFair-MetaAds`), it opens a browser tab and asks you to sign in to [notfair.co](https://notfair.co) — authorize once per platform and the token is stored in your OS keychain. No API key to copy, no `mcp-remote` bridge to install.
 
 ### Manual Install
 
@@ -180,6 +180,13 @@ Start here:
 | [`google-ads-copy`](google-ads/copy/) | RSA copy generator + A/B testing. Data-driven headlines and descriptions with character counts and pin positions. |
 | [`google-ads-landing`](google-ads/landing/) | Landing page audit. Analyzes relevance between keywords, ads, and landing page content to improve Quality Score. |
 
+### Meta Ads (Facebook + Instagram)
+
+| Skill | What it does |
+|-------|-------------|
+| [`meta-ads-audit`](meta-ads/audit/) | Account audit + business context setup. Run this first. Scores 7 health dimensions tuned for Meta (Pixel + CAPI Health, Attribution, Campaign Structure, Creative Health, Audience Strategy, Spend Efficiency, Scaling Readiness), persists creative inventory and persona data for downstream skills. |
+| [`meta-ads`](meta-ads/manage/) | Campaign management. ROAS analysis, frequency-first triage, creative fatigue diagnosis, Learning Phase / Learning Limited triage, audience overlap, CBO/ABO/Advantage+ Shopping structure. Mutations route through dedicated tools (`pause*`, `enable*`, `updateAdSetBudget`, `updateCampaignBudget`, `renameCampaign`); operations outside that surface route the user to Meta Ads Manager rather than improvising. |
+
 ### SEO
 
 | Skill | What it does |
@@ -213,12 +220,16 @@ toprank/
 ├── .claude-plugin/
 │   ├── plugin.json              <- plugin metadata (explicit skill paths)
 │   └── marketplace.json         <- registry entry
-├── .mcp.json                    <- NotFair MCP server (auto-configured)
+├── .mcp.json                    <- NotFair MCP servers (Google Ads + Meta Ads, auto-configured)
 ├── google-ads/
 │   ├── manage/                  <- campaign management (skill: google-ads)
 │   ├── audit/                   <- account audit + business context
 │   ├── copy/                    <- RSA copy generator + A/B testing
 │   └── landing/                 <- landing page scoring + diagnostic
+├── meta-ads/
+│   ├── manage/                  <- campaign management (skill: meta-ads)
+│   ├── audit/                   <- account audit + Meta business context
+│   └── shared/                  <- Meta-specific preamble, math, policy registry
 ├── seo/
 │   ├── seo-analysis/            <- full SEO audit with GSC data
 │   ├── content-writer/          <- E-E-A-T content creation
@@ -238,15 +249,26 @@ toprank/
 
 ---
 
-## MCP Server
+## MCP Servers
 
-The Google Ads surface is also available as a standalone remote MCP server — use it from any MCP client (Claude Desktop, Cursor, Inspector, your own agent) without installing the Toprank CLI plugin.
+The Google Ads and Meta Ads surfaces are available as standalone remote MCP servers — use either from any MCP client (Claude Desktop, Cursor, Inspector, your own agent) without installing the Toprank CLI plugin.
+
+### NotFair-GoogleAds
 
 - **Registry name:** `io.github.nowork-studio/notfair` (verify: `curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=notfair"`)
 - **Endpoint:** `https://notfair.co/api/mcp/google_ads` (streamable HTTP)
 - **Auth:** OAuth 2.1 with dynamic client registration — your MCP client opens a browser tab to sign in at [notfair.co](https://notfair.co) on first use; the token is stored locally (OS keychain in Claude Code)
 
-The server exposes ~100 Google Ads tools across reads (performance, search terms, impression share, keyword ideas, GAQL), writes (pause/enable, bid and budget updates, keyword and negative list management, campaign creation), and a `runScript` tool that fans out up to 20 GAQL queries in parallel for open-ended analytical questions. Source for the hosted server lives in [`nowork-studio/ads-agent`](https://github.com/nowork-studio/ads-agent).
+Exposes ~100 Google Ads tools across reads (performance, search terms, impression share, keyword ideas, GAQL), writes (pause/enable, bid and budget updates, keyword and negative list management, campaign creation), and a `runScript` tool that fans out up to 20 GAQL queries in parallel for open-ended analytical questions. Source for the hosted server lives in [`nowork-studio/ads-agent`](https://github.com/nowork-studio/ads-agent).
+
+### NotFair-MetaAds
+
+- **Endpoint:** `https://notfair.co/api/mcp/meta_ads` (streamable HTTP)
+- **Auth:** Same OAuth 2.1 flow as NotFair-GoogleAds — sign in to [notfair.co](https://notfair.co) once per platform; tokens are independent
+
+Exposes a focused set of Meta Marketing API tools: reads (campaign / ad set / ad listings, `getInsights` with breakdowns), writes (`pauseCampaign`, `pauseAdSet`, `pauseAd`, `enableCampaign`, `enableAdSet`, `enableAd`, `updateCampaignBudget`, `updateAdSetBudget`, `renameCampaign`), `suggestImprovement` for server-side heuristic recommendations, and a `runScript` sandbox with `ads.graph(path, params)`, `ads.graphParallel([calls])` (up to 20 Graph API calls in parallel), `ads.insights(...)`, and `ads.batch([requests])` for analytical fan-out.
+
+The Meta server's mutation surface is intentionally narrow — there is no programmatic create-campaign, no audience editing, and no creative upload. The `/meta-ads` skill is explicit about this and routes those operations to Meta Ads Manager.
 
 ---
 
@@ -257,6 +279,7 @@ Toprank skills reference external tools using the `~~category` placeholder patte
 | Category | Placeholder | Default Server | Alternatives |
 |----------|-------------|---------------|--------------|
 | Google Ads | `~~google-ads` | [NotFair-GoogleAds MCP](https://notfair.co) (legacy `mcp__notfair__*` and `mcp__adsagent__*` still detected during the rename window) | Google Ads MCP (`mcp__google_ads_mcp__*`) |
+| Meta Ads | `~~meta-ads` | [NotFair-MetaAds MCP](https://notfair.co) | Any Meta Marketing API MCP (`mcp__.*meta.*ads__*`) |
 | Search Console | `~~search-console` | gcloud CLI + Search Console API | Any GSC-compatible MCP server |
 | CMS | `~~cms` | Direct API (WordPress REST, Strapi, Contentful, Ghost) | Any CMS MCP server |
 
@@ -264,6 +287,7 @@ Skills use conditional blocks based on available tools. If a connector is not av
 
 **Setup:**
 - **Google Ads:** See `google-ads/shared/preamble.md`. The `.mcp.json` registers `https://notfair.co/api/mcp/google_ads` as a native HTTP MCP server; on first connection Claude Code opens a browser for OAuth sign-in to [notfair.co](https://notfair.co) and stores the token in your OS keychain — no environment variable, no bridge subprocess.
+- **Meta Ads:** See `meta-ads/shared/preamble.md`. The `.mcp.json` registers `https://notfair.co/api/mcp/meta_ads` as a native HTTP MCP server; OAuth sign-in is independent from Google Ads (sign in once per platform). Skills resolve the ad account from a `metaAccountId` field in `.notfair.json` (alongside `accountId` for Google Ads — same config file, no double-prompting).
 - **Search Console:** See `seo/shared/preamble.md`. Requires Google Cloud SDK, Search Console API enabled, and OAuth login.
 - **CMS:** Run `/toprank:setup-cms` to configure WordPress, Strapi, Contentful, or Ghost.
 
