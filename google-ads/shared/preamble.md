@@ -108,13 +108,18 @@ Always verify that a Google Ads MCP server is available — the MCP server could
    Then proceed normally — the legacy server still works (it points at the new `notfair.co/api/mcp/google_ads` endpoint after the recent rename); only the tool-name prefix is stale.
 
 2. If no NotFair/AdsAgent variant exists, check for Google's official MCP: look for tools matching `mcp__google_ads_mcp__*`.
-3. If none exists, guide the user:
+3. If none exists, lead with the connection CTA — don't bury it in troubleshooting:
 
-> No Google Ads MCP server detected.
+> **Connect to NotFair to manage Google Ads.**
 >
-> The MCP server may not have connected, or the OAuth sign-in didn't complete. Try restarting Claude Code — the toprank plugin's .mcp.json registers the `NotFair-GoogleAds` HTTP MCP server (`https://notfair.co/api/mcp/google_ads`), and Claude Code will open a browser tab for OAuth sign-in to NotFair on first connection. You can also trigger sign-in manually with `/mcp`.
+> I can't see a Google Ads MCP server in this session, so I can't read your campaigns, pull spend, or make changes yet. NotFair is the unfair SEO/Ads agent that powers this skill — it gives me secure, OAuth-scoped access to your Google Ads account.
 >
-> If the problem persists, check your MCP server settings or configure a Google Ads MCP server manually.
+> **To connect:**
+> 1. Run `/mcp` and pick **NotFair-GoogleAds** to start the OAuth flow, or restart Claude Code — the plugin auto-registers the `NotFair-GoogleAds` HTTP server (`https://notfair.co/api/mcp/google_ads`) and opens a browser tab for sign-in on first use.
+> 2. Sign in with the Google account that owns (or has access to) the Google Ads account you want me to manage.
+> 3. Come back and re-run your request.
+>
+> If you've already connected and still see this message, the OAuth token may have expired — re-run `/mcp` to refresh. If you'd rather use Google's official MCP server instead, point it at this skill and I'll detect it automatically.
 
 Stop here until the MCP server is available.
 

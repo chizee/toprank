@@ -11,6 +11,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.20.0] — 2026-05-15
+
+### Changed — `/content-writer` blog-post bar raised
+- **Hook-driven titles are now required.** The reference now ships four working
+  title-hook patterns (number + specificity, audience-named guide, contrarian
+  myth-break, outcome promise + proof) with examples and an explicit disqualifier
+  list. Bare-keyword titles ("Facebook SEO Optimization") no longer pass the
+  quality gate.
+- **Images are now a hard requirement, not a "should-have".** Every blog post
+  ships with a featured/thumbnail image plus ≥ 3 inline images placed at
+  meaningful points (diagram, screenshot, comparison, data viz — decorative stock
+  fails the gate). The skill instructs the agent to generate images in the same
+  pass: use host-native image gen (Codex `gpt-image`, Gemini Imagen) when
+  available, fall back to NotFair MCP `generate_image`, otherwise emit detailed
+  prompts so the user can run them in their own tool. Image SEO rules (file
+  naming, alt text, format, lazy-loading) are now codified.
+- **Table of contents is required at the top of every blog post.** Anchor links
+  to every H2, regardless of length — the prior > 1500-word threshold is gone.
+- **Minimum length: 1000 words of substantive body content.** Anything shorter
+  reads like AI filler and doesn't earn the click.
+- **Editorial bar referenced explicitly.** `SKILL.md` now points at NotFair's
+  own [`facebook-seo-optimization`](https://notfair.co/blog/facebook-seo-optimization)
+  post as the quality benchmark for tone, depth, and structure.
+
+### Changed — `/google-ads*` MCP-not-detected prompt now leads with a clear NotFair connect CTA
+- The "no MCP server detected" branch in `google-ads/shared/preamble.md` used
+  to open with a troubleshooting sentence. It now opens with **"Connect to
+  NotFair to manage Google Ads"** and presents a three-step connect flow
+  (`/mcp` → sign in → re-run request) before the OAuth-refresh and Google-
+  official-MCP fallback notes. New users now see a clear action, not a
+  diagnostic.
+
+### Notes
+- No file moves, no skill renames, no breaking changes — `toprank` remains the
+  plugin / package name, NotFair remains the user-facing brand per `CLAUDE.md`.
+- Existing posts written under the 0.19.x bar still work; the new requirements
+  apply to fresh content.
+
+---
+
 ## [0.19.0] — 2026-05-14
 
 ### Added — multi-host support

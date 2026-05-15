@@ -10,10 +10,12 @@ System, E-E-A-T quality rater guidelines, and Search Central documentation.
 1. [E-E-A-T Framework](#e-e-a-t-framework)
 2. [Helpful Content Signals](#helpful-content-signals)
 3. [Blog Posts](#blog-posts)
-4. [Landing Pages](#landing-pages)
-5. [Search Intent Matching](#search-intent-matching)
-6. [On-Page SEO Checklist](#on-page-seo-checklist)
-7. [Anti-Patterns](#anti-patterns)
+4. [Title Hook Patterns](#title-hook-patterns)
+5. [Images](#images)
+6. [Landing Pages](#landing-pages)
+7. [Search Intent Matching](#search-intent-matching)
+8. [On-Page SEO Checklist](#on-page-seo-checklist)
+9. [Anti-Patterns](#anti-patterns)
 
 ---
 
@@ -67,13 +69,23 @@ Informational and commercial-investigation intent: "how to", "what is", "best X"
 
 ### Structure
 ```
-H1: Primary topic (one per page, includes primary keyword)
+H1: Hook-driven title (one per page, includes primary keyword)
+Featured image (above the fold, used as thumbnail + Open Graph)
+Hook paragraph (breaks reader expectation, signals what's different)
+Table of Contents (anchor links to every H2)
   H2: Major section (answer core question first — don't bury the lead)
+    Inline image #1 (diagram, screenshot, comparison, or data viz)
     H3: Supporting detail
   H2: Practical examples / case studies
+    Inline image #2
   H2: Common mistakes
+    Inline image #3
   H2: FAQ (targets People Also Ask)
 ```
+
+A serious blog post is ≥ 1000 words, ships with a hook-driven title, a table of
+contents, a featured image, and at least 3 inline images. Posts below that bar
+read like AI filler and don't earn the click.
 
 ### Writing Rules
 1. **Open with the answer** — first paragraph directly addresses search intent
@@ -93,18 +105,115 @@ H1: Primary topic (one per page, includes primary keyword)
 - After that: synonyms and natural language — no stuffing
 
 ### Required Sections
-1. Opening hook — state the problem, signal you'll answer concretely
-2. Core content — main answer with clear H2/H3 structure
-3. Practical examples — at least one real scenario
-4. Common mistakes — what people get wrong
-5. Next steps / CTA
-6. FAQ (3-5 questions targeting related searches)
+1. **Featured image** — set above the fold, doubles as thumbnail + Open Graph
+2. **Opening hook (2–4 sentences)** — break expectation. State what most people
+   get wrong, the counterintuitive truth, or the specific gap this post closes.
+   No "in today's digital landscape" throat-clearing
+3. **Table of contents** — anchor links to every H2, rendered at the top
+4. **Core content** — main answer with clear H2/H3 structure, ≥ 1000 words
+5. **Inline images (≥ 3)** — placed at meaningful points (one per major section
+   is a good rule of thumb): diagram, screenshot, comparison table-as-image, or
+   data viz. No decorative stock
+6. **Practical examples** — at least one real scenario with concrete numbers
+7. **Common mistakes** — what people get wrong
+8. **Next steps / CTA**
+9. **FAQ** (3–5 questions targeting related searches)
 
 ### Metadata
-- **Title tag:** < 60 chars, keyword front-loaded, includes value prop
+- **Title tag:** < 60 chars, keyword front-loaded, includes value prop and hook
 - **Meta description:** 120-160 chars, keyword + reason to click
 - **URL slug:** short, readable, keyword-rich. `/blog/optimize-title-tags`
-- **Structured data:** `Article` or `BlogPosting`; add `HowTo` for tutorials, `FAQPage` for FAQ sections
+- **Structured data:** `Article` or `BlogPosting` (with `image` populated); add
+  `HowTo` for tutorials, `FAQPage` for FAQ sections
+
+---
+
+## Title Hook Patterns
+
+The bare keyword as a title ("Facebook SEO Optimization") loses to anything with
+a hook in the same SERP. Pick one of these patterns. Keep ≤ 60 chars and keep
+the primary keyword front-loaded.
+
+### 1. Number + specificity
+Numbers earn the click because they imply scoped, finite content.
+- "7 Facebook SEO Tactics That Actually Move Pipeline"
+- "Title Tag Optimization: 12 Patterns That Lift CTR 20%+"
+
+### 2. Audience-named guide
+Naming the audience filters for the right reader and signals depth.
+- "Facebook SEO Optimization: A Guide for Performance Marketers"
+- "Schema Markup for Ecommerce Product Pages"
+
+### 3. Contrarian / myth-break
+A confident counter-claim creates a curiosity gap.
+- "Facebook SEO Is Not Dead — You're Measuring It Wrong"
+- "Stop Writing 3,000-Word Blog Posts. Here's What Ranks Instead."
+
+### 4. Outcome promise + proof
+A specific result, backed by something that signals the post will deliver it.
+- "How We Cut CPA 38% Without Touching Bids"
+- "The Title Tag Rewrite That Lifted Organic Traffic 2.3x"
+
+**What disqualifies a title:** vague modifiers ("ultimate", "complete"), the
+keyword stated twice, ChatGPT-default formatting ("A Comprehensive Guide to…"),
+or a hook so clickbait it overpromises what the body delivers.
+
+---
+
+## Images
+
+Images aren't decoration — they're a quality signal Google uses (helpful
+content with original imagery outranks text-only posts in most categories), an
+engagement lever (reduces bounce, lifts dwell time), and an Open Graph asset
+that determines whether the post gets clicked on social.
+
+### Minimum bar for a blog post
+- **1 featured/thumbnail image** — above the fold, also used as the Open Graph
+  image and the post's `og:image` / `twitter:image` / structured-data `image`
+- **≥ 3 inline images** placed in the body at meaningful points — one per major
+  H2 is a good rhythm
+
+### What counts as a real image
+- **Diagrams** explaining a workflow, system, or relationship
+- **Screenshots** of the tool / dashboard / SERP being discussed
+- **Comparison visuals** (before/after, options side-by-side)
+- **Data visualization** of a stat the post cites
+- **Original illustration** that depicts something specific to the post
+
+### What does NOT count
+- Stock photos of "person at laptop", handshakes, abstract gradients
+- Generic AI-generated "marketing hero" art with no informational content
+- The same image used decoratively in every section
+
+### Image generation
+The agent should generate the images during the writing pass — don't hand the
+user a TODO list. Pick the first available surface:
+
+1. **Host-native image gen** (Codex `gpt-image`, Gemini Imagen, etc.) — use it
+   directly. Save to `images/` or the path the user picks.
+2. **NotFair MCP** — if a NotFair MCP is connected, `generate_image` produces
+   marketing-grade visuals from a prompt; works for blog imagery too.
+3. **No image-gen available** — emit the detailed prompt for each image along
+   with the markdown image tag (with the planned filename) so the post is ready
+   to slot the asset in.
+
+### Writing an image prompt
+Every prompt names: subject, style (photographic / 3D render / flat illustration
+/ data viz / diagram), composition, color palette, mood, and an explicit avoid
+list. Example:
+
+> Featured image for a blog post on Facebook SEO optimization. Flat vector
+> illustration, isometric perspective. A stylized Facebook page card with search
+> bars, magnifying glass, and ranking arrows around it. Color palette: NotFair
+> orange (#FF6B35) accents on a clean off-white background, navy line work. No
+> stock-photo people, no generic laptop, no abstract gradients. Square 1200×1200.
+
+### Image SEO
+- File name: keyword-relevant, hyphen-separated. `facebook-seo-page-checklist.png`
+- Alt text: descriptive of what the image shows, not keyword-stuffed
+- Format: WebP or AVIF preferred; PNG for diagrams with hard edges
+- Width: 1200px (featured), 800–1000px (inline), 2x for retina
+- Lazy-load every image except the featured one
 
 ---
 
@@ -207,11 +316,18 @@ that format — don't fight the SERP.
 
 ### Should-Have
 - [ ] Structured data (Article, Product, Service, HowTo, FAQPage)
-- [ ] Table of contents for long content (> 1500 words)
 - [ ] External links to authoritative sources
 - [ ] Author byline with credentials
 - [ ] Last-updated date for evergreen content
 - [ ] Open Graph + Twitter Card meta tags
+
+### Required for blog posts (in addition to Must-Have)
+- [ ] Hook-driven title — number, contrarian claim, named audience, or curiosity gap
+- [ ] Table of contents at the top with working anchor links
+- [ ] Featured/thumbnail image (also used as `og:image` / structured-data `image`)
+- [ ] ≥ 3 inline images (diagram, screenshot, comparison, or data viz)
+- [ ] ≥ 1000 words of substantive body content
+- [ ] FAQ section with 3–5 questions targeting People Also Ask
 
 ---
 
