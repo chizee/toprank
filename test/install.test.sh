@@ -159,8 +159,6 @@ for skill in manage audit copy; do
     "$skill references shared preamble"
   assert_not_contains "$REPO_ROOT/google-ads/$skill/SKILL.md" "mcp__notfair__listConnectedAccounts" \
     "$skill does not inline MCP detection (notfair prefix)"
-  assert_not_contains "$REPO_ROOT/google-ads/$skill/SKILL.md" "mcp__adsagent__listConnectedAccounts" \
-    "$skill does not inline MCP detection (legacy adsagent prefix)"
 done
 
 # SEO skills that need GSC reference the shared preamble

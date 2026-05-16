@@ -281,7 +281,7 @@ Toprank skills reference external tools using the `~~category` placeholder patte
 
 | Category | Placeholder | Default Server | Alternatives |
 |----------|-------------|---------------|--------------|
-| Google Ads | `~~google-ads` | [NotFair-GoogleAds MCP](https://notfair.co) (legacy `mcp__notfair__*` and `mcp__adsagent__*` still detected during the rename window) | Google Ads MCP (`mcp__google_ads_mcp__*`) |
+| Google Ads | `~~google-ads` | [NotFair-GoogleAds MCP](https://notfair.co) (legacy `mcp__notfair__*` still detected during the rename window) | Google Ads MCP (`mcp__google_ads_mcp__*`) |
 | Meta Ads | `~~meta-ads` | [NotFair-MetaAds MCP](https://notfair.co) | Any Meta Marketing API MCP (`mcp__.*meta.*ads__*`) |
 | Search Console | `~~search-console` | gcloud CLI + Search Console API | Any GSC-compatible MCP server |
 | CMS | `~~cms` | Direct API (WordPress REST, Strapi, Contentful, Ghost) | Any CMS MCP server |

@@ -11,6 +11,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.23.0] — 2026-05-16
+
+### Changed — full removal of legacy AdsAgent branding from active code
+
+- The legacy AdsAgent brand is now fully removed from all **active** skill
+  text, docs, MCP detection logic, install tests, and project guidance.
+  CHANGELOG history is intentionally preserved verbatim — past releases
+  shipped under that name and the historical record reflects that.
+- **`google-ads/shared/preamble.md`** — dropped the one-time
+  `.adsagent` → `.notfair` filesystem migration step entirely. Renumbered
+  the remaining steps (Resolve config → Step 1, MCP detection → Step 2,
+  Onboarding → Step 3, Calling tools → Step 4). MCP prefix detection now
+  only looks for NotFair / NotFair-GoogleAds variants; the legacy
+  `mcp__adsagent__*` / `mcp__claude_ai_AdsAgent__*` prefixes have been
+  removed from the detection table, the legacy-prefix nudge, and the
+  tool-call prefix reference list.
+- **`gemini/SKILL.md`** — Step 2a (Google Ads change detection) no longer
+  scans for the legacy MCP prefix or the legacy `.adsagent/` data-dir
+  path.
+- **`google-ads/shared/preamble.md`**, **`google-ads/shared/analysis-principles.md`**,
+  **`google-ads/audit/SKILL.md`**, **`google-ads/manage/SKILL.md`** — the four
+  active references to MCP playbook resources use `notfair://playbooks/*`
+  rather than the prior `adsagent://` scheme.
+- **`CLAUDE.md`** — "Branding: NotFair going forward" rewritten to
+  "Branding: NotFair." The load-bearing-compat carve-out is gone (there
+  is nothing left to carve out). The "Related repos" mention of the
+  sibling `adsagent-plugin/` directory has been removed.
+- **`README.md`** — Connectors table no longer mentions
+  `mcp__adsagent__*` as a detected variant.
+- **`test/install.test.sh`** — dropped the assertion that skills don't
+  inline the legacy MCP prefix. The current assertion (no inline
+  `mcp__notfair__listConnectedAccounts`) still guards against bypassing
+  the shared preamble's prefix-detection logic.
+
+### Coordination requirement (read before shipping)
+
+- The `NotFair-GoogleAds` MCP server must publish the three playbook
+  resources (`audit-account`, `explain-regression`, `run-experiment`)
+  under the `notfair://` scheme — or alias both schemes during the
+  rename window — before this version reaches users. As of this
+  changelog entry the live server still publishes under
+  `adsagent://playbooks/*`, so playbook fetches via `ReadMcpResourceTool`
+  will fail until the server-side rename ships.
+
+### Breaking — pre-0.19 users without migrated config
+
+- The auto-migration shipped in 0.15.0 (legacy `.adsagent` paths →
+  `.notfair` paths) is gone. Users who first installed the plugin
+  before 0.15.0 AND never invoked any google-ads skill on a
+  0.15.x–0.22.x version will, on upgrade to 0.23.0, find their saved
+  `accountId` and data files invisible to the plugin. Resolution:
+  rename the legacy global directory (`~/.adsagent` → `~/.notfair`),
+  the legacy project config file (`.adsagent.json` → `.notfair.json`),
+  and the legacy project data dir if any (`.adsagent/` → `.notfair/`)
+  manually, or simply re-run the `/google-ads` onboarding to save a
+  fresh `accountId`. One-time-per-machine fix.
+
+---
+
 ## [0.22.0] — 2026-05-15
 
 ### Added — opt-in OpenClaw cron publisher

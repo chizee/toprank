@@ -16,7 +16,7 @@ When the data is too thin to support a recommendation, say so explicitly and pro
 
 ## High-level approach (you decide the specifics)
 
-Trust your own diagnostic judgment on tool sequencing, GAQL shape, and which surfaces to correlate. You know how to use `runScript` + `ads.gaqlParallel` to fan out, and the MCP server's playbooks (`adsagent://playbooks/*`) give you battle-tested starting queries. Lean on them; deviate when the question warrants. The references in each skill are calibration data when you need an anchor — not mandatory reading or decision trees to follow step by step.
+Trust your own diagnostic judgment on tool sequencing, GAQL shape, and which surfaces to correlate. You know how to use `runScript` + `ads.gaqlParallel` to fan out, and the MCP server's playbooks (`notfair://playbooks/*`) give you battle-tested starting queries. Lean on them; deviate when the question warrants. The references in each skill are calibration data when you need an anchor — not mandatory reading or decision trees to follow step by step.
 
 What does need to be true on every analysis:
 
