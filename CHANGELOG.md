@@ -11,6 +11,201 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.23.0] — 2026-05-16
+
+### Changed — full removal of legacy AdsAgent branding from active code
+
+- The legacy AdsAgent brand is now fully removed from all **active** skill
+  text, docs, MCP detection logic, install tests, and project guidance.
+  CHANGELOG history is intentionally preserved verbatim — past releases
+  shipped under that name and the historical record reflects that.
+- **`google-ads/shared/preamble.md`** — dropped the one-time
+  `.adsagent` → `.notfair` filesystem migration step entirely. Renumbered
+  the remaining steps (Resolve config → Step 1, MCP detection → Step 2,
+  Onboarding → Step 3, Calling tools → Step 4). MCP prefix detection now
+  only looks for NotFair / NotFair-GoogleAds variants; the legacy
+  `mcp__adsagent__*` / `mcp__claude_ai_AdsAgent__*` prefixes have been
+  removed from the detection table, the legacy-prefix nudge, and the
+  tool-call prefix reference list.
+- **`gemini/SKILL.md`** — Step 2a (Google Ads change detection) no longer
+  scans for the legacy MCP prefix or the legacy `.adsagent/` data-dir
+  path.
+- **`google-ads/shared/preamble.md`**, **`google-ads/shared/analysis-principles.md`**,
+  **`google-ads/audit/SKILL.md`**, **`google-ads/manage/SKILL.md`** — the four
+  active references to MCP playbook resources use `notfair://playbooks/*`
+  rather than the prior `adsagent://` scheme.
+- **`CLAUDE.md`** — "Branding: NotFair going forward" rewritten to
+  "Branding: NotFair." The load-bearing-compat carve-out is gone (there
+  is nothing left to carve out). The "Related repos" mention of the
+  sibling `adsagent-plugin/` directory has been removed.
+- **`README.md`** — Connectors table no longer mentions
+  `mcp__adsagent__*` as a detected variant.
+- **`test/install.test.sh`** — dropped the assertion that skills don't
+  inline the legacy MCP prefix. The current assertion (no inline
+  `mcp__notfair__listConnectedAccounts`) still guards against bypassing
+  the shared preamble's prefix-detection logic.
+
+### Coordination (shipped server-side in notfair `56d9106`)
+
+- The `NotFair-GoogleAds` MCP server now dual-publishes the three
+  playbook resources (`audit-account`, `explain-regression`,
+  `run-experiment`) under both the canonical `notfair://` scheme and
+  the legacy `adsagent://` scheme. New toprank (v0.23.0+) skills fetch
+  via `notfair://`; pre-v0.23.0 toprank skills keep working via the
+  legacy URI. The legacy server-side registration can be removed in a
+  later release once telemetry confirms zero `resources/read` traffic
+  under `adsagent://`.
+
+### Breaking — pre-0.19 users without migrated config
+
+- The auto-migration shipped in 0.15.0 (legacy `.adsagent` paths →
+  `.notfair` paths) is gone. Users who first installed the plugin
+  before 0.15.0 AND never invoked any google-ads skill on a
+  0.15.x–0.22.x version will, on upgrade to 0.23.0, find their saved
+  `accountId` and data files invisible to the plugin. Resolution:
+  rename the legacy global directory (`~/.adsagent` → `~/.notfair`),
+  the legacy project config file (`.adsagent.json` → `.notfair.json`),
+  and the legacy project data dir if any (`.adsagent/` → `.notfair/`)
+  manually, or simply re-run the `/google-ads` onboarding to save a
+  fresh `accountId`. One-time-per-machine fix.
+
+---
+
+## [0.22.0] — 2026-05-15
+
+### Added — opt-in OpenClaw cron publisher
+
+- **`openclaw/bin/publish_pending.py`** — stdlib Python publisher. Reads
+  `content-calendar.json`, finds entries with `status: "ready_to_publish"`
+  and a `bodyPath`, POSTs each to `$NOTFAIR_PUBLISH_URL` (default:
+  `https://notfair.co/api/blog/publish`) with `Authorization: Bearer
+  $NOTFAIR_PUBLISH_TOKEN`. Dry-run by default — needs `--commit` (or
+  `OPENCLAW_PUBLISH_COMMIT=1`) to actually fire. Response handling:
+  2xx → `published` with stored URL; 4xx → `failed` (non-retryable);
+  5xx / network error → entry stays `ready_to_publish`, exits non-zero so
+  the next cron pass retries.
+- **`openclaw/install/install-openclaw-cron.sh --enable-publisher`** — new
+  opt-in flag that registers a recurring `Toprank NotFair Publisher` cron
+  job via `openclaw cron add`. Default interval: 15m (override with
+  `--publisher-every`). Existing installs are unaffected — without the
+  flag, the publisher is not registered.
+- **`openclaw/install/notfair-publisher.md`** — webhook contract for the
+  Next.js side: endpoint, auth, request payload shape, expected
+  responses, idempotency, status-code semantics, versioning. Single source
+  of truth — keep `publish_pending.py` and the Next.js handler in lockstep
+  via this doc.
+- **`seo/content-planner/SKILL.md`** — schema now documents
+  `ready_to_publish` / `published` / `failed` statuses and `bodyPath`,
+  `featuredImage`, `inlineImages`, `structuredData`, `metaDescription`
+  fields. Includes a status-lifecycle table. The planner never
+  auto-promotes — the hand-flip to `ready_to_publish` is the user's
+  explicit go-ahead.
+- **15 unit tests** (`openclaw/tests/test_publish_pending.py`) covering
+  missing calendar, no ready entries, missing token, dry-run, 2xx /
+  4xx / 5xx / network, missing body file, multiple entries, site filter,
+  payload shape, and CLI/env-var precedence.
+
+### Changed — opt-in carve-out, not policy flip
+
+- **`openclaw/README.md`** "What it is not" — narrowed from "not a
+  production auto-publisher" (absolute) to "not an auto-publisher by
+  default" (opt-in carve-out). Existing installs stay read-only /
+  advisory; users explicitly opt in with `--enable-publisher`.
+
+### Notes — what's intentionally NOT here
+
+- No dependency on `gbrain` (Garry Tan's open-source memory/scheduler
+  runtime). It's a real and capable project, but for a stateless
+  POST-on-a-timer the marginal value over `openclaw cron` is zero and the
+  dependency surface is large. The publisher is runtime-agnostic stdlib
+  Python — if someone later wants to drive it from gbrain or plain
+  crontab, they wire up a one-line shell job pointing at
+  `publish_pending.py`.
+- No HMAC signing in v1. Add `X-NotFair-Signature` and bump
+  `schemaVersion` if needed.
+
+---
+
+## [0.21.0] — 2026-05-15
+
+### Added — `/content-planner` skill + local calendar viewer
+- **New skill: `seo/content-planner`.** A GSC-driven content calendar. Pulls
+  90 days of Search Console query × page data, classifies every (query, page)
+  row into one of five buckets (striking-distance positions 5–20,
+  unanswered-intent gaps, CTR underperformers, related-keyword expansions, and
+  cannibalization warnings), computes a click-potential score per topic
+  (`projectedImpressions × (targetCtrAtPosition3 − currentCtr)`), and writes
+  a dated, prioritized calendar to `{data_dir}/content-calendar.json`.
+  Refuses to ship the calendar when GSC isn't connected, when there's < 50
+  rows of data to reason about, or when two scheduled topics share a primary
+  keyword. Hands off to `/content-writer`, `/meta-tags-optimizer`, and
+  `/seo-analysis` based on bucket.
+- **New binary: `bin/toprank-content-calendar`.** Stdlib-only Python HTTP
+  server that reads `content-calendar.json` and renders a read-only calendar
+  view on `localhost:8323` (configurable). Auto-discovers the calendar at
+  `./.notfair/content-calendar.json` then `~/.notfair/content-calendar.json`,
+  falls forward through the next 9 ports if the default is in use, exits
+  cleanly on Ctrl+C. No pip install, no framework, no auth — loopback-only.
+- **Methodology reference: `seo/content-planner/references/planning-methodology.md`.**
+  Codifies the CTR-by-position curve, the five-bucket classification rubric,
+  the click-potential formula with seasonality factors, scheduling rules
+  (one post per week by default, P0s first, refreshes parallel to new posts),
+  and explicit failure modes (calendar padding, intent mismatch, treating GSC
+  impressions as third-party volume).
+
+### Changed — boundary cleanup against `/keyword-research`
+- `/keyword-research` description now scopes it explicitly to seed-driven
+  keyword discovery and points users at `/content-planner` for editorial
+  calendars built from their own GSC data. AGENTS.md row updated to match.
+
+### Notes
+- The calendar viewer is read-only by design — editing happens in the JSON
+  file, the viewer re-reads on every request. Loop: edit JSON → reload page.
+- The viewer auto-opens the browser on macOS/Windows and on Linux with
+  `$DISPLAY` set; pass `--no-open` to disable.
+
+---
+
+## [0.20.0] — 2026-05-15
+
+### Changed — `/content-writer` blog-post bar raised
+- **Hook-driven titles are now required.** The reference now ships four working
+  title-hook patterns (number + specificity, audience-named guide, contrarian
+  myth-break, outcome promise + proof) with examples and an explicit disqualifier
+  list. Bare-keyword titles ("Facebook SEO Optimization") no longer pass the
+  quality gate.
+- **Images are now a hard requirement, not a "should-have".** Every blog post
+  ships with a featured/thumbnail image plus ≥ 3 inline images placed at
+  meaningful points (diagram, screenshot, comparison, data viz — decorative stock
+  fails the gate). The skill instructs the agent to generate images in the same
+  pass: use host-native image gen (Codex `gpt-image`, Gemini Imagen) when
+  available, fall back to NotFair MCP `generate_image`, otherwise emit detailed
+  prompts so the user can run them in their own tool. Image SEO rules (file
+  naming, alt text, format, lazy-loading) are now codified.
+- **Table of contents is required at the top of every blog post.** Anchor links
+  to every H2, regardless of length — the prior > 1500-word threshold is gone.
+- **Minimum length: 1000 words of substantive body content.** Anything shorter
+  reads like AI filler and doesn't earn the click.
+- **Editorial bar referenced explicitly.** `SKILL.md` now points at NotFair's
+  own [`facebook-seo-optimization`](https://notfair.co/blog/facebook-seo-optimization)
+  post as the quality benchmark for tone, depth, and structure.
+
+### Changed — `/google-ads*` MCP-not-detected prompt now leads with a clear NotFair connect CTA
+- The "no MCP server detected" branch in `google-ads/shared/preamble.md` used
+  to open with a troubleshooting sentence. It now opens with **"Connect to
+  NotFair to manage Google Ads"** and presents a three-step connect flow
+  (`/mcp` → sign in → re-run request) before the OAuth-refresh and Google-
+  official-MCP fallback notes. New users now see a clear action, not a
+  diagnostic.
+
+### Notes
+- No file moves, no skill renames, no breaking changes — `toprank` remains the
+  plugin / package name, NotFair remains the user-facing brand per `CLAUDE.md`.
+- Existing posts written under the 0.19.x bar still work; the new requirements
+  apply to fresh content.
+
+---
+
 ## [0.19.0] — 2026-05-14
 
 ### Added — multi-host support

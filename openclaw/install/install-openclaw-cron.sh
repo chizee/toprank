@@ -20,6 +20,15 @@ Options:
   --sites <csv>            Comma-separated sites. Default: active sites from ~/.toprank/openclaw/portfolio.json.
   --runtime-home <path>    Toprank runtime home. Default: ~/.toprank/openclaw.
   --repo-root <path>       Toprank repo root. Default: auto-detected from this script.
+
+Publisher (opt-in; off by default — see openclaw/install/notfair-publisher.md):
+  --enable-publisher       Register a recurring publisher job that POSTs ready
+                           blog posts to NotFair. Requires NOTFAIR_PUBLISH_TOKEN
+                           in the cron environment.
+  --publisher-every <dur>  Publisher interval. Default: 15m.
+  --publisher-calendar <p> Explicit calendar path passed to publish_pending.py
+                           (default: auto-resolve to ./.notfair/... → ~/.notfair/...).
+
   -h, --help              Show this help.
 
 Examples:
@@ -40,6 +49,9 @@ TIMEZONE="America/Los_Angeles"
 WEEKLY_TIME="06:30"
 SCHEDULER_EVERY="1h"
 SITES_CSV=""
+ENABLE_PUBLISHER=0
+PUBLISHER_EVERY="15m"
+PUBLISHER_CALENDAR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,6 +66,9 @@ while [[ $# -gt 0 ]]; do
     --sites) SITES_CSV="$2"; shift 2 ;;
     --runtime-home) RUNTIME_HOME="$2"; shift 2 ;;
     --repo-root) REPO_ROOT="$2"; shift 2 ;;
+    --enable-publisher) ENABLE_PUBLISHER=1; shift ;;
+    --publisher-every) PUBLISHER_EVERY="$2"; shift 2 ;;
+    --publisher-calendar) PUBLISHER_CALENDAR="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -166,6 +181,37 @@ for i in "${!sites[@]}"; do
 
   add_job_if_missing "Toprank Weekly Review — $site" "${weekly_args[@]}"
 done
+
+if [[ "$ENABLE_PUBLISHER" -eq 1 ]]; then
+  if [[ ! -x "$REPO_ROOT/openclaw/bin/publish_pending.py" ]]; then
+    echo "ERROR: --enable-publisher set but $REPO_ROOT/openclaw/bin/publish_pending.py is missing" >&2
+    exit 1
+  fi
+  publisher_cmd="OPENCLAW_PUBLISH_COMMIT=1 TOPRANK_OPENCLAW_HOME=\"$RUNTIME_HOME\" python3 \"$REPO_ROOT/openclaw/bin/publish_pending.py\" --commit"
+  if [[ -n "$PUBLISHER_CALENDAR" ]]; then
+    publisher_cmd+=" --calendar \"$PUBLISHER_CALENDAR\""
+  fi
+  publisher_msg="Run the Toprank publisher. Execute exactly: $publisher_cmd. Parse the JSON stdout. If processed is empty, reply exactly NO_REPLY. Otherwise summarize: how many published, how many failed (with reasons), how many retried. If the command exits non-zero, report the blocker. Do not retry the publisher in this turn — the next cron pass picks up retryable failures."
+
+  publisher_args=(
+    --every "$PUBLISHER_EVERY"
+    --session isolated
+    --light-context
+    --message "$publisher_msg"
+    --tools exec
+  )
+  [[ -n "$MODEL" ]] && publisher_args+=(--model "$MODEL")
+  publisher_args+=("${delivery_args[@]}")
+
+  add_job_if_missing "Toprank NotFair Publisher" "${publisher_args[@]}"
+
+  if [[ -z "${NOTFAIR_PUBLISH_TOKEN:-}" ]]; then
+    echo
+    echo "WARNING: NOTFAIR_PUBLISH_TOKEN is not set in your environment."
+    echo "The publisher cron job is registered but will fail until the token is exported"
+    echo "in the cron environment. See openclaw/install/notfair-publisher.md."
+  fi
+fi
 
 echo
 echo "Installed/verified Toprank OpenClaw cron jobs:"

@@ -1,6 +1,6 @@
 # Google Ads Shared Preamble
 
-Every google-ads skill reads this before doing anything else. It handles updates, legacy-path migration, MCP detection, config resolution, and onboarding in one place — so individual skills don't repeat this logic.
+Every google-ads skill reads this before doing anything else. It handles updates, MCP detection, config resolution, and onboarding in one place — so individual skills don't repeat this logic.
 
 ## Step 0: Check for toprank updates
 
@@ -16,54 +16,7 @@ If the output contains `JUST_UPGRADED <old> <new>`: mention "toprank upgraded fr
 
 If neither: continue to Step 1 silently.
 
-## Step 1: Migrate legacy `.adsagent` paths (one-time, silent)
-
-The MCP server moved from AdsAgent to NotFair. Existing users may have config and data under `.adsagent`-named paths from before the rename — move it to the new `.notfair` namespace before reading config so all subsequent steps see consistent state. If the new path already exists, **do not overwrite** — flag the conflict and stop.
-
-Run this as a single bash block (atomic `mv`, refuses to overwrite, no-op when nothing to migrate):
-
-```bash
-_NF_MIGRATED=()
-_NF_CONFLICTS=()
-
-_nf_move() {
-  local src="$1" dst="$2"
-  if [ -e "$src" ] || [ -L "$src" ]; then
-    if [ -e "$dst" ] || [ -L "$dst" ]; then
-      _NF_CONFLICTS+=("$src → $dst (target already exists)")
-    else
-      mv "$src" "$dst" && _NF_MIGRATED+=("$src → $dst")
-    fi
-  fi
-}
-
-# Global config + data directory
-_nf_move "$HOME/.adsagent" "$HOME/.notfair"
-
-# Project-level config + data directory (in the current working directory)
-_nf_move "$(pwd)/.adsagent.json" "$(pwd)/.notfair.json"
-_nf_move "$(pwd)/.adsagent"      "$(pwd)/.notfair"
-
-# Claude-project-level config (slug = CWD with '/' replaced by '-')
-_NF_SLUG=$(pwd | sed 's|/|-|g')
-_nf_move "$HOME/.claude/projects/$_NF_SLUG/adsagent.json" \
-         "$HOME/.claude/projects/$_NF_SLUG/notfair.json"
-
-if [ ${#_NF_MIGRATED[@]} -gt 0 ]; then
-  echo "MIGRATED:"
-  for m in "${_NF_MIGRATED[@]}"; do echo "  - $m"; done
-fi
-if [ ${#_NF_CONFLICTS[@]} -gt 0 ]; then
-  echo "CONFLICTS:"
-  for c in "${_NF_CONFLICTS[@]}"; do echo "  - $c"; done
-fi
-```
-
-- **Output contains `MIGRATED:`** — briefly tell the user "Migrated your AdsAgent config to the new NotFair location (`.adsagent` → `.notfair`)", then continue to Step 2.
-- **Output contains `CONFLICTS:`** — both the legacy and new paths exist for at least one item; the user has partial state from a previous migration attempt. Show the conflicts and tell the user to manually reconcile (typically: inspect both, keep the newer `.notfair` copy, delete the stale `.adsagent` copy). **Stop here** until they resolve it — running with split state will silently lose writes.
-- **Empty output** — nothing to migrate; continue to Step 2 silently.
-
-## Step 2: Resolve config
+## Step 1: Resolve config
 
 Read config from three locations and merge fields (first non-null, non-empty-string value wins per field):
 
@@ -86,43 +39,47 @@ Create `{data_dir}` if it doesn't exist. Ensure `~/.notfair/` also exists (neede
 
 **Important:** If using project-local storage (`.notfair/`), ensure `.notfair.json` and `.notfair/` are in the project's `.gitignore` — they contain business-sensitive data that should not be committed.
 
-Continue to Step 3 (MCP detection always runs).
+Continue to Step 2 (MCP detection always runs).
 
-## Step 3: MCP Server Detection
+## Step 2: MCP Server Detection
 
 Always verify that a Google Ads MCP server is available — the MCP server could be down, unauthorized, or misconfigured even with a saved accountId.
 
-1. Check for NotFair tools. The MCP server may be exposed under several different tool-name prefixes depending on the host (across the AdsAgent → NotFair → NotFair-GoogleAds renames, multiple prefixes may briefly coexist):
+1. Check for NotFair tools. The MCP server may be exposed under several different tool-name prefixes depending on the host (across the NotFair → NotFair-GoogleAds namespace split, multiple prefixes may briefly coexist):
    - `mcp__NotFair-GoogleAds__*` / `mcp__notfair_googleads__*` / `mcp__NotFair_GoogleAds__*` — Claude Code CLI (toprank plugin default, current; exact form depends on Claude Code's key sanitization)
    - `mcp__claude_ai_NotFairGoogleAds__*` — Claude Desktop / claude.ai plugin connector (current)
    - `mcp__notfair__*` / `mcp__claude_ai_NotFair__*` — pre-0.16.0 plugin (legacy NotFair prefix, before the GoogleAds namespace split)
-   - `mcp__adsagent__*` / `mcp__claude_ai_AdsAgent__*` — pre-0.15.0 plugin (legacy AdsAgent prefix)
-   - any other prefix matching `mcp__.*([Nn]ot[Ff]air|[Aa]ds[Aa]gent)__` (future hosts)
+   - any other prefix matching `mcp__.*[Nn]ot[Ff]air.*__` (future hosts)
 
-   **How to detect:** scan your available tool list for any tool whose name ends in `listConnectedAccounts`. Take everything before `listConnectedAccounts` as the detected prefix. If multiple candidates exist, prefer current over legacy: any `NotFair-GoogleAds`/`NotFairGoogleAds`/`notfair_googleads` variant > `mcp__notfair__` / `mcp__claude_ai_NotFair__` > `mcp__adsagent__` / `mcp__claude_ai_AdsAgent__` > any other match. Call `listConnectedAccounts` using that detected prefix, and save both the result and the prefix itself for reuse in Steps 4 and 5.
+   **How to detect:** scan your available tool list for any tool whose name ends in `listConnectedAccounts`. Take everything before `listConnectedAccounts` as the detected prefix. If multiple candidates exist, prefer current over legacy: any `NotFair-GoogleAds`/`NotFairGoogleAds`/`notfair_googleads` variant > `mcp__notfair__` / `mcp__claude_ai_NotFair__` > any other match. Call `listConnectedAccounts` using that detected prefix, and save both the result and the prefix itself for reuse in Steps 3 and 4.
 
-   **Legacy-prefix migration nudge:** if the chosen prefix is a legacy `mcp__notfair__` / `mcp__adsagent__` (or their `claude_ai_*` variants) and no current NotFair-GoogleAds variant is visible, briefly tell the user once:
+   **Legacy-prefix migration nudge:** if the chosen prefix is a legacy `mcp__notfair__` (or its `claude_ai_*` variant) and no current NotFair-GoogleAds variant is visible, briefly tell the user once:
 
    > Detected a legacy MCP server registration. The plugin's MCP server has been renamed to NotFair-GoogleAds — please **restart Claude Code** to pick up the new server registration. Continuing with the legacy server for this session.
 
    Then proceed normally — the legacy server still works (it points at the new `notfair.co/api/mcp/google_ads` endpoint after the recent rename); only the tool-name prefix is stale.
 
-2. If no NotFair/AdsAgent variant exists, check for Google's official MCP: look for tools matching `mcp__google_ads_mcp__*`.
-3. If none exists, guide the user:
+2. If no NotFair variant exists, check for Google's official MCP: look for tools matching `mcp__google_ads_mcp__*`.
+3. If none exists, lead with the connection CTA — don't bury it in troubleshooting:
 
-> No Google Ads MCP server detected.
+> **Connect to NotFair to manage Google Ads.**
 >
-> The MCP server may not have connected, or the OAuth sign-in didn't complete. Try restarting Claude Code — the toprank plugin's .mcp.json registers the `NotFair-GoogleAds` HTTP MCP server (`https://notfair.co/api/mcp/google_ads`), and Claude Code will open a browser tab for OAuth sign-in to NotFair on first connection. You can also trigger sign-in manually with `/mcp`.
+> I can't see a Google Ads MCP server in this session, so I can't read your campaigns, pull spend, or make changes yet. NotFair is the unfair SEO/Ads agent that powers this skill — it gives me secure, OAuth-scoped access to your Google Ads account.
 >
-> If the problem persists, check your MCP server settings or configure a Google Ads MCP server manually.
+> **To connect:**
+> 1. Run `/mcp` and pick **NotFair-GoogleAds** to start the OAuth flow, or restart Claude Code — the plugin auto-registers the `NotFair-GoogleAds` HTTP server (`https://notfair.co/api/mcp/google_ads`) and opens a browser tab for sign-in on first use.
+> 2. Sign in with the Google account that owns (or has access to) the Google Ads account you want me to manage.
+> 3. Come back and re-run your request.
+>
+> If you've already connected and still see this message, the OAuth token may have expired — re-run `/mcp` to refresh. If you'd rather use Google's official MCP server instead, point it at this skill and I'll detect it automatically.
 
 Stop here until the MCP server is available.
 
-If `accountId` was already resolved in Step 2, skip to Step 5. Otherwise, continue to Step 4.
+If `accountId` was already resolved in Step 1, skip to Step 4. Otherwise, continue to Step 3.
 
-## Step 4: Onboarding (only if accountId is missing)
+## Step 3: Onboarding (only if accountId is missing)
 
-Use the `listConnectedAccounts` result from Step 3 (do not call it again):
+Use the `listConnectedAccounts` result from Step 2 (do not call it again):
 
 1. **One account** → save automatically to the highest-priority config file that already exists (project > claude-project > global; if none exist yet, save to `~/.notfair/config.json`), tell the user which was selected
 2. **Multiple accounts** → show numbered list, ask user to pick, save choice to the same location
@@ -139,17 +96,16 @@ If the user explicitly asks to switch accounts, run `listConnectedAccounts`, let
 - **Project** → write `accountId` to `.notfair.json` in the current working directory (create the file if needed)
 - **Global** → write `accountId` to `~/.notfair/config.json`
 
-## Step 5: Calling tools
+## Step 4: Calling tools
 
-Use whichever MCP server prefix was detected in Step 3:
+Use whichever MCP server prefix was detected in Step 2:
 
 - **NotFair-GoogleAds MCP via Claude Code CLI (current):** `mcp__NotFair-GoogleAds__<toolName>` (or whatever sanitized form Claude Code emits — `mcp__notfair_googleads__`, `mcp__NotFair_GoogleAds__`, etc.)
 - **NotFair-GoogleAds MCP via Claude Desktop / claude.ai plugin (current):** `mcp__claude_ai_NotFairGoogleAds__<toolName>`
 - **Legacy NotFair MCP (pre-0.16.0 plugin):** `mcp__notfair__<toolName>` / `mcp__claude_ai_NotFair__<toolName>`
-- **Legacy AdsAgent MCP (pre-0.15.0 plugin):** `mcp__adsagent__<toolName>` / `mcp__claude_ai_AdsAgent__<toolName>`
 - **Google's official MCP:** `mcp__google_ads_mcp__<toolName>`
 
-Always call tools under the exact prefix detected in Step 3 — do not hardcode any prefix. Pass `accountId` from the resolved config (Step 2) to every tool call (except `listConnectedAccounts`).
+Always call tools under the exact prefix detected in Step 2 — do not hardcode any prefix. Pass `accountId` from the resolved config (Step 1) to every tool call (except `listConnectedAccounts`).
 
 ### Reads vs. writes
 
@@ -159,6 +115,6 @@ The MCP server's own instructions are the canonical guide and are surfaced to th
 - **Mutations** go through dedicated write tools (`pauseKeyword`, `updateBid`, `createCampaign`, etc.). Never wrap a mutation in `runScript`.
 - **Schema discovery** (`getResourceMetadata`, `listQueryableResources`) is the right call before writing GAQL against an unfamiliar resource.
 
-The server also publishes ready-to-use playbooks as MCP resources — `adsagent://playbooks/audit-account` and `adsagent://playbooks/explain-regression`. Fetch them when the user asks the matching question rather than rediscovering the query shape.
+The server also publishes ready-to-use playbooks as MCP resources — `notfair://playbooks/audit-account` and `notfair://playbooks/explain-regression`. Fetch them when the user asks the matching question rather than rediscovering the query shape.
 
 Config is loaded. Hand control back to the invoking skill.

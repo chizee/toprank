@@ -38,7 +38,13 @@ In practice, this means OpenClaw can continuously work a portfolio of sites by r
 
 - not a second copy of the SEO skill library
 - not a replacement for the Claude plugin surface
-- not a production auto-publisher
+- **not an auto-publisher by default** — publishing is an explicit opt-in. The
+  base install is read-only / advisory. If you want OpenClaw to POST ready
+  blog posts to a NotFair Next.js webhook on a cron, pass
+  `--enable-publisher` to `install-openclaw-cron.sh` and export
+  `NOTFAIR_PUBLISH_TOKEN` in the cron environment. The publisher only fires
+  for content-calendar entries the user has explicitly flipped to
+  `status: "ready_to_publish"`. Contract: `openclaw/install/notfair-publisher.md`.
 
 ## Runtime state
 
