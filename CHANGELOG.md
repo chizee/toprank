@@ -45,15 +45,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `mcp__notfair__listConnectedAccounts`) still guards against bypassing
   the shared preamble's prefix-detection logic.
 
-### Coordination requirement (read before shipping)
+### Coordination (shipped server-side in notfair `56d9106`)
 
-- The `NotFair-GoogleAds` MCP server must publish the three playbook
-  resources (`audit-account`, `explain-regression`, `run-experiment`)
-  under the `notfair://` scheme — or alias both schemes during the
-  rename window — before this version reaches users. As of this
-  changelog entry the live server still publishes under
-  `adsagent://playbooks/*`, so playbook fetches via `ReadMcpResourceTool`
-  will fail until the server-side rename ships.
+- The `NotFair-GoogleAds` MCP server now dual-publishes the three
+  playbook resources (`audit-account`, `explain-regression`,
+  `run-experiment`) under both the canonical `notfair://` scheme and
+  the legacy `adsagent://` scheme. New toprank (v0.23.0+) skills fetch
+  via `notfair://`; pre-v0.23.0 toprank skills keep working via the
+  legacy URI. The legacy server-side registration can be removed in a
+  later release once telemetry confirms zero `resources/read` traffic
+  under `adsagent://`.
 
 ### Breaking — pre-0.19 users without migrated config
 

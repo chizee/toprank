@@ -51,6 +51,7 @@ SKILL_ENTRIES=(
   "google-ads-landing:google-ads/landing"
   "seo-analysis:seo/seo-analysis"
   "content-writer:seo/content-writer"
+  "content-planner:seo/content-planner"
   "keyword-research:seo/keyword-research"
   "meta-tags-optimizer:seo/meta-tags-optimizer"
   "schema-markup-generator:seo/schema-markup-generator"
