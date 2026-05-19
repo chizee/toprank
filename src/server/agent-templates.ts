@@ -13,6 +13,59 @@ import { writeAgentMeta } from "@/server/agent-meta";
  * what makes the cron tab in the UI parse and group cleanly. Drift here =
  * cron lands in "ungrouped" bucket. Strong prompt + examples = compliance.
  */
+/**
+ * Embedded in CMO + Google Ads agent system prompts. Two purposes:
+ *  1. (D19) Read a one-shot FIRST_TURN.md sentinel file if present at the
+ *     start of a fresh chat session, weave its content into the greeting,
+ *     then move it to MEMORY/ so subsequent sessions don't repeat.
+ *  2. (D8) After the user approves a one-time action in chat, propose a
+ *     recurring cron via a structured <propose_cron> block the UI can
+ *     render as an inline accept button. The actual cron creation happens
+ *     when the user accepts, not when the agent proposes — earned trust,
+ *     not premature autonomy.
+ */
+const FIRST_TURN_AND_PROPOSE_CRON_PROMPT = `## First-turn context on a fresh chat session
+
+On every new chat session in this workspace, your FIRST action MUST be:
+
+1. Check whether \`FIRST_TURN.md\` exists in your current workspace directory.
+2. If it exists: read it, weave its contents into your opening reply per the
+   "Suggested opener" section it specifies, then move it to
+   \`MEMORY/last-first-turn-<YYYY-MM-DD>.md\` so you don't repeat the greeting
+   on subsequent sessions.
+3. If it does not exist: greet the user normally — do NOT fabricate audit
+   findings or pretend you have account context you don't have.
+
+This file is dropped by the onboarding magic-moment flow when a fresh Google
+Ads audit completes. It contains the structured audit summary, top finding,
+and a suggested opener. The contract is one-shot: read, weave, move.
+
+## Proposing recurring work after an approved action
+
+When the user just approved an action that produces a one-time outcome
+(e.g., pausing wasted-spend keywords), your next response should ALSO
+propose a recurring cron to catch the same kind of issue in the future.
+Append this structured block at the END of your reply so the UI can
+render it as an inline accept button:
+
+<propose_cron>
+name: <project>/<agent>/<kebab-case-cron-name>
+agent: <project-slug>-<agent-slug>
+schedule: cron 0 9 * * * America/Los_Angeles
+message: RUN: instructions to your future self on each tick
+description: one-line description for the cron tab
+</propose_cron>
+
+Rules:
+- Only propose ONE cron per turn. Quality over quantity.
+- Only propose AFTER the user has demonstrated trust by approving at least
+  one one-time action. Do not propose on a cold chat.
+- Do NOT \`exec\` the \`openclaw cron add\` CLI directly when emitting a
+  proposal. The UI will materialize the cron when the user accepts. If the
+  user replies "yes" / "do it" in the next turn, THEN call your exec tool
+  to actually create the cron using the schedule above.
+`;
+
 const SCHEDULE_RECURRING_WORK_SYSTEM_PROMPT = `## Scheduling recurring work
 
 When the user asks you to "do X every day", "every Monday", "every hour", etc.,
@@ -118,6 +171,8 @@ work for the specialist agents you coordinate.
 
 ${SCHEDULE_RECURRING_WORK_SYSTEM_PROMPT}
 
+${FIRST_TURN_AND_PROPOSE_CRON_PROMPT}
+
 Style:
 - Lead with the point. Be specific. Reference real numbers and channel realities.
 - Don't waffle. Recommendations beat options. The user can push back.
@@ -143,6 +198,8 @@ negatives. When the notfair-googleads MCP is connected, use it for live account
 operations.
 
 ${SCHEDULE_RECURRING_WORK_SYSTEM_PROMPT}
+
+${FIRST_TURN_AND_PROPOSE_CRON_PROMPT}
 
 Schedule yourself for recurring jobs the user asks for: hourly metric pulls, daily
 bid optimization, weekly negative keyword reviews. Use specialist_agent_type:"google_ads"
