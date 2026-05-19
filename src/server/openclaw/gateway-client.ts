@@ -212,6 +212,10 @@ export class GatewayClient {
     this.eventListeners.clear();
   }
 
+  isOpen(): boolean {
+    return this.connected && !!this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
   request<T = unknown>(method: string, params?: unknown): Promise<T> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -282,6 +286,12 @@ export type StreamChatInput = {
   message: string;
   /** Cancellation signal. When aborted, we issue chat.abort and stop. */
   signal?: AbortSignal;
+  /** Optional profiler — caller passes a ChatPerf to receive timing marks. */
+  perf?: ChatPerf;
+};
+
+export type ChatPerf = {
+  mark(name: string): void;
 };
 
 export type ChatStreamEvent =
@@ -290,26 +300,64 @@ export type ChatStreamEvent =
   | { kind: "error"; message: string };
 
 /**
+ * Process-wide singleton gateway client.
+ *
+ * Why: opening a fresh WebSocket per chat turn was costing ~10-30 ms for the
+ * TCP+WS handshake plus a `connect`/hello round-trip (see `[chat-perf]`
+ * traces). Reusing one connection across turns eliminates that overhead.
+ *
+ * Resilience: if the underlying socket closes (OpenClaw restarted), `isOpen()`
+ * returns false and we lazily reconnect on the next call.
+ */
+let sharedClient: GatewayClient | null = null;
+
+async function getSharedClient(): Promise<GatewayClient> {
+  if (sharedClient && sharedClient.isOpen()) return sharedClient;
+  sharedClient = new GatewayClient();
+  await sharedClient.open();
+  return sharedClient;
+}
+
+/**
  * Stream a chat turn from OpenClaw. Yields incremental delta text events as
  * the agent produces tokens, then a final event with the full text once done.
  *
- * Strategy: subscribe to `event: "chat"` frames filtered to our runId. Each
- * payload carries the merged text in message.content[0].text; we compute the
- * delta against what we've already yielded so the consumer sees pure new
- * characters per event (cleaner than relying on the gateway's optional
- * `deltaText` field which can have buffering quirks).
+ * Three text channels are coalesced into a single monotonically-growing
+ * transcript and surfaced as delta events:
+ *   1. `event: "agent"`, `stream: "assistant"` — true token-by-token streaming
+ *      from providers that support it. Carries `data.delta` (incremental) or
+ *      `data.text` (full text-so-far when `replace: true`).
+ *   2. `event: "chat"`, `state: "delta"` — provider-buffered streaming with
+ *      the merged text in `message.content[0].text`.
+ *   3. `chat.history` fallback — for deltaless providers (codex/gpt-5.5) the
+ *      assistant text only appears in the persisted transcript. After the
+ *      terminal `chat` event we poll `chat.history` until an assistant message
+ *      timestamped at-or-after `turnStartedAt` shows up.
  */
 export async function* streamChatViaGateway(
   input: StreamChatInput,
 ): AsyncGenerator<ChatStreamEvent, void, void> {
-  const client = new GatewayClient();
-  await client.open();
+  const perf = input.perf;
+  perf?.mark("gw_open_start");
+  let client: GatewayClient;
+  try {
+    client = await getSharedClient();
+  } catch (err) {
+    // First-time failure means the cached null instance is fine — the next
+    // call will retry. Surface error to the caller.
+    sharedClient = null;
+    throw err;
+  }
+  perf?.mark("gw_open_end");
 
   const runId = randomUUID();
+  const turnStartedAt = Date.now();
   const events: ChatStreamEvent[] = [];
   let done = false;
   let lastEmittedLen = 0;
   let resolveWait: (() => void) | null = null;
+  let firstEventSeen = false;
+  let firstDeltaEmitted = false;
 
   const wake = () => {
     if (resolveWait) {
@@ -319,30 +367,87 @@ export async function* streamChatViaGateway(
     }
   };
 
+  // Helper: emit a delta consisting of the suffix beyond what we've already
+  // shown the client. Coalesces text coming from agent-stream events (live
+  // tokens), chat-state delta events (provider-buffered), and the final
+  // chat.history fallback into a single monotonically-growing transcript.
+  const emitMergedText = (merged: string) => {
+    if (merged.length <= lastEmittedLen) return;
+    const delta = merged.slice(lastEmittedLen);
+    lastEmittedLen = merged.length;
+    if (!firstDeltaEmitted) {
+      firstDeltaEmitted = true;
+      perf?.mark("gw_first_delta");
+    }
+    events.push({ kind: "delta", text: delta });
+    wake();
+  };
+
+  // Agent text deltas: OpenClaw streams live assistant tokens via
+  // `event: "agent"` with `stream: "assistant"`, payload.data.delta = the new
+  // characters. Older bursts (e.g., the first chunk on a deltaless provider)
+  // arrive as data.text containing the full text-so-far instead. Handle both.
+  let agentAssistantBuffer = "";
+
   const unsubscribe = client.addEventListener((evt) => {
-    if (evt.event !== "chat") return;
     const payload = evt.payload as
       | {
           runId?: string;
+          sessionKey?: string;
+          stream?: string;
           state?: string;
           deltaText?: string;
           replace?: boolean;
+          data?: { delta?: string; text?: string; replace?: boolean };
           message?: { content?: Array<{ type?: string; text?: string }> };
         }
       | undefined;
     if (!payload || payload.runId !== runId) return;
 
-    const merged = extractText(payload.message?.content);
-    if (merged.length > lastEmittedLen) {
-      const delta = merged.slice(lastEmittedLen);
-      lastEmittedLen = merged.length;
-      events.push({ kind: "delta", text: delta });
-      wake();
+    if (!firstEventSeen) {
+      firstEventSeen = true;
+      perf?.mark("gw_first_event");
     }
+
+    if (evt.event === "agent" && payload.stream === "assistant") {
+      const d = payload.data ?? {};
+      if (d.replace === true && typeof d.text === "string") {
+        agentAssistantBuffer = d.text;
+      } else if (typeof d.delta === "string") {
+        agentAssistantBuffer = agentAssistantBuffer + d.delta;
+      } else if (typeof d.text === "string" && d.text.length > agentAssistantBuffer.length) {
+        agentAssistantBuffer = d.text;
+      }
+      emitMergedText(agentAssistantBuffer);
+      return;
+    }
+
+    if (evt.event !== "chat") return;
+
+    const merged = extractText(payload.message?.content);
+    emitMergedText(merged);
+
     if (payload.state === "final" || payload.state === "complete") {
-      events.push({ kind: "final", text: merged });
-      done = true;
-      wake();
+      perf?.mark("gw_final");
+      // If nothing was streamed (deltaless provider AND empty final.message),
+      // fall back to chat.history to pull the persisted assistant reply so
+      // the user actually sees the text.
+      if (lastEmittedLen === 0) {
+        fetchHistoryFallback(client, input.sessionKey, turnStartedAt)
+          .then((text) => {
+            if (text && text.length > 0) emitMergedText(text);
+          })
+          .catch(() => {})
+          .finally(() => {
+            events.push({ kind: "final", text: merged });
+            done = true;
+            wake();
+          });
+      } else {
+        events.push({ kind: "final", text: merged });
+        done = true;
+        wake();
+      }
     }
   });
 
@@ -360,6 +465,7 @@ export async function* streamChatViaGateway(
   try {
     // Fire the request. The promise resolves quickly with the runId-or-ack
     // payload; streaming text arrives as events.
+    perf?.mark("gw_chat_send_start");
     void client
       .request("chat.send", {
         sessionKey: input.sessionKey,
@@ -367,6 +473,9 @@ export async function* streamChatViaGateway(
         message: input.message,
         deliver: false,
         idempotencyKey: runId,
+      })
+      .then(() => {
+        perf?.mark("gw_chat_send_ack");
       })
       .catch((err: Error) => {
         events.push({ kind: "error", message: err.message });
@@ -393,7 +502,7 @@ export async function* streamChatViaGateway(
   } finally {
     unsubscribe();
     if (input.signal) input.signal.removeEventListener("abort", onAbort);
-    client.close();
+    // Do NOT close the shared client — subsequent turns reuse it.
   }
 }
 
@@ -403,4 +512,58 @@ function extractText(content: Array<{ type?: string; text?: string }> | undefine
     .filter((c) => c?.type === "text" && typeof c.text === "string")
     .map((c) => c.text as string)
     .join("");
+}
+
+/**
+ * On terminal `chat` events with empty content (codex and other deltaless
+ * providers), the assistant reply lives only in the persisted transcript.
+ * The OpenClaw web UI handles this by calling `chat.history` after the final
+ * event, and so do we — but transcript persistence happens asynchronously,
+ * milliseconds after the final event fires, so a naive call returns the
+ * previous turn's reply. Retry briefly until we see an assistant message
+ * whose timestamp is at or after `notBefore` (the moment we sent the turn).
+ *
+ * Returns "" if no fresh assistant message appears within the retry budget.
+ */
+async function fetchHistoryFallback(
+  client: GatewayClient,
+  sessionKey: string,
+  notBefore: number,
+): Promise<string> {
+  type HistoryMessage = {
+    role?: string;
+    content?: Array<{ type?: string; text?: string }>;
+    text?: string;
+    timestamp?: number;
+  };
+  type HistoryResponse = { messages?: HistoryMessage[] };
+
+  const findLatestAssistant = (msgs: HistoryMessage[]) => {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m?.role !== "assistant") continue;
+      const text = extractText(m.content) || (typeof m.text === "string" ? m.text : "");
+      if (!text.trim()) continue;
+      return { text, timestamp: typeof m.timestamp === "number" ? m.timestamp : 0 };
+    }
+    return null;
+  };
+
+  const MAX_ATTEMPTS = 8;
+  const DELAY_MS = 80;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = (await client.request("chat.history", {
+        sessionKey,
+        limit: 8,
+      })) as HistoryResponse | undefined;
+      const msgs = Array.isArray(res?.messages) ? res!.messages : [];
+      const hit = findLatestAssistant(msgs);
+      if (hit && hit.timestamp >= notBefore) return hit.text;
+    } catch {
+      // swallow and retry
+    }
+    await new Promise((r) => setTimeout(r, DELAY_MS));
+  }
+  return "";
 }

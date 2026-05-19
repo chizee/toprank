@@ -172,6 +172,9 @@ export function AgentChat({
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const perf = makeClientPerf();
+    perf.mark("send_click");
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -179,6 +182,7 @@ export function AgentChat({
         body: JSON.stringify({ message: text, agent: agentSlug, sessionId, sessionKey }),
         signal: ctrl.signal,
       });
+      perf.mark("fetch_headers");
       if (!res.ok || !res.body) {
         throw new Error((await res.text()) || `HTTP ${res.status}`);
       }
@@ -187,10 +191,16 @@ export function AgentChat({
       const decoder = new TextDecoder();
       let buffer = "";
       let receivedText = false;
+      let firstByteSeen = false;
+      let firstTextSeen = false;
 
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
+        if (!firstByteSeen) {
+          firstByteSeen = true;
+          perf.mark("first_sse_byte");
+        }
         buffer += decoder.decode(value, { stream: true });
         const events = buffer.split("\n\n");
         buffer = events.pop() ?? "";
@@ -209,10 +219,19 @@ export function AgentChat({
           if (evt === "text") {
             const chunk = (data as { chunk: string }).chunk;
             if (chunk.length > 0) receivedText = true;
+            if (!firstTextSeen && chunk.length > 0) {
+              firstTextSeen = true;
+              perf.mark("first_text_chunk");
+            }
             setMessages((m) =>
               m.map((msg) =>
                 msg.id === assistantId ? { ...msg, body: msg.body + chunk } : msg,
               ),
+            );
+          } else if (evt === "perf") {
+            perf.recordServer(
+              (data as { marks: Array<{ name: string; at: number; delta: number }> })
+                .marks,
             );
           } else if (evt === "error") {
             const msg = (data as { message: string }).message;
@@ -228,6 +247,8 @@ export function AgentChat({
           }
         }
       }
+      perf.mark("stream_done");
+      perf.report();
 
       // Slash commands forwarded to OpenClaw (compact, model, think, etc.)
       // sometimes complete with zero stdout. Leave a quiet acknowledgement so
@@ -459,4 +480,59 @@ function formatAgentError(raw: string): string {
     return `${raw}\n\nHint: this OpenClaw slash command requires a permission your gateway token does not grant. Use the “New thread” button above for new conversations.`;
   }
   return raw;
+}
+
+/**
+ * Client-side chat profiler. Records ms-offsets from send-click. At the end
+ * of a turn `report()` prints a single `console.table` with both client marks
+ * and the merged server timeline so a developer can attribute slow turns to
+ * a stage (network, gateway open, model first-token, etc.) without leaving
+ * DevTools. Disable via `localStorage.setItem("notfair.chat.perf", "0")`.
+ */
+function makeClientPerf() {
+  const enabled =
+    typeof window === "undefined"
+      ? false
+      : window.localStorage.getItem("notfair.chat.perf") !== "0";
+  const start = performance.now();
+  const marks: Array<{ name: string; at: number; delta: number }> = [];
+  let lastAt = start;
+  let serverMarks: Array<{ name: string; at: number; delta: number }> = [];
+  const mark = (name: string) => {
+    if (!enabled) return;
+    const now = performance.now();
+    const at = now - start;
+    const delta = now - lastAt;
+    lastAt = now;
+    marks.push({ name, at, delta });
+  };
+  const recordServer = (s: Array<{ name: string; at: number; delta: number }>) => {
+    serverMarks = s;
+  };
+  const report = () => {
+    if (!enabled) return;
+    // eslint-disable-next-line no-console
+    console.group("[chat-perf] turn complete");
+    // eslint-disable-next-line no-console
+    console.table(
+      marks.map((m) => ({
+        stage: `client:${m.name}`,
+        "+from start (ms)": Number(m.at.toFixed(1)),
+        "Δ from prev (ms)": Number(m.delta.toFixed(1)),
+      })),
+    );
+    if (serverMarks.length > 0) {
+      // eslint-disable-next-line no-console
+      console.table(
+        serverMarks.map((m) => ({
+          stage: `server:${m.name}`,
+          "+from start (ms)": Number(m.at.toFixed(1)),
+          "Δ from prev (ms)": Number(m.delta.toFixed(1)),
+        })),
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+  };
+  return { mark, recordServer, report };
 }

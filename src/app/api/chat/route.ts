@@ -10,6 +10,35 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * Lightweight per-request profiler. Records ms-offsets from request start so
+ * we can attribute end-to-end latency to a stage (route boot, gateway open,
+ * model first-token, etc.). Marks are emitted to stdout and to the client as
+ * an SSE `perf` event so they show up in both the dev terminal and the browser
+ * console. Toggle off with `NOTFAIR_CHAT_PERF=0`.
+ */
+const PERF_ON = process.env.NOTFAIR_CHAT_PERF !== "0";
+
+function makePerf(tag: string) {
+  const start = performance.now();
+  const marks: Array<{ name: string; at: number; delta: number }> = [];
+  let last = start;
+  const mark = (name: string) => {
+    if (!PERF_ON) return;
+    const now = performance.now();
+    const at = now - start;
+    const delta = now - last;
+    last = now;
+    marks.push({ name, at, delta });
+    // eslint-disable-next-line no-console
+    console.log(
+      `[chat-perf ${tag}] +${at.toFixed(1)}ms (Δ${delta.toFixed(1)}ms) ${name}`,
+    );
+  };
+  const summary = () => marks;
+  return { mark, summary };
+}
+
 type ChatPostBody = {
   message: string;
   agent?: string;
@@ -25,7 +54,10 @@ type ChatPostBody = {
 };
 
 export async function POST(request: Request) {
+  const perf = makePerf("route");
+  perf.mark("route_start");
   const project = await getActiveProject();
+  perf.mark("active_project_resolved");
   if (!project) {
     return NextResponse.json(
       { error: "No active project. Create one first." },
@@ -39,12 +71,14 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+  perf.mark("body_parsed");
   if (!body?.message?.trim()) {
     return NextResponse.json({ error: "message is required" }, { status: 400 });
   }
 
   const requestedSlug = (body.agent ?? "cmo").trim();
   const resolved = await resolveAgentBySlug(project.slug, requestedSlug);
+  perf.mark("agent_resolved");
   if (!resolved) {
     return NextResponse.json(
       { error: `Unknown agent: '${requestedSlug}'` },
@@ -69,6 +103,7 @@ export async function POST(request: Request) {
     const known = findSessionBySessionId(agentName, sessionId);
     sessionKey = known?.sessionKey ?? buildPendingSessionKey(agentName, sessionId);
   }
+  perf.mark("session_resolved");
 
   const encoder = new TextEncoder();
 
@@ -83,7 +118,9 @@ export async function POST(request: Request) {
       const abortCtl = new AbortController();
       request.signal?.addEventListener("abort", () => abortCtl.abort(), { once: true });
 
+      let firstSseDeltaSent = false;
       try {
+        perf.mark("stream_start");
         send("meta", {
           project_slug: project.slug,
           agent: agentName,
@@ -95,14 +132,21 @@ export async function POST(request: Request) {
           sessionId,
           message: body.message,
           signal: abortCtl.signal,
+          perf,
         })) {
           if (evt.kind === "delta") {
+            if (!firstSseDeltaSent) {
+              firstSseDeltaSent = true;
+              perf.mark("first_sse_delta_sent");
+            }
             send("text", { chunk: evt.text });
           } else if (evt.kind === "error") {
             send("error", { message: evt.message });
           }
           // "final" implicitly ends the loop after; no separate signal needed.
         }
+        perf.mark("stream_done");
+        send("perf", { marks: perf.summary() });
         send("done", {});
       } catch (err) {
         send("error", {
