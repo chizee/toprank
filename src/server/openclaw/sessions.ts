@@ -83,15 +83,27 @@ export function buildPendingSessionKey(agentFullId: string, sessionId: string): 
 }
 
 /**
- * Look up an existing session by its sessionId (UUID), returning the entry
- * with its OpenClaw-registered sessionKey. Returns null when the sessionId is
- * not yet known to OpenClaw — caller should treat it as a pending new thread.
+ * Look up an existing session by the URL thread id we mint for new chats.
+ *
+ * That id ends up as the **label** part of OpenClaw's sessionKey
+ * (`agent:<agent>:<label>`), not as OpenClaw's internal `sessionId` — which is
+ * a different UUID the gateway assigns when it first writes the transcript
+ * file. So we match on label first, falling back to sessionId for the older
+ * case where the two happened to coincide.
+ *
+ * Returns null when the thread id is unknown to OpenClaw — caller should
+ * treat it as a pending new thread.
  */
 export function findSessionBySessionId(
   agentFullId: string,
-  sessionId: string,
+  threadId: string,
 ): OpenClawSession | null {
-  return listSessionsForAgent(agentFullId).find((s) => s.sessionId === sessionId) ?? null;
+  const all = listSessionsForAgent(agentFullId);
+  return (
+    all.find((s) => s.label === threadId) ??
+    all.find((s) => s.sessionId === threadId) ??
+    null
+  );
 }
 
 /** Generate a brand-new session id. OpenClaw creates the entry on first turn. */
@@ -197,7 +209,14 @@ export function loadSessionHistory(agentFullId: string, sessionId: string): Chat
     }
     if (entry.type !== "message") continue;
     const message = entry.message as
-      | { role?: string; content?: Array<{ type?: string; text?: string }>; timestamp?: number }
+      | {
+          role?: string;
+          // OpenClaw persists user messages as a plain string and assistant
+          // messages as a content-parts array. Accept either shape — see
+          // extractText() below.
+          content?: string | Array<{ type?: string; text?: string } | string>;
+          timestamp?: number;
+        }
       | undefined;
     if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
     const text = extractText(message.content);
@@ -212,11 +231,18 @@ export function loadSessionHistory(agentFullId: string, sessionId: string): Chat
   return messages;
 }
 
-function extractText(content: Array<{ type?: string; text?: string }> | undefined): string {
+function extractText(
+  content: string | Array<{ type?: string; text?: string } | string> | undefined,
+): string {
+  if (typeof content === "string") return content.trim();
   if (!Array.isArray(content)) return "";
   return content
-    .filter((c) => c?.type === "text" && typeof c.text === "string")
-    .map((c) => c.text as string)
+    .map((c) => {
+      if (typeof c === "string") return c;
+      if (c?.type === "text" && typeof c.text === "string") return c.text;
+      return "";
+    })
+    .filter((s) => s.length > 0)
     .join("\n")
     .trim();
 }

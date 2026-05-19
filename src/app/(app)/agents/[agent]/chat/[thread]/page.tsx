@@ -52,7 +52,9 @@ export default async function AgentChatThreadPage({
   // a brand-new thread the user just navigated into; use a self-named key so
   // OpenClaw can create the entry on the first turn.
   const sessionKey = existing?.sessionKey ?? buildPendingSessionKey(agentFullId, threadId);
-  const history = existing ? loadSessionHistory(agentFullId, threadId) : [];
+  // History lives in a JSONL file named after OpenClaw's internal sessionId,
+  // which is distinct from the URL thread id (the label half of the sessionKey).
+  const history = existing ? loadSessionHistory(agentFullId, existing.sessionId) : [];
 
   // For the dropdown: surface the pending thread at the top so the user sees
   // it's "selected" even before sending the first message.
