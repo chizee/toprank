@@ -183,6 +183,22 @@ type GaqlRow = Record<string, unknown>;
 type GaqlReport = { rows?: GaqlRow[]; error?: string };
 type ScriptResult = Record<string, GaqlReport | { error: string }>;
 
+/**
+ * The MCP runScript tool wraps the script's return value in this envelope.
+ * Real shape observed against notfair.co/api/mcp/google_ads:
+ *   { ok: true, result: { <name>: GaqlReport }, resultTruncated, logs,
+ *     logsTruncated, timedOut, elapsedMs }
+ * Our script returns the `ads.gaqlParallel([...])` result; the MCP server
+ * wraps it. We must unwrap `result` before treating it as the category dict.
+ */
+type RunScriptEnvelope = {
+  ok?: boolean;
+  result?: ScriptResult;
+  resultTruncated?: boolean;
+  timedOut?: boolean;
+  error?: { message?: string };
+};
+
 type McpToolCallResult = {
   content?: Array<{ type?: string; text?: string }>;
   isError?: boolean;
@@ -340,8 +356,11 @@ function mapRpcError(
 
 /**
  * MCP wraps the runScript return value in `{content: [{type: 'text', text: <JSON>}], isError}`.
- * Extract and parse the inner JSON. Returns null if the payload doesn't match
- * the expected shape (treat as malformed_response upstream).
+ * Inside that, the script's return value is itself wrapped by the runScript
+ * tool in `{ ok, result, resultTruncated, ... }` (verified live against
+ * notfair.co/api/mcp/google_ads). We unwrap both layers and return just the
+ * category dict (`result`). Returns null when any layer is missing or shaped
+ * unexpectedly (treat as malformed_response upstream).
  */
 function parseScriptResult(payload: McpToolCallResult): ScriptResult | null {
   if (!payload || typeof payload !== "object") return null;
@@ -350,13 +369,25 @@ function parseScriptResult(payload: McpToolCallResult): ScriptResult | null {
   if (!Array.isArray(content) || content.length === 0) return null;
   const text = content[0]?.text;
   if (typeof text !== "string") return null;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(text) as unknown;
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed as ScriptResult;
+    parsed = JSON.parse(text);
   } catch {
     return null;
   }
+  if (!parsed || typeof parsed !== "object") return null;
+  const envelope = parsed as RunScriptEnvelope & ScriptResult;
+  // Preferred path: the runScript envelope with `result`.
+  if (envelope.ok === true && envelope.result && typeof envelope.result === "object") {
+    return envelope.result;
+  }
+  // Tool-side script error — surface as malformed_response so the caller
+  // emits a clear audit:error event rather than silently classifying empty.
+  if (envelope.ok === false) return null;
+  // Tolerate older or alternate shapes where the script returned the dict
+  // directly. Safe because the runScript envelope always carries `ok`; if
+  // it's absent we assume the body IS the category dict.
+  return envelope as ScriptResult;
 }
 
 function classifyAccountState(
@@ -375,9 +406,27 @@ function classifyAccountState(
     0,
   );
   if (last30Spend < 10) return "empty";
-  const enabled = rows.some((r) => getString(r, "campaign.status") === "ENABLED");
-  if (!enabled) return "empty";
+  if (!rows.some(isEnabledCampaign)) return "empty";
   return "normal";
+}
+
+/**
+ * Google Ads returns campaign.status as BOTH a numeric protobuf enum and a
+ * string-named convenience field. The numeric value of ENABLED is 2; the
+ * gaqlParallel result includes a `status_name: "ENABLED"` companion field.
+ * We accept either shape so behavior survives MCP/library upgrades that
+ * tighten or loosen the response. Numeric enum reference:
+ *   UNSPECIFIED=0, UNKNOWN=1, ENABLED=2, PAUSED=3, REMOVED=4
+ */
+const CAMPAIGN_STATUS_ENABLED_ENUM = 2;
+function isEnabledCampaign(row: GaqlRow): boolean {
+  const nameStr = getString(row, "campaign.status_name");
+  if (nameStr === "ENABLED") return true;
+  const numeric = getMetric(row, "campaign.status");
+  if (numeric === CAMPAIGN_STATUS_ENABLED_ENUM) return true;
+  const statusStr = getString(row, "campaign.status");
+  if (statusStr === "ENABLED") return true;
+  return false;
 }
 
 /** Top Fix = highest dollar_impact_usd; tie-break by CATEGORY_PRIORITY order. */

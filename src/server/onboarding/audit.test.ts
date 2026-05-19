@@ -31,80 +31,106 @@ import { runAudit, type AuditEvent } from "./audit";
 
 // ── Fixtures ───────────────────────────────────────────────────────
 
-const NORMAL_REPORTS = {
+/**
+ * Fixtures mirror the REAL `ads.gaqlParallel` envelope shape (verified live
+ * against notfair.co/api/mcp/google_ads on 2026-05-19): the script's return
+ * is wrapped in `{ ok, result, resultTruncated, logs, timedOut, elapsedMs }`.
+ * Campaign status comes as numeric enum + `status_name` string companion.
+ * Rows use object-nested shape (campaign.name, metrics.cost_micros) — NOT
+ * dotted keys. Bugs that ship under fixtures that don't match the live shape
+ * silently classify accounts as empty (the regression that triggered this
+ * test rewrite).
+ */
+const NORMAL_REPORTS_INNER = {
   wasted_spend: {
+    rowCount: 4,
     rows: [
       {
-        "ad_group_criterion": { keyword: { text: "marketing automation" } },
-        "ad_group": { name: "Brand" },
-        "campaign": { name: "Brand-US" },
-        "metrics": { cost_micros: 420_000_000, conversions: 0, clicks: 300 },
+        ad_group_criterion: { keyword: { text: "marketing automation" } },
+        ad_group: { name: "Brand" },
+        campaign: { name: "Brand-US" },
+        metrics: { cost_micros: 420_000_000, conversions: 0, clicks: 300 },
       },
       {
-        "ad_group_criterion": { keyword: { text: "saas crm" } },
-        "ad_group": { name: "Brand" },
-        "campaign": { name: "Brand-US" },
-        "metrics": { cost_micros: 420_000_000, conversions: 0, clicks: 300 },
+        ad_group_criterion: { keyword: { text: "saas crm" } },
+        ad_group: { name: "Brand" },
+        campaign: { name: "Brand-US" },
+        metrics: { cost_micros: 420_000_000, conversions: 0, clicks: 300 },
       },
       {
-        "ad_group_criterion": { keyword: { text: "best crm" } },
-        "ad_group": { name: "Brand" },
-        "campaign": { name: "Brand-US" },
-        "metrics": { cost_micros: 210_000_000, conversions: 0, clicks: 150 },
+        ad_group_criterion: { keyword: { text: "best crm" } },
+        ad_group: { name: "Brand" },
+        campaign: { name: "Brand-US" },
+        metrics: { cost_micros: 210_000_000, conversions: 0, clicks: 150 },
       },
       {
-        "ad_group_criterion": { keyword: { text: "ad ops" } },
-        "ad_group": { name: "Brand" },
-        "campaign": { name: "Brand-US" },
-        "metrics": { cost_micros: 210_000_000, conversions: 0, clicks: 450 },
+        ad_group_criterion: { keyword: { text: "ad ops" } },
+        ad_group: { name: "Brand" },
+        campaign: { name: "Brand-US" },
+        metrics: { cost_micros: 210_000_000, conversions: 0, clicks: 450 },
       },
     ],
   },
   low_qs: {
+    rowCount: 1,
     rows: [
       {
-        "ad_group_criterion": {
+        ad_group_criterion: {
           keyword: { text: "kw1" },
           quality_info: { quality_score: 3 },
         },
-        "ad_group": { name: "Generic" },
-        "campaign": { name: "Generic-US" },
-        "metrics": { impressions: 500, cost_micros: 50_000_000 },
+        ad_group: { name: "Generic" },
+        campaign: { name: "Generic-US" },
+        metrics: { impressions: 500, cost_micros: 50_000_000 },
       },
     ],
   },
-  search_term_gap: { rows: [] },
-  budget_pacing: { rows: [] },
+  search_term_gap: { rowCount: 0, rows: [] },
+  budget_pacing: { rowCount: 0, rows: [] },
   campaigns_summary: {
+    rowCount: 1,
     rows: [
       {
-        "campaign": { name: "Brand-US", status: "ENABLED" },
-        "metrics": { cost_micros: 3_000_000_000, impressions: 50_000 },
+        campaign: { name: "Brand-US", status: 2, status_name: "ENABLED" },
+        metrics: { cost_micros: 3_000_000_000, impressions: 50_000 },
       },
     ],
   },
 };
 
-const EMPTY_REPORTS = {
-  wasted_spend: { rows: [] },
-  low_qs: { rows: [] },
-  search_term_gap: { rows: [] },
-  budget_pacing: { rows: [] },
-  campaigns_summary: { rows: [] },
+const EMPTY_REPORTS_INNER = {
+  wasted_spend: { rowCount: 0, rows: [] },
+  low_qs: { rowCount: 0, rows: [] },
+  search_term_gap: { rowCount: 0, rows: [] },
+  budget_pacing: { rowCount: 0, rows: [] },
+  campaigns_summary: { rowCount: 0, rows: [] },
 };
 
+/** Wrap inner reports in the runScript envelope and the MCP tool-call envelope. */
 function mockToolCallResult(reports: unknown): {
   ok: true;
   result: { content: Array<{ type: string; text: string }>; isError: boolean };
 } {
+  const scriptEnvelope = {
+    ok: true,
+    result: reports,
+    resultTruncated: false,
+    logs: [],
+    logsTruncated: false,
+    timedOut: false,
+    elapsedMs: 950,
+  };
   return {
     ok: true,
     result: {
-      content: [{ type: "text", text: JSON.stringify(reports) }],
+      content: [{ type: "text", text: JSON.stringify(scriptEnvelope) }],
       isError: false,
     },
   };
 }
+
+const NORMAL_REPORTS = NORMAL_REPORTS_INNER;
+const EMPTY_REPORTS = EMPTY_REPORTS_INNER;
 
 async function collect(slug: string, signal?: AbortSignal): Promise<AuditEvent[]> {
   const out: AuditEvent[] = [];
@@ -310,6 +336,93 @@ describe("runAudit", () => {
       // FIRST_TURN.md and memory writes did NOT run after persist failed.
       expect(writeFileMock).not.toHaveBeenCalled();
       expect(openclawMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("regression — real MCP envelope shape", () => {
+    it("unwraps the runScript {ok, result} envelope (Demo2 bug — 2026-05-19)", async () => {
+      // Build a payload WITHOUT the helper so we can exercise the unwrap path
+      // explicitly. Live MCP wraps the script's return in {ok, result, ...}.
+      // Before the fix, our parser returned the wrapper as the category dict
+      // and findings disappeared (classified as empty).
+      const inner = {
+        wasted_spend: NORMAL_REPORTS_INNER.wasted_spend,
+        low_qs: NORMAL_REPORTS_INNER.low_qs,
+        search_term_gap: { rows: [] },
+        budget_pacing: { rows: [] },
+        campaigns_summary: NORMAL_REPORTS_INNER.campaigns_summary,
+      };
+      const envelopeText = JSON.stringify({
+        ok: true,
+        result: inner,
+        resultTruncated: false,
+        logs: [],
+        timedOut: false,
+        elapsedMs: 950,
+      });
+      mcpRpcMock.mockResolvedValueOnce({
+        ok: true,
+        result: {
+          content: [{ type: "text", text: envelopeText }],
+          isError: false,
+        },
+      });
+      const events = await collect("acme");
+      const complete = events.find((e) => e.type === "audit:complete");
+      expect(complete, "should reach audit:complete with findings, not classify empty").toBeDefined();
+      if (complete && complete.type === "audit:complete") {
+        expect(complete.summary.account_state).toBe("normal");
+        expect(complete.summary.count).toBeGreaterThan(0);
+      }
+    });
+
+    it("treats campaign.status_name='ENABLED' as enabled even when status is the numeric enum (Demo2 bug — 2026-05-19)", async () => {
+      // Live shape: campaign.status is the integer enum (2 = ENABLED) and
+      // campaign.status_name is the string companion. Before the fix, the
+      // classifier checked .status === 'ENABLED' (string compare against
+      // an integer), got false, and classified the account empty even
+      // when a real campaign was running.
+      const numericOnly = {
+        ...EMPTY_REPORTS_INNER,
+        campaigns_summary: {
+          rowCount: 1,
+          rows: [
+            {
+              campaign: { name: "NotFair - Google Ads", status: 2, status_name: "ENABLED" },
+              metrics: { cost_micros: 39_390_000, impressions: 42 },
+            },
+          ],
+        },
+      };
+      mcpRpcMock.mockResolvedValueOnce(mockToolCallResult(numericOnly));
+      const events = await collect("acme");
+      // Spend is $39 (over the $10 threshold) and status enum says ENABLED,
+      // so account_state should NOT be 'empty'.
+      const complete = events.find((e) => e.type === "audit:complete");
+      if (complete && complete.type === "audit:complete") {
+        expect(complete.summary.account_state).toBe("normal");
+      }
+    });
+
+    it("classifies as empty when ok=false (script-side error in envelope)", async () => {
+      // Defensive: if the runScript envelope reports ok=false, treat as
+      // malformed_response so the user sees a real error instead of silent
+      // 'empty' misclassification.
+      const errorEnvelope = JSON.stringify({
+        ok: false,
+        error: { message: "GAQL syntax error" },
+      });
+      mcpRpcMock.mockResolvedValueOnce({
+        ok: true,
+        result: {
+          content: [{ type: "text", text: errorEnvelope }],
+          isError: false,
+        },
+      });
+      const events = await collect("acme");
+      expect(events.find((e) => e.type === "audit:error")).toMatchObject({
+        kind: "malformed_response",
+      });
     });
   });
 
