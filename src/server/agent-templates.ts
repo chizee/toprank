@@ -181,14 +181,37 @@ export function agentNameFor(project_slug: string, template_key: AgentTemplate["
   return `${project_slug}-${safe_template}`;
 }
 
-export async function ensureProjectAgents(project_slug: string): Promise<{
+export type EnsureAgentsResult = {
   created: string[];
   existed: string[];
-}> {
+  failed: Array<{ name: string; error: string }>;
+};
+
+/**
+ * Idempotently provision OpenClaw agents for a project.
+ *
+ * Pass `scope` to provision only a subset (per D4: onboarding ships with CMO
+ * + Google Ads only; SEO becomes opt-in later). Omit `scope` to provision
+ * every template — preserved for back-compat with existing call sites like
+ * the reprovision endpoint.
+ *
+ * The result includes `failed`: when a subprocess fails for one agent, the
+ * loop logs + continues (partial provisioning is recoverable) and the
+ * caller can decide whether `failed.length > 0` is fatal for their flow.
+ */
+export async function ensureProjectAgents(
+  project_slug: string,
+  scope?: AgentTemplateKey[],
+): Promise<EnsureAgentsResult> {
   const created: string[] = [];
   const existed: string[] = [];
+  const failed: Array<{ name: string; error: string }> = [];
 
-  for (const template of TEMPLATES) {
+  const templates = scope
+    ? TEMPLATES.filter((t) => scope.includes(t.key))
+    : TEMPLATES;
+
+  for (const template of templates) {
     const name = agentNameFor(project_slug, template.key);
     const workspaceAbs = workspaceDirFor(name);
     const already = await agentExists(name);
@@ -237,11 +260,13 @@ export async function ensureProjectAgents(project_slug: string): Promise<{
       created.push(name);
     } catch (err) {
       // Surface but don't crash the loop; partial provisioning recoverable on retry.
+      const message = err instanceof Error ? err.message : String(err);
       console.error(`Failed to create agent ${name}:`, err);
+      failed.push({ name, error: message });
     }
   }
 
-  return { created, existed };
+  return { created, existed, failed };
 }
 
 function workspaceDirFor(name: string): string {
@@ -264,7 +289,7 @@ ${template.system_prompt}
   }
 }
 
-async function agentExists(name: string): Promise<boolean> {
+export async function agentExists(name: string): Promise<boolean> {
   try {
     // `agents list` doesn't currently take a name filter, so list-all and grep.
     // V1 acceptable; revisit if list grows large.
