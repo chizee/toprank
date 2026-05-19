@@ -40,7 +40,7 @@ If you touch any of these files, an eval pass is required before shipping:
 - `src/server/agent-chat.tsx` chat orchestration if it adds new tool-call patterns
 - Any new file under `src/server/onboarding/` that constructs prompt context (e.g., `audit.ts` writing `FIRST_TURN.md`)
 
-Light eval harness lives at `tests/evals/` (to be added). Pattern: golden scenario JSON + expected-shape assertions. Run via `pnpm eval` (script to be added).
+Light eval harness lives at `tests/evals/`. Pattern: golden scenario JSON + expected-shape assertions. Run via `pnpm eval`. Skips entirely when `OPENAI_API_KEY` is absent. See `tests/evals/README.md` for details.
 
 ## Project structure conventions
 
