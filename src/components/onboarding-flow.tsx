@@ -1,343 +1,717 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  AlertCircle,
+  AlertTriangle,
+  ChevronRight,
+  Gauge,
+  Loader2,
+  Plug,
+  Search,
+  TrendingUp,
+} from "lucide-react";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { STEP_ORDER, type StepId, type StepPreview } from "@/lib/onboarding/steps";
+import { startMcpConnect } from "@/server/actions/mcp";
+import { createProjectForOnboardingAction } from "@/server/actions/projects";
+import type {
+  AuditSummary,
+  Finding,
+  FindingCategory,
+  StreamEvent,
+} from "@/lib/onboarding/events";
 
-type StepState = "pending" | "running" | "done" | "error";
-
-type StepEntry = {
-  state: StepState;
-  preview?: StepPreview;
-  errorMessage?: string;
-};
-
-const PLACEHOLDER_LABELS: Record<StepId, string> = {
-  scrape: "site scrape",
-  voice: "brand voice fingerprint",
-  icp: "ICP hypothesis",
-  plan: "30-day plan",
-};
-
-type SseEvent =
-  | { type: "step:start"; id: StepId }
-  | { type: "step:done"; id: StepId; preview: StepPreview }
-  | { type: "step:error"; id: StepId; message: string }
-  | { type: "complete" };
-
-function initialEntries(): Record<StepId, StepEntry> {
-  return {
-    scrape: { state: "pending" },
-    voice: { state: "pending" },
-    icp: { state: "pending" },
-    plan: { state: "pending" },
-  };
-}
+type Step = "name" | "connect" | "audit";
 
 export function OnboardingFlow() {
   const router = useRouter();
-  const [url, setUrl] = useState("");
-  const [entries, setEntries] = useState<Record<StepId, StepEntry>>(initialEntries);
-  const [active, setActive] = useState(false);
-  const [complete, setComplete] = useState(false);
-  const [announce, setAnnounce] = useState("");
-  const approveRef = useRef<HTMLButtonElement | null>(null);
-  const esRef = useRef<EventSource | null>(null);
-
-  useEffect(() => {
-    return () => {
-      esRef.current?.close();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (complete && approveRef.current) {
-      approveRef.current.focus();
-    }
-  }, [complete]);
-
-  function start() {
-    if (!url.trim()) {
-      toast.error("Enter your site URL first.");
-      return;
-    }
-    setEntries(initialEntries());
-    setComplete(false);
-    setActive(true);
-    setAnnounce("Starting onboarding.");
-
-    const es = new EventSource(`/api/onboarding/stream?url=${encodeURIComponent(url.trim())}`);
-    esRef.current = es;
-
-    es.onmessage = (msg) => {
-      let data: SseEvent;
-      try {
-        data = JSON.parse(msg.data);
-      } catch {
-        return;
-      }
-
-      if (data.type === "step:start") {
-        const label = STEP_ORDER.find((s) => s.id === data.id)?.label ?? data.id;
-        setAnnounce(`${label} in progress.`);
-        setEntries((prev) => ({ ...prev, [data.id]: { state: "running" } }));
-      } else if (data.type === "step:done") {
-        const label = STEP_ORDER.find((s) => s.id === data.id)?.label ?? data.id;
-        setAnnounce(`${label} complete.`);
-        setEntries((prev) => ({ ...prev, [data.id]: { state: "done", preview: data.preview } }));
-      } else if (data.type === "step:error") {
-        const label = PLACEHOLDER_LABELS[data.id];
-        setAnnounce(`Used placeholder for ${label}.`);
-        setEntries((prev) => ({
-          ...prev,
-          [data.id]: { state: "error", errorMessage: data.message },
-        }));
-      } else if (data.type === "complete") {
-        setComplete(true);
-        setAnnounce("Your 30-day plan is ready.");
-        es.close();
-        esRef.current = null;
-      }
-    };
-
-    es.onerror = () => {
-      es.close();
-      esRef.current = null;
-      toast.error("Lost connection to the onboarding stream.");
-      setActive(false);
-    };
-  }
-
-  function goToChat(message: string) {
-    toast(message);
-    router.push("/");
-  }
+  const params = useSearchParams();
+  const stepParam = params.get("step");
+  const slug = params.get("slug") ?? null;
+  const step: Step =
+    stepParam === "connect" || stepParam === "audit"
+      ? stepParam
+      : "name";
 
   return (
     <div className="mx-auto w-full max-w-[720px] space-y-6 pt-8 pb-12">
+      <a
+        href="#onboarding-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:shadow"
+      >
+        Skip to content
+      </a>
+      <main id="onboarding-main" className="space-y-6">
+        {step === "name" && (
+          <NameStep
+            onCreated={(s) =>
+              router.push(`/onboarding?step=connect&slug=${encodeURIComponent(s)}`)
+            }
+          />
+        )}
+        {step === "connect" && slug && <ConnectStep slug={slug} />}
+        {step === "audit" && slug && <AuditStep slug={slug} />}
+        {(step === "connect" || step === "audit") && !slug && (
+          <MissingSlug />
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ── Step 1: Name ───────────────────────────────────────────────────
+
+function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
+  const [state, formAction, isPending] = useActionState<
+    | { ok: true; data: { slug: string; display_name: string } }
+    | { ok: false; error: string }
+    | null,
+    FormData
+  >(async (_prev, formData) => createProjectForOnboardingAction(formData), null);
+
+  useEffect(() => {
+    if (state && state.ok) onCreated(state.data.slug);
+  }, [state, onCreated]);
+
+  const errorMessage = state && !state.ok ? state.error : null;
+
+  return (
+    <>
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
           Let&rsquo;s set up your CMO.
         </h1>
         <p className="text-sm text-muted-foreground">
-          Paste your site URL. The CMO scrapes it, learns your voice, drafts an ICP,
-          and proposes a 30-day plan.
+          What should we call this project?
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Site URL</CardTitle>
-          <CardDescription>This is the only thing you need to provide right now.</CardDescription>
+          <CardTitle className="text-base">Project name</CardTitle>
+          <CardDescription>
+            A project groups the agents and crons your CMO will manage. The slug
+            (used in agent names) is set once and immutable.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="url">URL</Label>
-            <Input
-              id="url"
-              placeholder="https://yourcompany.com"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              disabled={active}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !active) {
-                  e.preventDefault();
-                  start();
-                }
-              }}
-            />
+        <CardContent>
+          <form action={formAction} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="display_name">Name</Label>
+              <Input
+                id="display_name"
+                name="display_name"
+                required
+                autoFocus
+                placeholder="Acme Q4 launch"
+                maxLength={80}
+                disabled={isPending}
+              />
+            </div>
+            {errorMessage && (
+              <p role="alert" className="text-sm text-destructive">
+                {errorMessage}
+              </p>
+            )}
+            <Button type="submit" size="lg" disabled={isPending}>
+              {isPending ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
+              Continue
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+// ── Step 2: Connect ────────────────────────────────────────────────
+
+function ConnectStep({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function onConnect() {
+    setBusy(true);
+    try {
+      const result = await startMcpConnect({
+        mcp_key: "notfair-googleads",
+        return_to: `/onboarding?step=audit&slug=${encodeURIComponent(slug)}`,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        setBusy(false);
+        return;
+      }
+      // Cross-origin redirect to the OAuth issuer.
+      window.location.href = result.authorize_url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  }
+
+  function onSkip() {
+    router.push("/agents/cmo/chat");
+  }
+
+  return (
+    <>
+      <header className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          Connect your Google Ads.
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          I&rsquo;ll read your account so I can show you what to fix. Read-only
+          &mdash; I won&rsquo;t change anything yet.
+        </p>
+      </header>
+
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onConnect} disabled={busy} size="lg">
+              {busy ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Plug className="mr-1.5 size-4" />
+              )}
+              Connect Google Ads
+            </Button>
+            <Button
+              onClick={onSkip}
+              variant="ghost"
+              disabled={busy}
+              aria-label="Skip Google Ads connection for now and go to chat"
+            >
+              Skip for now
+            </Button>
           </div>
-          {!active && (
-            <Button onClick={start} disabled={!url.trim()}>
-              Go
+          <p className="text-xs text-muted-foreground">
+            You can disconnect anytime in{" "}
+            <Link href="/connections" className="underline underline-offset-2">
+              Connections
+            </Link>
+            .
+          </p>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+// ── Step 3: Audit (terminal) ───────────────────────────────────────
+
+type AuditState =
+  | { phase: "provisioning" }
+  | { phase: "provision-timeout" }
+  | { phase: "no-agents" }
+  | { phase: "streaming" }
+  | { phase: "complete-normal"; summary: AuditSummary }
+  | { phase: "complete-empty"; summary: AuditSummary }
+  | { phase: "error"; kind: string; message: string }
+  | { phase: "persist-failed"; message: string };
+
+function AuditStep({ slug }: { slug: string }) {
+  const [audit, setAudit] = useState<AuditState>({ phase: "provisioning" });
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [categoryErrors, setCategoryErrors] = useState<
+    Array<{ category: string; message: string }>
+  >([]);
+  const completeFocusRef = useRef<HTMLButtonElement | null>(null);
+  const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    const es = new EventSource(
+      `/api/onboarding/stream?slug=${encodeURIComponent(slug)}`,
+    );
+    esRef.current = es;
+
+    es.onmessage = (msg) => {
+      let event: StreamEvent;
+      try {
+        event = JSON.parse(msg.data) as StreamEvent;
+      } catch {
+        return;
+      }
+      switch (event.type) {
+        case "provision:waiting":
+          // Already showing the provisioning UI; nothing to do.
+          break;
+        case "provision:ready":
+          setAudit({ phase: "streaming" });
+          break;
+        case "provision:timeout":
+          setAudit({ phase: "provision-timeout" });
+          es.close();
+          break;
+        case "provision:no-agents":
+          setAudit({ phase: "no-agents" });
+          es.close();
+          break;
+        case "audit:start":
+          setAudit({ phase: "streaming" });
+          break;
+        case "audit:finding":
+          setFindings((prev) => [...prev, event.finding]);
+          break;
+        case "audit:finding-error":
+          setCategoryErrors((prev) => [
+            ...prev,
+            { category: event.category, message: event.message },
+          ]);
+          break;
+        case "audit:empty":
+          // The audit:complete event will set state to complete-empty with
+          // the summary. Nothing to render eagerly here.
+          break;
+        case "audit:complete":
+          setAudit(
+            event.summary.account_state === "empty"
+              ? { phase: "complete-empty", summary: event.summary }
+              : { phase: "complete-normal", summary: event.summary },
+          );
+          es.close();
+          break;
+        case "audit:error":
+          setAudit({ phase: "error", kind: event.kind, message: event.message });
+          es.close();
+          break;
+        case "audit:persist-failed":
+          setAudit({ phase: "persist-failed", message: event.message });
+          es.close();
+          break;
+      }
+    };
+
+    es.onerror = () => {
+      setAudit((prev) =>
+        prev.phase === "complete-normal" ||
+        prev.phase === "complete-empty" ||
+        prev.phase === "error" ||
+        prev.phase === "persist-failed"
+          ? prev
+          : {
+              phase: "error",
+              kind: "unreachable",
+              message: "Lost connection to onboarding stream.",
+            },
+      );
+      es.close();
+    };
+
+    return () => {
+      es.close();
+      esRef.current = null;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    if (
+      (audit.phase === "complete-normal" || audit.phase === "complete-empty") &&
+      completeFocusRef.current
+    ) {
+      completeFocusRef.current.focus();
+    }
+  }, [audit.phase]);
+
+  return (
+    <>
+      <AuditHeader phase={audit.phase} findingsCount={findings.length} />
+
+      {audit.phase === "provisioning" && <ProvisioningCard />}
+
+      {audit.phase === "provision-timeout" && (
+        <TimeoutCard
+          title="Setting up took longer than expected."
+          message="Your project is created but OpenClaw is slow."
+        />
+      )}
+
+      {audit.phase === "no-agents" && (
+        <TimeoutCard
+          title="Setting up the project hasn't finished."
+          message="Open this onboarding again from your project home to retry."
+        />
+      )}
+
+      {(audit.phase === "streaming" ||
+        audit.phase === "complete-normal" ||
+        audit.phase === "complete-empty") &&
+        findings.length > 0 && (
+          <FindingsList
+            findings={findings}
+            topFixId={
+              audit.phase === "complete-normal"
+                ? audit.summary.top_fix_id
+                : null
+            }
+            categoryErrors={categoryErrors}
+          />
+        )}
+
+      {(audit.phase === "streaming" ||
+        audit.phase === "complete-normal" ||
+        audit.phase === "complete-empty") &&
+        findings.length === 0 &&
+        categoryErrors.length > 0 && (
+          <PartialErrorBanner errors={categoryErrors} />
+        )}
+
+      {audit.phase === "complete-empty" && (
+        <EmptyAccountRoadmap focusRef={completeFocusRef} />
+      )}
+
+      {audit.phase === "complete-normal" && (
+        <CompleteFooterCtas focusRef={completeFocusRef} />
+      )}
+
+      {audit.phase === "error" && (
+        <AuditErrorCard kind={audit.kind} message={audit.message} />
+      )}
+
+      {audit.phase === "persist-failed" && (
+        <PersistFailedCard message={audit.message} />
+      )}
+
+      {/* One-shot announcement for screen readers. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {audit.phase === "complete-normal" &&
+          `Audit complete. ${audit.summary.count} findings.`}
+        {audit.phase === "complete-empty" &&
+          "Audit complete. Looks like you're just getting started."}
+      </div>
+    </>
+  );
+}
+
+function AuditHeader({
+  phase,
+  findingsCount,
+}: {
+  phase: AuditState["phase"];
+  findingsCount: number;
+}) {
+  if (phase === "provisioning") return null;
+  if (phase === "provision-timeout" || phase === "no-agents") return null;
+  if (phase === "error" || phase === "persist-failed") return null;
+  if (phase === "complete-empty") {
+    return (
+      <header className="space-y-1">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          Looks like you&rsquo;re just getting started.
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          I didn&rsquo;t find spend or campaigns in the last 30 days. Here&rsquo;s
+          what I&rsquo;d build with you next.
+        </p>
+      </header>
+    );
+  }
+  if (phase === "complete-normal") {
+    return (
+      <header className="space-y-1">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          Here&rsquo;s what I found.
+        </h1>
+        <p className="text-sm text-muted-foreground tabular-nums">
+          Audit complete &middot; {findingsCount} finding
+          {findingsCount === 1 ? "" : "s"}
+        </p>
+      </header>
+    );
+  }
+  // streaming
+  return (
+    <header className="space-y-1" role="status">
+      <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+        Looking at your Google Ads account&hellip;
+      </h1>
+      <p className="text-sm text-muted-foreground">
+        Findings will land here as I work through your account.
+      </p>
+    </header>
+  );
+}
+
+function ProvisioningCard() {
+  return (
+    <Card>
+      <CardContent className="space-y-2 pt-6 pb-6">
+        <div className="flex items-center gap-3 text-sm">
+          <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+          <span className="font-medium">Connecting your CMO to your account&hellip;</span>
+        </div>
+        <p className="text-xs text-muted-foreground pl-7">
+          Just a few seconds. You&rsquo;ll see findings as soon as we&rsquo;re in.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TimeoutCard({ title, message }: { title: string; message: string }) {
+  return (
+    <Card role="alert">
+      <CardContent className="space-y-3 pt-6 pb-6">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="size-4 text-amber-600" aria-hidden />
+          <span className="font-medium text-sm">{title}</span>
+        </div>
+        <p className="text-xs text-muted-foreground">{message}</p>
+        <div className="flex gap-2">
+          <Button asChild>
+            <Link href="/onboarding">Retry</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/agents/cmo/chat">Skip to chat</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FindingsList({
+  findings,
+  topFixId,
+  categoryErrors,
+}: {
+  findings: Finding[];
+  topFixId: string | null;
+  categoryErrors: Array<{ category: string; message: string }>;
+}) {
+  // Pull the top fix to the top, keep others in order.
+  const top = topFixId ? findings.find((f) => f.id === topFixId) : null;
+  const rest = top ? findings.filter((f) => f.id !== top.id) : findings;
+  return (
+    <ol
+      aria-live="polite"
+      aria-relevant="additions"
+      className="space-y-3 list-none p-0"
+    >
+      {top && <FindingCard finding={top} isTopFix />}
+      {rest.map((f) => (
+        <FindingCard key={f.id} finding={f} />
+      ))}
+      {categoryErrors.map((ce) => (
+        <li key={`err:${ce.category}`} className="text-xs text-muted-foreground pl-7">
+          <span className="inline-flex items-center gap-2">
+            <AlertCircle className="size-3.5" aria-hidden />
+            Couldn&rsquo;t check {ce.category.toLowerCase().replace(/_/g, " ")} &mdash;
+            continuing with the rest.
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const CATEGORY_ICON: Record<FindingCategory, React.ComponentType<{ className?: string }>> = {
+  WASTED_SPEND: AlertTriangle,
+  LOW_QS: Gauge,
+  SEARCH_TERM_GAP: Search,
+  BUDGET_PACING: TrendingUp,
+};
+
+function FindingCard({
+  finding,
+  isTopFix,
+}: {
+  finding: Finding;
+  isTopFix?: boolean;
+}) {
+  const Icon = CATEGORY_ICON[finding.category];
+  return (
+    <li className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+      <Card className={cn(isTopFix && "ring-1 ring-foreground/10")}>
+        <CardHeader className="pt-4 pb-2">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <Icon className="size-4" aria-hidden />
+            <span>
+              {isTopFix && "TOP FIX · "}
+              {finding.category.replace(/_/g, " ")}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0 pb-4 space-y-2">
+          <p className="text-sm font-medium leading-snug text-foreground">
+            {finding.headline}
+          </p>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {finding.evidence}
+          </p>
+          {isTopFix ? (
+            <Button asChild size="lg" className="mt-2">
+              <Link
+                href={`/agents/cmo/chat?propose=${encodeURIComponent(finding.id)}`}
+              >
+                Fix this now
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild variant="link" size="sm" className="px-0">
+              <Link
+                href={`/agents/cmo/chat?propose=${encodeURIComponent(finding.id)}`}
+              >
+                I&rsquo;ll fix this <ChevronRight className="ml-0.5 size-3.5" aria-hidden />
+              </Link>
             </Button>
           )}
         </CardContent>
       </Card>
+    </li>
+  );
+}
 
-      {active && (
-        <Card aria-busy={!complete}>
-          <CardHeader>
-            <CardTitle className="text-base">Building your plan</CardTitle>
-            <CardDescription>This usually takes about 30 seconds.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ol className="space-y-4">
-              {STEP_ORDER.map((step) => {
-                const entry = entries[step.id];
-                return (
-                  <li key={step.id} className="space-y-2">
-                    <div className="flex items-center gap-3 text-sm">
-                      <StepIcon state={entry.state} />
-                      <span
-                        className={cn(
-                          entry.state === "running" && "font-medium text-foreground",
-                          entry.state === "pending" && "text-muted-foreground",
-                          entry.state === "done" && "text-foreground",
-                          entry.state === "error" && "text-foreground",
-                        )}
-                      >
-                        {step.label}
-                      </span>
-                    </div>
-
-                    {entry.state === "done" && entry.preview && (
-                      <PreviewBlock preview={entry.preview} />
-                    )}
-
-                    {entry.state === "error" && (
-                      <div className="ml-7 rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-muted-foreground dark:border-zinc-700 dark:bg-zinc-900">
-                        Used placeholder for {PLACEHOLDER_LABELS[step.id]}; CMO will refine over time.
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </CardContent>
-        </Card>
-      )}
-
-      {complete && <PlanCard approveRef={approveRef} onChat={goToChat} entries={entries} />}
-
-      <div role="status" aria-live="polite" className="sr-only">
-        {announce}
-      </div>
+function CompleteFooterCtas({
+  focusRef,
+}: {
+  focusRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 pt-2">
+      <Button asChild variant="outline" size="lg">
+        <Link
+          href="/agents/cmo/chat"
+          ref={focusRef as unknown as React.Ref<HTMLAnchorElement>}
+        >
+          Chat with CMO about all of this
+        </Link>
+      </Button>
     </div>
   );
 }
 
-function StepIcon({ state }: { state: StepState }) {
-  if (state === "done") {
-    return <CheckCircle2 className="size-4 text-emerald-600" aria-hidden />;
-  }
-  if (state === "running") {
-    return <Loader2 className="size-4 animate-spin text-zinc-500" aria-hidden />;
-  }
-  if (state === "error") {
-    return <AlertCircle className="size-4 text-amber-600" aria-hidden />;
-  }
-  return <div className="size-4 rounded-full border border-zinc-300 dark:border-zinc-700" aria-hidden />;
-}
-
-function PreviewBlock({ preview }: { preview: StepPreview }) {
-  if (preview.kind === "scrape") {
-    return (
-      <div className="ml-7 rounded-md border bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-900">
-        <div className="font-medium text-foreground">{preview.title}</div>
-        <div className="text-muted-foreground">{preview.description}</div>
-        <div className="text-muted-foreground">{preview.pages} pages indexed.</div>
-      </div>
-    );
-  }
-  if (preview.kind === "voice") {
-    return (
-      <div className="ml-7 rounded-md border bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-900">
-        <div className="text-foreground">{preview.tone}</div>
-        <div className="text-muted-foreground">
-          Adjectives: {preview.adjectives.join(", ")}
-        </div>
-        <div className="mt-1 text-muted-foreground italic">&ldquo;{preview.sample}&rdquo;</div>
-      </div>
-    );
-  }
-  if (preview.kind === "icp") {
-    return (
-      <div className="ml-7 rounded-md border bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-900">
-        <div className="font-medium text-foreground">{preview.segment}</div>
-        <div className="text-muted-foreground">Pains: {preview.pains.join("; ")}</div>
-        <div className="text-muted-foreground">Channels: {preview.channels.join(", ")}</div>
-      </div>
-    );
-  }
-  if (preview.kind === "plan") {
-    return (
-      <div className="ml-7 rounded-md border bg-zinc-50 px-3 py-2 text-xs text-muted-foreground dark:bg-zinc-900">
-        {preview.weeks.length} weeks of actions queued. See plan below.
-      </div>
-    );
-  }
-  return null;
-}
-
-function PlanCard({
-  approveRef,
-  onChat,
-  entries,
+function EmptyAccountRoadmap({
+  focusRef,
 }: {
-  approveRef: React.RefObject<HTMLButtonElement | null>;
-  onChat: (message: string) => void;
-  entries: Record<StepId, StepEntry>;
+  focusRef: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const planPreview = entries.plan.preview;
-  const weeks =
-    planPreview && planPreview.kind === "plan"
-      ? planPreview.weeks
-      : [
-          { label: "Week 1", items: ["Audit Google Ads"] },
-          { label: "Week 2", items: ["Cold email sequence"] },
-          { label: "Week 3", items: ["Bid optimization"] },
-          { label: "Week 4", items: ["Review and reallocate"] },
-        ];
-
   return (
-    <Card aria-label="Your 30-day plan">
-      <CardHeader>
-        <CardTitle className="text-base">Your 30-day plan</CardTitle>
-        <CardDescription>
-          A starting point. Your CMO will refine this as it learns from results.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {weeks.map((w) => (
-            <div
-              key={w.label}
-              className="rounded-md border bg-zinc-50/50 p-3 text-sm dark:bg-zinc-900/50"
-            >
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {w.label}
-              </div>
-              <ul className="space-y-1.5 text-foreground">
-                {w.items.map((item, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-muted-foreground">•</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Where I&rsquo;d start</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p>
+            <strong>Set a daily budget for your first campaign.</strong> Most B2B
+            starts at $50&ndash;100/day to gather signal.
+          </p>
+          <p>
+            <strong>Decide your first goal:</strong> leads vs. traffic vs. brand.
+            I can help you pick.
+          </p>
+          <p>
+            <strong>Talk it through with me.</strong> Thirty minutes and
+            you&rsquo;ll have a campaign brief.
+          </p>
+        </CardContent>
+      </Card>
+      <div className="flex flex-wrap gap-2 pt-2">
+        <Button asChild size="lg">
+          <Link
+            href="/agents/cmo/chat"
+            ref={focusRef as unknown as React.Ref<HTMLAnchorElement>}
+          >
+            Plan with CMO
+          </Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link href="/">I&rsquo;ll come back</Link>
+        </Button>
+      </div>
+    </>
+  );
+}
 
-        <div className="flex flex-wrap gap-2 pt-2">
-          <Button
-            ref={approveRef}
-            onClick={() => onChat("Plan approved — CMO will start working on Week 1.")}
-          >
-            Approve &amp; launch
+function AuditErrorCard({ kind, message }: { kind: string; message: string }) {
+  const headline =
+    kind === "stale_token"
+      ? "Google Ads token expired."
+      : kind === "mcp_not_configured"
+        ? "Google Ads isn't connected for this project."
+        : kind === "timeout"
+          ? "Audit timed out."
+          : "Couldn't reach your Google Ads account.";
+  return (
+    <Card role="alert">
+      <CardContent className="space-y-3 pt-6 pb-6">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="size-4 text-amber-600" aria-hidden />
+          <span className="font-medium text-sm">{headline}</span>
+        </div>
+        <p className="text-xs text-muted-foreground">{message}</p>
+        <div className="flex gap-2">
+          <Button asChild>
+            <Link href="/onboarding">Retry</Link>
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => onChat("Opening plan editor in chat.")}
-          >
-            Edit plan
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => onChat("Saved. You can come back to this plan anytime.")}
-          >
-            Save &amp; decide later
+          <Button variant="outline" asChild>
+            <Link href="/agents/cmo/chat">Skip to chat</Link>
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersistFailedCard({ message }: { message: string }) {
+  return (
+    <Card role="alert">
+      <CardContent className="space-y-3 pt-6 pb-6">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="size-4 text-destructive" aria-hidden />
+          <span className="font-medium text-sm">Couldn&rsquo;t save your audit.</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Check disk space or restart and try again. Detail: {message}
+        </p>
+        <Button asChild>
+          <Link href="/onboarding">Retry</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PartialErrorBanner({
+  errors,
+}: {
+  errors: Array<{ category: string; message: string }>;
+}) {
+  return (
+    <Card>
+      <CardContent className="space-y-2 pt-6 pb-6 text-sm">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="size-4 text-muted-foreground" aria-hidden />
+          <span className="text-muted-foreground">
+            Couldn&rsquo;t check {errors.length} categor
+            {errors.length === 1 ? "y" : "ies"} &mdash; the rest came back clean.
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MissingSlug() {
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-6 pb-6">
+        <p className="text-sm text-muted-foreground">
+          This step needs a project. Start from the beginning.
+        </p>
+        <Button asChild>
+          <Link href="/onboarding">Start over</Link>
+        </Button>
       </CardContent>
     </Card>
   );

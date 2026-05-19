@@ -1,43 +1,107 @@
 import { NextRequest } from "next/server";
-import { STEP_ORDER, STEP_RUNNERS, type StepId } from "@/lib/onboarding/steps";
+
+import { getActiveProject } from "@/server/active-project";
+import { runAudit } from "@/server/onboarding/audit";
+import { awaitProvisioning } from "@/server/onboarding/provisioning-state";
+import type { StreamEvent } from "@/lib/onboarding/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Event =
-  | { type: "step:start"; id: StepId }
-  | { type: "step:done"; id: StepId; preview: unknown }
-  | { type: "step:error"; id: StepId; message: string }
-  | { type: "complete" };
+/**
+ * SSE stream powering the onboarding magic moment.
+ *
+ * Phases (per D13 + D17):
+ *   1. Provisioning gate — await `ensureProjectAgents` (fired async by
+ *      createProjectAction) for up to 8s. Emits provision:waiting →
+ *      provision:ready | provision:timeout | provision:no-agents.
+ *   2. Audit — pipe `runAudit` events to the client with ~200ms stagger
+ *      between per-finding events for visual rhythm.
+ *
+ * Security (per design Pass 3.3): the slug query param MUST match the
+ * active-project cookie. Otherwise the caller could read another project's
+ * audit by guessing slugs.
+ *
+ * Cancellation: when the client closes the EventSource, req.signal fires;
+ * we cascade to runAudit's AbortSignal so the in-flight MCP fetch cancels.
+ */
 
-function sse(event: Event) {
-  return `data: ${JSON.stringify(event)}\n\n`;
-}
+const PROVISION_TIMEOUT_MS = 8_000;
+const FINDING_STAGGER_MS = 200;
 
 export async function GET(req: NextRequest) {
-  const url = req.nextUrl.searchParams.get("url")?.trim() || "";
+  const slug = req.nextUrl.searchParams.get("slug")?.trim() || "";
+  const active = await getActiveProject();
+  if (!slug || !active || active.slug !== slug) {
+    return new Response("forbidden", { status: 403 });
+  }
+
+  const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const encoder = new TextEncoder();
-      const send = (e: Event) => controller.enqueue(encoder.encode(sse(e)));
-
-      for (const step of STEP_ORDER) {
-        send({ type: "step:start", id: step.id });
+      let closed = false;
+      const send = (event: StreamEvent) => {
+        if (closed) return;
         try {
-          const preview = await STEP_RUNNERS[step.id](url, step.sleepMs);
-          send({ type: "step:done", id: step.id, preview });
-        } catch (err) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          // Controller closed underneath us (client disconnected mid-flight).
+          closed = true;
+        }
+      };
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+      };
+
+      const abortAudit = new AbortController();
+      const onClientAbort = () => abortAudit.abort();
+      req.signal.addEventListener("abort", onClientAbort, { once: true });
+
+      try {
+        // Phase 1: provisioning gate.
+        send({ type: "provision:waiting", elapsed_ms: 0 });
+        const provision = await awaitProvisioning(slug, PROVISION_TIMEOUT_MS);
+        if (closed) return;
+        if (provision.kind === "timeout") {
+          send({ type: "provision:timeout" });
+          close();
+          return;
+        }
+        if (provision.kind === "no-agents") {
+          send({ type: "provision:no-agents" });
+          close();
+          return;
+        }
+        send({ type: "provision:ready" });
+
+        // Phase 2: stream audit events.
+        for await (const event of runAudit(slug, abortAudit.signal)) {
+          if (closed) break;
+          send(event);
+          if (event.type === "audit:finding") {
+            // Small stagger so per-finding cards land with rhythm in the UI.
+            await new Promise((r) => setTimeout(r, FINDING_STAGGER_MS));
+          }
+        }
+      } catch (err) {
+        if (!closed) {
           send({
-            type: "step:error",
-            id: step.id,
-            message: err instanceof Error ? err.message : "Unknown error",
+            type: "audit:error",
+            kind: "unreachable",
+            message: err instanceof Error ? err.message : String(err),
           });
         }
+      } finally {
+        req.signal.removeEventListener("abort", onClientAbort);
+        close();
       }
-
-      send({ type: "complete" });
-      controller.close();
     },
   });
 

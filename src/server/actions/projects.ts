@@ -70,6 +70,51 @@ export async function createProjectAction(formData: FormData): Promise<void> {
   redirect("/");
 }
 
+/**
+ * Onboarding-flow variant of createProjectAction. Same create + async
+ * provision (D6) but returns the slug to the caller instead of redirecting
+ * to /. The client navigates to ?step=connect&slug=... after success.
+ */
+export async function createProjectForOnboardingAction(
+  formData: FormData,
+): Promise<ActionResult<{ slug: string; display_name: string }>> {
+  const display_name = String(formData.get("display_name") ?? "").trim();
+  if (!display_name) return { ok: false, error: "Please enter a project name." };
+
+  const result = createProject({ display_name });
+  if (!result.ok) return { ok: false, error: result.reason };
+
+  // Same async-provisioning policy as createProjectAction (D4 + D6).
+  const provisionPromise = ensureProjectAgents(result.project.slug, [
+    "cmo",
+    "google_ads",
+  ]);
+  startProvisioning(result.project.slug, provisionPromise);
+  provisionPromise
+    .then((prov) => {
+      logAgentAction({
+        project_slug: result.project.slug,
+        agent_id: "system",
+        action_type: "project_created",
+        summary: `Project '${result.project.display_name}' created. ${prov.created.length} agents provisioned${prov.failed.length > 0 ? `, ${prov.failed.length} failed` : ""}.`,
+        payload: prov,
+      });
+    })
+    .catch((err) => {
+      console.error("Agent provisioning failed; project created but no agents:", err);
+    });
+
+  await setActiveProject(result.project.slug);
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    data: {
+      slug: result.project.slug,
+      display_name: result.project.display_name,
+    },
+  };
+}
+
 export async function reprovisionAgentsAction(slug: string): Promise<{ ok: true; created: string[]; existed: string[] } | { ok: false; error: string }> {
   try {
     const result = await ensureProjectAgents(slug);
