@@ -29,14 +29,14 @@ export default async function ProjectHomePage() {
     return (
       <div className="mx-auto flex max-w-lg flex-col items-start gap-4 pt-16">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Hire your AI marketing team.
+          Hire a CMO.
         </h1>
         <p className="text-sm text-muted-foreground">
-          Each project gets its own CMO + specialist agents (Google Ads, SEO),
-          scoped under OpenClaw. Spin one up and start chatting.
+          Connect your Google Ads account and watch a real audit in under 60
+          seconds. Skip the connect if you just want to chat.
         </p>
-        <Button asChild>
-          <Link href="/projects/new">Create your first project</Link>
+        <Button asChild size="lg">
+          <Link href="/onboarding">Set up your CMO</Link>
         </Button>
       </div>
     );

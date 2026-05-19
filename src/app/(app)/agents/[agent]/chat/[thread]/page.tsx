@@ -41,7 +41,7 @@ export default async function AgentChatThreadPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/projects/new" className="text-sm underline">
+            <Link href="/onboarding" className="text-sm underline">
               Create one
             </Link>
           </CardContent>

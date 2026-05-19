@@ -26,7 +26,7 @@ export default async function AgentSkillsPage({
             <p className="text-sm text-muted-foreground">
               Create a project to see this agent&apos;s skills.
             </p>
-            <Link href="/projects/new" className="text-sm underline">
+            <Link href="/onboarding" className="text-sm underline">
               Create one
             </Link>
           </CardContent>

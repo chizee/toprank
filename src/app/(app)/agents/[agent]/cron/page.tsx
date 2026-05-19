@@ -59,7 +59,7 @@ export default async function AgentCronPage({
             <p className="text-sm text-muted-foreground">
               Create a project to schedule recurring work for this agent.
             </p>
-            <Link href="/projects/new" className="text-sm underline">
+            <Link href="/onboarding" className="text-sm underline">
               Create one
             </Link>
           </CardContent>

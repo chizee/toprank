@@ -79,7 +79,7 @@ export function ProjectSwitcher({ projects, activeSlug }: Props) {
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <a href="/projects/new" className="gap-2">
+          <a href="/onboarding" className="gap-2">
             <Plus className="size-4" />
             <span>New project</span>
           </a>

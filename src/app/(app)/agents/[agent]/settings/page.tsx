@@ -27,7 +27,7 @@ export default async function AgentSettingsPage({
             <p className="text-sm text-muted-foreground">
               Create a project to edit agent settings.
             </p>
-            <Link href="/projects/new" className="text-sm underline">
+            <Link href="/onboarding" className="text-sm underline">
               Create one
             </Link>
           </CardContent>

@@ -15,7 +15,7 @@ export default function ProjectsListPage() {
           <p className="text-sm text-muted-foreground">{projects.length} total</p>
         </div>
         <Button asChild>
-          <Link href="/projects/new">New project</Link>
+          <Link href="/onboarding">New project</Link>
         </Button>
       </div>
 
@@ -23,7 +23,7 @@ export default function ProjectsListPage() {
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             No projects yet.{" "}
-            <Link className="underline" href="/projects/new">
+            <Link className="underline" href="/onboarding">
               Create your first one
             </Link>
             .
