@@ -339,6 +339,30 @@ describe("runAudit", () => {
     });
   });
 
+  describe("accountId plumbing (multi-account bearers, Demo2 fix)", () => {
+    beforeEach(() => {
+      mcpRpcMock.mockResolvedValue(mockToolCallResult(NORMAL_REPORTS));
+    });
+
+    it("omits accountId from runScript args when option is null/undefined", async () => {
+      await collect("acme");
+      const [, , , params] = mcpRpcMock.mock.calls[0]!;
+      const args = (params as { arguments: Record<string, unknown> }).arguments;
+      expect(args).not.toHaveProperty("accountId");
+    });
+
+    it("passes accountId to runScript when option is provided", async () => {
+      const events: AuditEvent[] = [];
+      for await (const e of runAudit("acme", undefined, { accountId: "7073485715" })) {
+        events.push(e);
+      }
+      const [, , , params] = mcpRpcMock.mock.calls[0]!;
+      const args = (params as { arguments: Record<string, unknown> }).arguments;
+      expect(args.accountId).toBe("7073485715");
+      expect(events.some((e) => e.type === "audit:complete")).toBe(true);
+    });
+  });
+
   describe("regression — real MCP envelope shape", () => {
     it("unwraps the runScript {ok, result} envelope (Demo2 bug — 2026-05-19)", async () => {
       // Build a payload WITHOUT the helper so we can exercise the unwrap path

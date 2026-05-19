@@ -41,13 +41,33 @@ export function createProject(input: CreateProjectInput): CreateProjectResult {
     display_name: input.display_name.trim(),
     created_at: new Date().toISOString(),
     archived_at: null,
+    google_ads_account_id: null,
   };
 
   db.prepare(
-    "INSERT INTO projects (id, slug, display_name, created_at, archived_at) VALUES (?, ?, ?, ?, NULL)",
+    "INSERT INTO projects (id, slug, display_name, created_at, archived_at, google_ads_account_id) VALUES (?, ?, ?, ?, NULL, NULL)",
   ).run(project.id, project.slug, project.display_name, project.created_at);
 
   return { ok: true, project };
+}
+
+/**
+ * Persist the chosen Google Ads customer ID for a project. Returns null when
+ * the project doesn't exist or is archived. Idempotent — re-setting to the
+ * same value is a no-op write.
+ */
+export function setProjectGoogleAdsAccount(
+  slug: string,
+  account_id: string | null,
+): Project | null {
+  const db = getDb();
+  const existing = db.prepare("SELECT 1 FROM projects WHERE slug = ?").get(slug);
+  if (!existing) return null;
+  db.prepare("UPDATE projects SET google_ads_account_id = ? WHERE slug = ?").run(
+    account_id,
+    slug,
+  );
+  return getProject(slug);
 }
 
 export function renameProject(slug: string, display_name: string): Project | null {

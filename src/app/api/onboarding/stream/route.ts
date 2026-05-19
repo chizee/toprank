@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { getActiveProject } from "@/server/active-project";
+import { getProject } from "@/server/db/projects";
 import { runAudit } from "@/server/onboarding/audit";
 import { awaitProvisioning } from "@/server/onboarding/provisioning-state";
 import type { StreamEvent } from "@/lib/onboarding/events";
@@ -81,8 +82,14 @@ export async function GET(req: NextRequest) {
         }
         send({ type: "provision:ready" });
 
-        // Phase 2: stream audit events.
-        for await (const event of runAudit(slug, abortAudit.signal)) {
+        // Phase 2: stream audit events. Pass the user's selected Google Ads
+        // account ID so MCP runScript targets the right customer; null when
+        // the user hasn't picked yet (single-account bearer case).
+        const project = getProject(slug);
+        const accountId = project?.google_ads_account_id ?? null;
+        for await (const event of runAudit(slug, abortAudit.signal, {
+          accountId,
+        })) {
           if (closed) break;
           send(event);
           if (event.type === "audit:finding") {

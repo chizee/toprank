@@ -204,6 +204,16 @@ type McpToolCallResult = {
   isError?: boolean;
 };
 
+export type RunAuditOptions = {
+  /**
+   * The Google Ads customer ID to audit. When omitted, MCP picks the bearer's
+   * default account — fine for single-account bearers but the multi-account
+   * Demo2 case made this misleading. The onboarding flow now stores the
+   * user's selection on projects.google_ads_account_id and passes it here.
+   */
+  accountId?: string | null;
+};
+
 /**
  * Run the audit and yield events. Caller is responsible for piping events
  * to whichever surface the user is watching (SSE, log, etc).
@@ -211,6 +221,7 @@ type McpToolCallResult = {
 export async function* runAudit(
   project_slug: string,
   signal?: AbortSignal,
+  options: RunAuditOptions = {},
 ): AsyncGenerator<AuditEvent, void, void> {
   yield { type: "audit:start" };
 
@@ -224,11 +235,19 @@ export async function* runAudit(
     return;
   }
 
+  const runScriptArgs: Record<string, unknown> = {
+    code: AUDIT_SCRIPT,
+    timeoutMs: 45_000,
+  };
+  if (options.accountId) {
+    runScriptArgs.accountId = options.accountId;
+  }
+
   const rpcResult = await mcpRpc<McpToolCallResult>(
     cfg.url,
     cfg.token,
     "tools/call",
-    { name: "runScript", arguments: { code: AUDIT_SCRIPT, timeoutMs: 45_000 } },
+    { name: "runScript", arguments: runScriptArgs },
     { timeoutMs: MCP_TIMEOUT_MS, signal },
   );
 

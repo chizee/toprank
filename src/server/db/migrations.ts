@@ -4,7 +4,7 @@
 //
 // To add a migration:
 //   1. Write src/server/db/migrations/00N_<name>.sql
-//   2. Append an entry below with the SAME contents
+//   2. Append an entry below with the SAME contents (order = apply order)
 //   3. CI lint (TODO) keeps the two in sync
 
 export type Migration = {
@@ -117,6 +117,16 @@ CREATE TABLE IF NOT EXISTS sequence_runs (
   created_at    TEXT NOT NULL,
   updated_at    TEXT NOT NULL
 );
+`,
+  },
+  {
+    name: "002_google_ads_account.sql",
+    sql: `
+-- Per-project Google Ads account selection. Bearers from notfair.co's MCP
+-- can grant access to multiple customer accounts; onboarding asks the user
+-- to pick one and persists it here so the audit + later automation always
+-- target the right account.
+ALTER TABLE projects ADD COLUMN google_ads_account_id TEXT;
 `,
   },
 ];

@@ -6,6 +6,14 @@ export type Project = {
   display_name: string;
   created_at: string;
   archived_at: string | null;
+  /**
+   * Selected Google Ads customer ID for this project. Bearers from
+   * notfair.co/api/mcp/google_ads can grant access to multiple customer
+   * accounts; the onboarding flow asks the user to pick one and persists
+   * it here so the audit + later automation target the right account.
+   * Null until the user picks (or until /onboarding gets re-run).
+   */
+  google_ads_account_id: string | null;
 };
 
 export type TaskStatus =

@@ -22,6 +22,11 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { startMcpConnect } from "@/server/actions/mcp";
 import { createProjectForOnboardingAction } from "@/server/actions/projects";
+import {
+  listGoogleAdsAccounts,
+  setOnboardingAccountAction,
+  type GoogleAdsAccount,
+} from "@/server/onboarding/accounts";
 import type {
   AuditSummary,
   Finding,
@@ -29,7 +34,7 @@ import type {
   StreamEvent,
 } from "@/lib/onboarding/events";
 
-type Step = "name" | "connect" | "audit";
+type Step = "name" | "connect" | "account" | "audit";
 
 export function OnboardingFlow() {
   const router = useRouter();
@@ -37,7 +42,9 @@ export function OnboardingFlow() {
   const stepParam = params.get("step");
   const slug = params.get("slug") ?? null;
   const step: Step =
-    stepParam === "connect" || stepParam === "audit"
+    stepParam === "connect" ||
+    stepParam === "account" ||
+    stepParam === "audit"
       ? stepParam
       : "name";
 
@@ -58,10 +65,10 @@ export function OnboardingFlow() {
           />
         )}
         {step === "connect" && slug && <ConnectStep slug={slug} />}
+        {step === "account" && slug && <AccountStep slug={slug} />}
         {step === "audit" && slug && <AuditStep slug={slug} />}
-        {(step === "connect" || step === "audit") && !slug && (
-          <MissingSlug />
-        )}
+        {(step === "connect" || step === "account" || step === "audit") &&
+          !slug && <MissingSlug />}
       </main>
     </div>
   );
@@ -143,7 +150,7 @@ function ConnectStep({ slug }: { slug: string }) {
     try {
       const result = await startMcpConnect({
         mcp_key: "notfair-googleads",
-        return_to: `/onboarding?step=audit&slug=${encodeURIComponent(slug)}`,
+        return_to: `/onboarding?step=account&slug=${encodeURIComponent(slug)}`,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -207,7 +214,226 @@ function ConnectStep({ slug }: { slug: string }) {
   );
 }
 
-// ── Step 3: Audit (terminal) ───────────────────────────────────────
+// ── Step 3: Pick Google Ads account (auto-skipped if only 1) ───────
+
+type AccountListState =
+  | { phase: "loading" }
+  | { phase: "loaded"; accounts: GoogleAdsAccount[]; default_account_id: string | null }
+  | { phase: "error"; message: string };
+
+function AccountStep({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<AccountListState>({ phase: "loading" });
+  const [pickingId, setPickingId] = useState<string | null>(null);
+  // Guard against StrictMode double-mount auto-selecting twice.
+  const autoSelectedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await listGoogleAdsAccounts(slug);
+      if (cancelled) return;
+      if (!result.ok) {
+        setState({
+          phase: "error",
+          message: result.error,
+        });
+        return;
+      }
+      setState({
+        phase: "loaded",
+        accounts: result.accounts,
+        default_account_id: result.default_account_id,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  // Auto-skip when there's exactly one account — no point making the user
+  // pick from a list of one. We still call the server action so the project
+  // row gets the id persisted, then forward to the audit step.
+  useEffect(() => {
+    if (state.phase !== "loaded") return;
+    if (state.accounts.length !== 1) return;
+    if (autoSelectedRef.current) return;
+    autoSelectedRef.current = true;
+    (async () => {
+      const only = state.accounts[0]!;
+      const result = await setOnboardingAccountAction(slug, only.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        setState({ phase: "error", message: result.error });
+        return;
+      }
+      router.replace(`/onboarding?step=audit&slug=${encodeURIComponent(slug)}`);
+    })();
+  }, [state, slug, router]);
+
+  async function onPick(account: GoogleAdsAccount) {
+    setPickingId(account.id);
+    try {
+      const result = await setOnboardingAccountAction(slug, account.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        setPickingId(null);
+        return;
+      }
+      router.replace(`/onboarding?step=audit&slug=${encodeURIComponent(slug)}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      setPickingId(null);
+    }
+  }
+
+  if (state.phase === "loading") {
+    return (
+      <Card>
+        <CardContent className="space-y-2 pt-6 pb-6">
+          <div className="flex items-center gap-3 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+            <span className="font-medium">Loading your Google Ads accounts&hellip;</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state.phase === "error") {
+    return (
+      <Card role="alert">
+        <CardContent className="space-y-3 pt-6 pb-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="size-4 text-amber-600" aria-hidden />
+            <span className="font-medium text-sm">
+              Couldn&rsquo;t load your Google Ads accounts.
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">{state.message}</p>
+          <div className="flex gap-2">
+            <Button asChild>
+              <Link href="/onboarding">Retry from start</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/agents/cmo/chat">Skip to chat</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state.accounts.length === 0) {
+    return (
+      <Card role="alert">
+        <CardContent className="space-y-3 pt-6 pb-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="size-4 text-amber-600" aria-hidden />
+            <span className="font-medium text-sm">
+              No Google Ads accounts found on this connection.
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The connected user has no Google Ads customer accounts. Connect a
+            different account or skip and chat with your CMO.
+          </p>
+          <div className="flex gap-2">
+            <Button asChild>
+              <Link href={`/onboarding?step=connect&slug=${encodeURIComponent(slug)}`}>
+                Reconnect
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/agents/cmo/chat">Skip to chat</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // length === 1 → auto-selecting via effect above; render the same loading
+  // card so there's no flash of the picker UI.
+  if (state.accounts.length === 1) {
+    return (
+      <Card>
+        <CardContent className="space-y-2 pt-6 pb-6">
+          <div className="flex items-center gap-3 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+            <span className="font-medium">
+              Using your only Google Ads account&hellip;
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // length > 1 → picker.
+  return (
+    <>
+      <header className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          Which Google Ads account?
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Your connection has {state.accounts.length} accounts. Pick the one
+          you want me to audit for this project. You can switch later in
+          Settings.
+        </p>
+      </header>
+
+      <ul className="space-y-2 list-none p-0">
+        {state.accounts.map((account) => {
+          const isDefault = account.id === state.default_account_id;
+          const isPicking = pickingId === account.id;
+          const isOtherPicking = pickingId !== null && !isPicking;
+          return (
+            <li key={account.id}>
+              <button
+                type="button"
+                onClick={() => onPick(account)}
+                disabled={pickingId !== null}
+                aria-label={`Audit ${account.name} (${account.id})`}
+                className={cn(
+                  "block w-full rounded-md border bg-card p-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30 disabled:cursor-not-allowed",
+                  isOtherPicking && "opacity-50",
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{account.name}</span>
+                      {isDefault && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      Customer ID {account.id}
+                    </p>
+                  </div>
+                  {isPicking ? (
+                    <Loader2
+                      className="size-4 animate-spin text-muted-foreground"
+                      aria-hidden
+                    />
+                  ) : (
+                    <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+                  )}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+// ── Step 4: Audit (terminal) ───────────────────────────────────────
 
 type AuditState =
   | { phase: "provisioning" }
