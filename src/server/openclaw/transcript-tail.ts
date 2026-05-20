@@ -57,6 +57,12 @@ type RawMessage = {
   role?: string;
   content?: string | RawMessageContentPart[];
   timestamp?: number;
+  // Present on top-level toolResult messages (role: "toolResult"). OpenClaw
+  // doesn't nest these inside the assistant turn's content array — they're
+  // sibling entries with their own role.
+  toolCallId?: string;
+  toolName?: string;
+  isError?: boolean;
 };
 
 type RawEntry = {
@@ -164,6 +170,28 @@ export function readTranscriptTail(
       events.push({ kind: "user_message", id: baseId, ts, body });
       continue;
     }
+    // Tool results land as their own top-level message with role "toolResult".
+    // We don't render them as a standalone row — collapseToolPairs in the
+    // client matches them by tool_call_id to flip the prior tool_call from
+    // spinner → check.
+    if (msg.role === "toolResult") {
+      const callId = msg.toolCallId ?? "";
+      const name = msg.toolName ?? "tool";
+      const ok = !msg.isError;
+      const summary = summarizeToolResult(msg.content);
+      if (callId) {
+        events.push({
+          kind: "tool_result",
+          id: baseId,
+          ts,
+          tool_call_id: callId,
+          name,
+          summary,
+          ok,
+        });
+      }
+      continue;
+    }
     if (msg.role !== "assistant") continue;
 
     // Assistant: content is an array of parts. Each part becomes one event.
@@ -265,13 +293,17 @@ function summarizeToolResult(content: unknown): string | null {
     const text = content
       .map((c) => {
         if (typeof c === "string") return c;
-        if (c && typeof c === "object" && "text" in c)
-          return String((c as { text?: string }).text ?? "");
+        if (!c || typeof c !== "object") return "";
+        const obj = c as { text?: unknown; content?: unknown };
+        // Prefer `text`, fall back to `content` (some MCPs put the payload
+        // under `content` directly without splitting into a text/data union).
+        if (typeof obj.text === "string" && obj.text) return obj.text;
+        if (typeof obj.content === "string" && obj.content) return obj.content;
         return "";
       })
       .filter(Boolean)
       .join("\n");
-    return shortenLine(text);
+    return text ? shortenLine(text) : null;
   }
   if (typeof content === "object") {
     try {
