@@ -338,12 +338,32 @@ export type ChatStreamEvent =
  * returns false and we lazily reconnect on the next call.
  */
 let sharedClient: GatewayClient | null = null;
+let sharedClientPromise: Promise<GatewayClient> | null = null;
 
+/**
+ * Returns the shared singleton gateway client, lazily creating it on first
+ * call. The promise cache makes concurrent callers await the SAME in-flight
+ * connect — without it, two callers arriving before the first open()
+ * completes would each create a fresh GatewayClient, opening two WebSockets
+ * and racing each other's connect handshake against the OpenClaw gateway
+ * (which rejects any frame before a connect with "invalid handshake: first
+ * request must be connect"). React StrictMode double-mounting client
+ * effects in Next dev was the easiest reproducer.
+ */
 async function getSharedClient(): Promise<GatewayClient> {
   if (sharedClient && sharedClient.isOpen()) return sharedClient;
-  sharedClient = new GatewayClient();
-  await sharedClient.open();
-  return sharedClient;
+  if (sharedClientPromise) return sharedClientPromise;
+  sharedClientPromise = (async () => {
+    const candidate = new GatewayClient();
+    try {
+      await candidate.open();
+      sharedClient = candidate;
+      return candidate;
+    } finally {
+      sharedClientPromise = null;
+    }
+  })();
+  return sharedClientPromise;
 }
 
 /**

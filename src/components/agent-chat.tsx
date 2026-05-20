@@ -55,6 +55,13 @@ export type InitialMessage = {
   body: string;
 };
 
+/**
+ * Module-level dedup for the auto-kickoff. Keyed by sessionId so different
+ * threads kick off independently, but a single thread's StrictMode-induced
+ * double-mount only fires once.
+ */
+const KICKOFF_FIRED = new Set<string>();
+
 type Props = {
   projectSlug: string;
   agentSlug: string;
@@ -134,22 +141,25 @@ export function AgentChat({
 
   // Auto-kickoff: on a brand-new thread when the server told us FIRST_TURN.md
   // is pending in the agent workspace, send a hidden first message so the
-  // agent runs and produces its greeting (per D19). Fire exactly once per
-  // mount; once messages.length is non-zero (any path) we never re-fire.
-  const kickoffFiredRef = useRef(false);
+  // agent runs and produces its greeting (per D19). Dedup via a MODULE-level
+  // Set keyed by sessionId — useRef doesn't survive React StrictMode dev
+  // remounts (refs are reinitialized on every mount), so a ref guard fires
+  // twice and triggers two concurrent chat requests, which can race the
+  // gateway-client's connect handshake. The module-level set survives
+  // remounts because the module isn't re-evaluated.
   useEffect(() => {
     if (!autoKickoff) return;
-    if (kickoffFiredRef.current) return;
+    if (KICKOFF_FIRED.has(sessionId)) return;
     if (messages.length > 0) return;
     if (pending) return;
-    kickoffFiredRef.current = true;
+    KICKOFF_FIRED.add(sessionId);
     // Short, neutral kickoff — the agent's FIRST_TURN.md instruction does the
     // rest. Hidden so the user sees the greeting land on a clean canvas.
     send("(session start)", { hidden: true });
     // Intentionally do not depend on `send` (stable enough across renders) or
     // `messages` (would re-fire as the greeting streams in).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoKickoff]);
+  }, [autoKickoff, sessionId]);
 
   // Keep the message thread pinned to the bottom on send / streaming updates.
   // Use the scroll container directly (not scrollIntoView on a sentinel) so we
