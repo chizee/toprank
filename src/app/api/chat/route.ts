@@ -115,8 +115,8 @@ export async function POST(request: Request) {
       // and silently drop further sends. The agent run on OpenClaw keeps
       // going, the assistantBuffer keeps accumulating, and orchestration
       // still runs at the end. Persistence (JSONL) happens server-side
-      // regardless, so when the user returns, loadThreadHistory shows the
-      // full response.
+      // regardless, so when the user returns, the transcript-tail endpoint
+      // surfaces the full response on the next poll.
       let clientOpen = true;
       const send = (event: string, data: unknown) => {
         if (!clientOpen) return;

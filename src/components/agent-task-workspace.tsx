@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Circle, CircleDot, Loader2, XCircle } from "lucide-react";
@@ -12,6 +12,8 @@ import { StartAllTasksButton } from "@/components/start-all-tasks-button";
 import { cn } from "@/lib/utils";
 import type { TranscriptEvent } from "@/server/openclaw/transcript-tail";
 import type { Task, TaskStatus } from "@/types";
+
+const TASK_IN_FLIGHT: TaskStatus[] = ["proposed", "approved", "running"];
 
 const STATUS_GROUPS: Array<{ status: TaskStatus; label: string }> = [
   { status: "running", label: "Running" },
@@ -213,17 +215,7 @@ export function AgentTaskWorkspace({
             </header>
 
             <div className="min-h-0 flex-1">
-              <LiveTranscript
-                key={selected.task.id}
-                agentSlug={agentSlug}
-                agentDisplayName={agentDisplayName}
-                taskId={selected.task.id}
-                taskStatus={selected.task.status}
-                initialEvents={selected.initialEvents}
-                initialByteOffset={selected.initialByteOffset}
-                sessionId={selected.threadId}
-                sessionKey={selected.sessionKey}
-              />
+              <SelectedTaskPanel selected={selected} agentSlug={agentSlug} agentDisplayName={agentDisplayName} />
             </div>
           </>
         ) : (
@@ -234,6 +226,46 @@ export function AgentTaskWorkspace({
         )}
       </section>
     </div>
+  );
+}
+
+function SelectedTaskPanel({
+  selected,
+  agentSlug,
+  agentDisplayName,
+}: {
+  selected: SelectedTaskBundle;
+  agentSlug: string;
+  agentDisplayName: string;
+}) {
+  const router = useRouter();
+  const isInFlight = TASK_IN_FLIGHT.includes(selected.task.status);
+  // Each time polling returns new events we refresh the server tree so
+  // the status badge in this panel's header + the task list grouping
+  // catch up to the JSONL — the LiveTranscript handles its own rendering
+  // updates, this hook just rebroadcasts to the rest of the page.
+  const onPolled = useCallback(
+    ({ newEvents }: { newEvents: number; fileSize: number }) => {
+      if (newEvents > 0) router.refresh();
+      // Return true to stop polling once the task is terminal AND the
+      // poll returned nothing new (transcript fully drained).
+      if (!isInFlight && newEvents === 0) return true;
+      return false;
+    },
+    [isInFlight, router],
+  );
+  return (
+    <LiveTranscript
+      key={selected.task.id}
+      agentSlug={agentSlug}
+      agentDisplayName={agentDisplayName}
+      threadId={selected.threadId}
+      sessionKey={selected.sessionKey}
+      initialEvents={selected.initialEvents}
+      initialByteOffset={selected.initialByteOffset}
+      composerDisabled={isInFlight}
+      onPolled={onPolled}
+    />
   );
 }
 

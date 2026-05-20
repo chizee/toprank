@@ -31,50 +31,75 @@ import { RunningDot } from "@/components/running-dot";
 import { cn } from "@/lib/utils";
 import { stripOrchestrationBlocks } from "@/server/orchestration/blocks";
 import type { TranscriptEvent } from "@/server/openclaw/transcript-tail";
-import type { TaskStatus } from "@/types";
 
-const POLL_INTERVAL_MS = 1_500;
-const POLL_MAX_DURATION_MS = 10 * 60 * 1000;
-
-const IN_FLIGHT_STATUSES: TaskStatus[] = ["proposed", "approved", "running"];
+const POLL_INTERVAL_MS = 2_000;
 
 type Props = {
   agentSlug: string;
   agentDisplayName: string;
-  taskId: string;
-  taskStatus: TaskStatus;
+  /** OpenClaw thread (the URL label half of `agent:<agent>:<label>`). */
+  threadId: string;
+  /** Canonical sessionKey for /api/chat sends. */
+  sessionKey: string;
   /** Server-rendered initial slice of the transcript. */
   initialEvents: TranscriptEvent[];
   /** Byte offset *after* `initialEvents` — polls start from here. */
   initialByteOffset: number;
-  /** sessionId / sessionKey for the per-task chat thread, used by /api/chat. */
-  sessionId: string;
-  sessionKey: string;
+  /**
+   * When true, disables the composer (e.g., task is running and the user
+   * shouldn't send mid-run input). Default: composer always enabled.
+   */
+  composerDisabled?: boolean;
+  /**
+   * When set, on each successful poll we call this so the parent can
+   * react to JSONL growth (e.g., trigger router.refresh to refetch task
+   * statuses). Returning true tells us to stop background polling.
+   */
+  onPolled?: (info: { newEvents: number; fileSize: number }) => boolean | void;
+  /**
+   * Auto-kickoff: when true AND the transcript is empty AND we're not
+   * already sending, fire a hidden first message so the agent runs
+   * without the user typing. Used by /chat after onboarding (the
+   * FIRST_TURN.md sentinel) so the CMO greets without a manual nudge.
+   */
+  autoKickoff?: boolean;
+  /** Override for the auto-kickoff message body. */
+  kickoffMessage?: string;
 };
+
+/** Module-level guard so React StrictMode dev double-mounts don't double-fire. */
+const KICKOFF_FIRED = new Set<string>();
 
 export function LiveTranscript({
   agentSlug,
   agentDisplayName,
-  taskId,
-  taskStatus,
+  threadId,
+  sessionKey,
   initialEvents,
   initialByteOffset,
-  sessionId,
-  sessionKey,
+  composerDisabled = false,
+  onPolled,
+  autoKickoff = false,
+  kickoffMessage,
 }: Props) {
   const router = useRouter();
   const [events, setEvents] = useState<TranscriptEvent[]>(initialEvents);
   const [byteOffset, setByteOffset] = useState(initialByteOffset);
-  const [status, setStatus] = useState<TaskStatus>(taskStatus);
   const [input, setInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [stopPolling, setStopPolling] = useState(false);
+
+  // Optimistic state for the active /api/chat send. Rendered after committed
+  // events so the user sees their message + the streaming response before
+  // polling materializes them from JSONL. Cleared once polling catches up.
+  const [pendingUserMsg, setPendingUserMsg] = useState<string | null>(null);
+  const [pendingAssistant, setPendingAssistant] = useState("");
+  const [pendingTools, setPendingTools] = useState<ToolEntry[]>([]);
+  const [pendingError, setPendingError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const stickyBottomRef = useRef(true);
-  const startedAtRef = useRef<number | null>(null);
-
-  const isInFlight = IN_FLIGHT_STATUSES.includes(status);
+  const abortRef = useRef<AbortController | null>(null);
 
   // ── Auto-scroll: only when the user is already near the bottom. ─────
   function onScroll() {
@@ -88,104 +113,154 @@ export function LiveTranscript({
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [events, sendingChat]);
+  }, [events, sendingChat, pendingAssistant, pendingTools, pendingUserMsg]);
 
-  // ── Live tail polling. Stops once the server reports `done: true`. ──
+  // ── Live tail polling. ─────────────────────────────────────────────
   const pollOnce = useCallback(async () => {
     try {
-      const url = `/api/agents/${agentSlug}/tasks/${taskId}/transcript?offset=${byteOffset}`;
+      const url = `/api/agents/${agentSlug}/threads/${threadId}/transcript?offset=${byteOffset}`;
       const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) return { stop: false };
+      if (!res.ok) return { newEvents: 0 };
       const data = (await res.json()) as {
         events: TranscriptEvent[];
         byteOffset: number;
-        done: boolean;
-        status: TaskStatus;
+        file_size: number;
       };
       if (data.events.length > 0) {
         setEvents((prev) => [...prev, ...data.events]);
+        // Clear pending state: JSONL now has the canonical events so the
+        // optimistic placeholders are no longer needed.
+        setPendingUserMsg(null);
+        setPendingAssistant("");
+        setPendingTools([]);
+        setPendingError(null);
       }
       if (data.byteOffset !== byteOffset) setByteOffset(data.byteOffset);
-      if (data.status !== status) {
-        setStatus(data.status);
-        // Status flipped — refresh the rest of the page (task list pills,
-        // status badge in the brief header). Cheaper than a full reload.
-        router.refresh();
-      }
-      return { stop: data.done };
+      const shouldStop = onPolled?.({
+        newEvents: data.events.length,
+        fileSize: data.file_size,
+      });
+      if (shouldStop) setStopPolling(true);
+      return { newEvents: data.events.length };
     } catch {
-      return { stop: false };
+      return { newEvents: 0 };
     }
-  }, [agentSlug, byteOffset, router, status, taskId]);
+  }, [agentSlug, byteOffset, onPolled, threadId]);
 
+  // Background polling: runs while mounted, paused during an active send so
+  // we don't double-render content we're already streaming via SSE.
   useEffect(() => {
-    if (!isInFlight) return;
-    if (startedAtRef.current === null) startedAtRef.current = Date.now();
+    if (stopPolling) return;
+    if (sendingChat) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-
     const tick = async () => {
       if (cancelled) return;
-      const elapsed = Date.now() - (startedAtRef.current ?? Date.now());
-      if (elapsed > POLL_MAX_DURATION_MS) return;
-      const { stop } = await pollOnce();
-      if (cancelled || stop) return;
+      await pollOnce();
+      if (cancelled) return;
       timer = setTimeout(tick, POLL_INTERVAL_MS);
     };
-
     timer = setTimeout(tick, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [isInFlight, pollOnce]);
+  }, [pollOnce, sendingChat, stopPolling]);
 
-  // ── Pair tool_call with its eventual tool_result so they render as ONE row.
-  const rendered = useMemo(() => collapseToolPairs(events), [events]);
+  // ── Send: optimistic user message + SSE-driven streaming reply. ─────
+  const send = useCallback(
+    async (overrideText?: string, opts: { hidden?: boolean } = {}) => {
+      const usingOverride = typeof overrideText === "string";
+      const text = (usingOverride ? overrideText : input).trim();
+      if (!text || sendingChat) return;
+      if (!usingOverride) setInput("");
+      setSendingChat(true);
+      setPendingUserMsg(opts.hidden ? null : text);
+      setPendingAssistant("");
+      setPendingTools([]);
+      setPendingError(null);
 
-  // ── Composer: enabled only when the task isn't actively in flight. ──
-  async function send() {
-    const text = input.trim();
-    if (!text || sendingChat) return;
-    setInput("");
-    setSendingChat(true);
-    try {
-      // Pipe through /api/chat exactly like AgentChat does — the response
-      // streams to the JSONL we're already tailing, so the new turn lands
-      // automatically once polling resumes (which we kick off below by
-      // letting the task status flip back to running via the server).
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          agent: agentSlug,
-          sessionId,
-          sessionKey,
-        }),
-      });
-      if (!res.ok || !res.body) {
-        const err = await res.text();
-        throw new Error(err || `HTTP ${res.status}`);
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            agent: agentSlug,
+            sessionId: threadId,
+            sessionKey,
+          }),
+          signal: ctrl.signal,
+        });
+        if (!res.ok || !res.body) {
+          throw new Error((await res.text()) || `HTTP ${res.status}`);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          for (const raw of events) {
+            handleSseEvent(raw, {
+              onText: (chunk) => setPendingAssistant((s) => s + chunk),
+              onTool: (evt) => {
+                setPendingTools((prev) =>
+                  upsertToolEntry(prev, evt),
+                );
+              },
+              onError: (msg) => setPendingError(msg),
+            });
+          }
+        }
+        // Stream closed. Give OpenClaw a moment to flush the JSONL, then
+        // pull the committed events. pollOnce clears pending state when it
+        // returns new events; if it returns nothing yet, the regular
+        // polling effect picks it up on the next tick.
+        await new Promise((r) => setTimeout(r, 400));
+        const { newEvents } = await pollOnce();
+        if (newEvents === 0) {
+          // Re-try once more shortly. Avoids the case where OpenClaw is
+          // slow to flush and the user briefly sees pending state with no
+          // backing JSONL.
+          setTimeout(() => {
+            void pollOnce();
+          }, 1200);
+        }
+      } catch (err) {
+        const isAbort = err instanceof DOMException && err.name === "AbortError";
+        if (!isAbort) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setPendingError(msg);
+          toast.error(msg);
+        }
+      } finally {
+        setSendingChat(false);
+        abortRef.current = null;
       }
-      // Drain the SSE stream so the gateway run completes; we don't need
-      // to render its events here (the JSONL tail will pick everything up
-      // on the next poll). We just have to consume the body so the agent
-      // turn doesn't stall on backpressure.
-      const reader = res.body.getReader();
-      while (true) {
-        const { done } = await reader.read();
-        if (done) break;
-      }
-      // After the turn closes, prompt a re-poll so the new transcript bytes
-      // show up immediately instead of waiting for the next tick.
-      void pollOnce();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Send failed");
-    } finally {
-      setSendingChat(false);
-    }
-  }
+    },
+    [agentSlug, input, pollOnce, sendingChat, sessionKey, threadId],
+  );
+
+  // ── Auto-kickoff for FIRST_TURN-style flows. ────────────────────────
+  useEffect(() => {
+    if (!autoKickoff) return;
+    if (KICKOFF_FIRED.has(threadId)) return;
+    if (events.length > 0) return;
+    if (sendingChat) return;
+    KICKOFF_FIRED.add(threadId);
+    void send(kickoffMessage ?? "(session start)", { hidden: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoKickoff, threadId]);
+
+  const rendered = useMemo(() => collapseEvents(events), [events]);
+  const showThinking = sendingChat && pendingAssistant === "" && pendingTools.length === 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -197,25 +272,42 @@ export function LiveTranscript({
         aria-live="polite"
       >
         <div className="mx-auto w-full max-w-3xl px-6 py-6">
-          {rendered.length === 0 ? (
-            <TranscriptEmptyState
-              status={status}
-              agentDisplayName={agentDisplayName}
-            />
+          {rendered.length === 0 && !pendingUserMsg && !sendingChat ? (
+            <TranscriptEmptyState agentDisplayName={agentDisplayName} />
           ) : (
             <ol className="space-y-4">
               {rendered.map((item) => (
                 <li key={item.key}>
-                  <RenderItem
-                    item={item}
-                    agentDisplayName={agentDisplayName}
-                  />
+                  <RenderItem item={item} />
                 </li>
               ))}
+              {pendingUserMsg && (
+                <li>
+                  <UserBubble body={pendingUserMsg} />
+                </li>
+              )}
+              {pendingTools.length > 0 && (
+                <li>
+                  <ToolGroup tools={pendingTools} />
+                </li>
+              )}
+              {pendingAssistant && (
+                <li>
+                  <AssistantText body={pendingAssistant} />
+                </li>
+              )}
+              {pendingError && (
+                <li>
+                  <ErrorRow agentDisplayName={agentDisplayName} body={pendingError} />
+                </li>
+              )}
+              {showThinking && (
+                <li>
+                  <ThinkingPulse agentDisplayName={agentDisplayName} />
+                </li>
+              )}
             </ol>
           )}
-          {isInFlight && <ThinkingPulse agentDisplayName={agentDisplayName} />}
-          <div ref={bottomSentinelRef} />
         </div>
       </div>
 
@@ -237,34 +329,43 @@ export function LiveTranscript({
                   void send();
                 }
               }}
-              disabled={isInFlight || sendingChat}
+              disabled={composerDisabled}
               placeholder={
-                isInFlight
-                  ? `${agentDisplayName} is working — the transcript updates live`
+                composerDisabled
+                  ? `${agentDisplayName} is on a task — the transcript updates live`
                   : `Message ${agentDisplayName}…`
               }
               rows={1}
               className="flex min-h-[40px] flex-1 resize-none rounded-xl border bg-background px-3.5 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isInFlight || sendingChat || !input.trim()}
-              className="h-10 rounded-xl"
-            >
-              {sendingChat ? (
+            {sendingChat ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => abortRef.current?.abort()}
+                className="h-10 rounded-xl"
+                aria-label="Stop"
+              >
                 <StopCircle className="size-4" />
-              ) : (
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="sm"
+                disabled={composerDisabled || !input.trim()}
+                className="h-10 rounded-xl"
+                aria-label="Send"
+              >
                 <Send className="size-4" />
-              )}
-              <span className="sr-only">Send</span>
-            </Button>
+              </Button>
+            )}
           </form>
           <p className="pt-1.5 text-center text-[10px] text-muted-foreground">
-            {isInFlight ? (
+            {sendingChat ? (
               <span className="inline-flex items-center gap-1.5">
                 <RunningDot size="sm" aria-label="" />
-                Live · polling every {Math.round(POLL_INTERVAL_MS / 1000)}s
+                Streaming — click stop to abort
               </span>
             ) : (
               <>Enter to send · Shift+Enter for newline</>
@@ -274,6 +375,76 @@ export function LiveTranscript({
       </div>
     </div>
   );
+}
+
+// ── SSE plumbing for the active send ────────────────────────────────────
+
+type SseToolEvent = {
+  phase: "start" | "update" | "result";
+  tool_call_id: string;
+  name: string;
+  label?: string;
+};
+
+function handleSseEvent(
+  raw: string,
+  handlers: {
+    onText: (chunk: string) => void;
+    onTool: (evt: SseToolEvent) => void;
+    onError: (msg: string) => void;
+  },
+) {
+  const lines = raw.split("\n");
+  const evtLine = lines.find((l) => l.startsWith("event: "));
+  const dataLine = lines.find((l) => l.startsWith("data: "));
+  if (!evtLine || !dataLine) return;
+  const evt = evtLine.slice("event: ".length);
+  let data: unknown;
+  try {
+    data = JSON.parse(dataLine.slice("data: ".length));
+  } catch {
+    return;
+  }
+  if (evt === "text") {
+    const chunk = (data as { chunk?: string }).chunk;
+    if (typeof chunk === "string") handlers.onText(chunk);
+    return;
+  }
+  if (evt === "tool") {
+    handlers.onTool(data as SseToolEvent);
+    return;
+  }
+  if (evt === "error") {
+    const msg = (data as { message?: string }).message ?? "unknown error";
+    handlers.onError(msg);
+    return;
+  }
+}
+
+function upsertToolEntry(prev: ToolEntry[], evt: SseToolEvent): ToolEntry[] {
+  const idx = prev.findIndex((t) => t.toolCallId === evt.tool_call_id);
+  if (idx < 0) {
+    return [
+      ...prev,
+      {
+        toolCallId: evt.tool_call_id,
+        name: evt.name,
+        label: evt.label ?? null,
+        result: null,
+        ok: true,
+        done: evt.phase === "result",
+      },
+    ];
+  }
+  const next = prev.slice();
+  const existing = next[idx]!;
+  next[idx] = {
+    ...existing,
+    name: evt.name,
+    label: evt.label ?? existing.label,
+    done: evt.phase === "result" ? true : existing.done,
+  };
+  return next;
 }
 
 // ── Rendering helpers ──────────────────────────────────────────────────
@@ -298,13 +469,12 @@ type RenderedItem =
  * sometimes interleaved across multiple message rows in one turn. We:
  *   1. Pair calls with their later results by tool_call_id so each tool
  *      renders as one logical entry (spinner → check).
- *   2. Group runs of contiguous tool entries (no assistant_text or user_msg
- *      between them) into a single collapsible "tool_group". Mirrors
- *      Claude.ai's pattern — one card per cluster, summary shows the most
- *      recent tool name, expand to see all of them.
+ *   2. Group runs of contiguous tool entries (no assistant_text or
+ *      user_message between them) into a single collapsible "tool_group".
+ *      Mirrors Claude.ai's pattern — one card per cluster, summary shows
+ *      the most recent tool name, expand to see all of them.
  */
-function collapseToolPairs(events: TranscriptEvent[]): RenderedItem[] {
-  // Pass 1: flatten + pair results into tool entries, preserving order.
+function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
   type Step =
     | { tag: "tool"; key: string; entry: ToolEntry }
     | { tag: "msg"; item: RenderedItem };
@@ -339,7 +509,6 @@ function collapseToolPairs(events: TranscriptEvent[]): RenderedItem[] {
         };
         continue;
       }
-      // Orphan result — render standalone so the user still sees something.
       steps.push({
         tag: "tool",
         key: e.id,
@@ -376,8 +545,6 @@ function collapseToolPairs(events: TranscriptEvent[]): RenderedItem[] {
       continue;
     }
   }
-
-  // Pass 2: group contiguous tool entries into a single tool_group item.
   const out: RenderedItem[] = [];
   let buffer: ToolEntry[] = [];
   let bufferKey: string | null = null;
@@ -400,58 +567,46 @@ function collapseToolPairs(events: TranscriptEvent[]): RenderedItem[] {
   return out;
 }
 
-function RenderItem({
-  item,
-  agentDisplayName: _agentDisplayName,
-}: {
-  item: RenderedItem;
-  agentDisplayName: string;
-}) {
+function RenderItem({ item }: { item: RenderedItem }) {
   if (item.kind === "user_message") {
-    // Kickoff messages (the task brief + operating protocol that
-    // buildTaskKickoffMessage produces, or FIRST_TURN session opens) are
-    // technically user-role rows in OpenClaw, but they're system-injected
-    // not user-typed. Collapse them so the transcript reads as "agent
-    // acknowledged + did the work", not "USER DUMPED 30 LINES OF XML".
     const isKickoff =
       item.body.startsWith("(task assignment)") ||
       item.body.startsWith("(session start)") ||
       item.body.startsWith("TASK_BRIEF") ||
       item.body.startsWith("FIRST_TURN");
-    if (isKickoff) {
-      return <KickoffBlock body={item.body} />;
-    }
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words">
-          {item.body}
-        </div>
-      </div>
-    );
+    if (isKickoff) return <KickoffBlock body={item.body} />;
+    return <UserBubble body={item.body} />;
   }
   if (item.kind === "assistant_text") {
-    // Same orchestration-tag stripping the live chat applies — keeps the
-    // raw <task_status>…</task_status>, <create_task>…</create_task> XML
-    // out of the user-facing transcript. The structured outcome already
-    // lives in the task DB row.
-    const cleanBody = stripOrchestrationBlocks(item.body);
-    if (cleanBody.trim() === "") return null;
-    return (
-      <div className="text-sm leading-relaxed">
-        <Markdown>{cleanBody}</Markdown>
-      </div>
-    );
+    return <AssistantText body={item.body} />;
   }
   if (item.kind === "tool_group") {
     return <ToolGroup tools={item.tools} />;
   }
-  // Unknown / system rows render as a thin divider so the eye can scan past.
   return null;
 }
 
+function UserBubble({ body }: { body: string }) {
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words">
+        {body}
+      </div>
+    </div>
+  );
+}
+
+function AssistantText({ body }: { body: string }) {
+  const cleanBody = stripOrchestrationBlocks(body);
+  if (cleanBody.trim() === "") return null;
+  return (
+    <div className="text-sm leading-relaxed">
+      <Markdown>{cleanBody}</Markdown>
+    </div>
+  );
+}
+
 function KickoffBlock({ body }: { body: string }) {
-  // Show the task brief as a collapsed system block — full text visible but
-  // visually demoted so it doesn't dominate the transcript.
   return (
     <details className="group rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 text-xs">
       <summary className="flex cursor-pointer items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground select-none">
@@ -466,15 +621,8 @@ function KickoffBlock({ body }: { body: string }) {
 }
 
 function ToolGroup({ tools }: { tools: ToolEntry[] }) {
-  // Auto-expand while any tool in the group is still in flight so the user
-  // can watch progress; collapse on completion (user can re-open via the
-  // chevron). The summary row always shows the most recent tool name +
-  // running/done count — mirrors Claude.ai's web chat behavior.
   const inFlightCount = tools.filter((t) => !t.done).length;
   const isLive = inFlightCount > 0;
-  // The "headline" is the newest tool: while running that's the in-flight
-  // one; when done it's just the last entry. Either way the user sees the
-  // most informative single line at a glance.
   const headline =
     tools.find((t) => !t.done) ?? tools[tools.length - 1] ?? null;
   const hasError = tools.some((t) => t.done && !t.ok);
@@ -490,11 +638,6 @@ function ToolGroup({ tools }: { tools: ToolEntry[] }) {
       ? "text-destructive"
       : "text-emerald-600";
 
-  // `key` includes the open-by-default signal so React rebuilds the
-  // <details> when liveness flips. Without this, a group that streamed in
-  // expanded would stay expanded after completion; we want the inverse
-  // (open while live, collapsed when done, but user choice always wins
-  // within a single liveness phase).
   return (
     <details
       key={isLive ? "live" : "done"}
@@ -582,32 +725,43 @@ function ToolRow({ entry }: { entry: ToolEntry }) {
 
 function ThinkingPulse({ agentDisplayName }: { agentDisplayName: string }) {
   return (
-    <div className="mt-4 flex items-center gap-2 text-xs italic text-muted-foreground">
+    <div className="flex items-center gap-2 text-xs italic text-muted-foreground">
       <RunningDot size="sm" aria-label="" />
       {agentDisplayName} is working…
     </div>
   );
 }
 
+function ErrorRow({
+  agentDisplayName,
+  body,
+}: {
+  agentDisplayName: string;
+  body: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
+      <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+      <div className="min-w-0 flex-1">
+        <div className="font-medium text-destructive">
+          Couldn&rsquo;t reach {agentDisplayName}.
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap break-words">
+          {body}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TranscriptEmptyState({
-  status,
   agentDisplayName,
 }: {
-  status: TaskStatus;
   agentDisplayName: string;
 }) {
-  if (status === "proposed") {
-    return (
-      <div className="py-12 text-center text-sm text-muted-foreground">
-        Waiting for {agentDisplayName} to pick this up. Hit{" "}
-        <span className="font-mono text-xs">Start all</span> on the agent tasks
-        page, or open this task to kick it off.
-      </div>
-    );
-  }
   return (
     <div className="py-12 text-center text-sm text-muted-foreground">
-      No transcript yet. Send a message below to start the conversation.
+      No messages yet. Say hi to {agentDisplayName} below.
     </div>
   );
 }

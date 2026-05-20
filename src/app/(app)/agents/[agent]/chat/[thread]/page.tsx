@@ -8,13 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getActiveProject } from "@/server/active-project";
 import { resolveAgentBySlug } from "@/server/agent-meta";
 import {
+  buildPendingSessionKey,
   findSessionBySessionId,
   listSessionsForAgent,
 } from "@/server/openclaw/sessions";
 import { storedMcpKey } from "@/server/mcp-catalog";
 import { getMcpStatus } from "@/server/mcp-state";
-import { loadThreadHistory } from "@/server/orchestration/thread-history";
-import { AgentChat } from "@/components/agent-chat";
+import { readTranscriptTail } from "@/server/openclaw/transcript-tail";
+import { LiveTranscript } from "@/components/live-transcript";
 import { GoogleAdsMcpBanner } from "@/components/google-ads-mcp-banner";
 import { McpFlashBanner } from "@/components/mcp-flash-banner";
 import { ThreadSelector } from "@/components/thread-selector";
@@ -72,10 +73,14 @@ export default async function AgentChatThreadPage({
   const allSessions = listSessionsForAgent(agentFullId);
   const existing = findSessionBySessionId(agentFullId, threadId);
 
-  // Both surfaces (this page + /tasks/[id]) load history via the shared
-  // helper that resolves the URL threadId to OpenClaw's internal sessionId
-  // before reading the transcript JSONL. See thread-history.ts.
-  const { sessionKey, history } = loadThreadHistory(agentFullId, threadId);
+  // Pull the full transcript slice (text, tool calls, tool results) so the
+  // chat page renders the same rich JSONL view the task workspace shows.
+  // The sessionKey comes from OpenClaw's index when the thread already
+  // exists; pending threads get a derived key tied to the URL threadId.
+  const sessionKey =
+    existing?.sessionKey ?? buildPendingSessionKey(agentFullId, threadId);
+  const { events: initialEvents, byteOffset: initialByteOffset } =
+    readTranscriptTail(agentFullId, threadId, 0);
 
   // For the dropdown: surface the pending thread at the top so the user sees
   // it's "selected" even before sending the first message.
@@ -106,7 +111,8 @@ export default async function AgentChatThreadPage({
   // sentinel (dropped by the onboarding audit). The agent's system prompt
   // tells it to read the file + move it to MEMORY/ after, so subsequent
   // sessions won't re-fire even though we keep the simple history-empty check.
-  const autoKickoff = history.length === 0 && firstTurnPendingForAgent(agentFullId);
+  const autoKickoff =
+    initialEvents.length === 0 && firstTurnPendingForAgent(agentFullId);
 
   return (
     <div className="flex h-full flex-col">
@@ -130,15 +136,14 @@ export default async function AgentChatThreadPage({
       </div>
 
       <div className="min-h-0 flex-1">
-        <AgentChat
+        <LiveTranscript
           key={threadId}
-          projectSlug={project.slug}
           agentSlug={agentSlug}
           agentDisplayName={resolved.display_name}
-          sessionId={threadId}
+          threadId={threadId}
           sessionKey={sessionKey}
-          templateKey={resolved.template_key}
-          initialMessages={history.map((m) => ({ id: m.id, role: m.role, body: m.body }))}
+          initialEvents={initialEvents}
+          initialByteOffset={initialByteOffset}
           autoKickoff={autoKickoff}
         />
       </div>
