@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, FileText, Sparkles, Clock, Settings } from "lucide-react";
+import { MessageSquare, FileText, Sparkles, Clock, Settings, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tab = {
@@ -13,6 +13,7 @@ type Tab = {
 
 const TABS: Tab[] = [
   { key: "chat", label: "Chat", icon: MessageSquare },
+  { key: "tasks", label: "Tasks", icon: ListChecks },
   { key: "files", label: "Files", icon: FileText },
   { key: "skills", label: "Skills", icon: Sparkles },
   { key: "cron", label: "Cron", icon: Clock },

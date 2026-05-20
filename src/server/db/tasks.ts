@@ -94,6 +94,23 @@ export function listTasks(project_slug: string, status?: TaskStatus): Task[] {
     .all(project_slug) as Task[];
 }
 
+/**
+ * Per-agent task list — what's on this agent's plate. Used by the
+ * /agents/[agent]/tasks page so the assignee can see its queue without
+ * filtering the project-wide kanban manually.
+ */
+export function listTasksByAgent(agent_id: string, status?: TaskStatus): Task[] {
+  const db = getDb();
+  if (status) {
+    return db
+      .prepare("SELECT * FROM tasks WHERE agent_id = ? AND status = ? ORDER BY created_at DESC")
+      .all(agent_id, status) as Task[];
+  }
+  return db
+    .prepare("SELECT * FROM tasks WHERE agent_id = ? ORDER BY created_at DESC")
+    .all(agent_id) as Task[];
+}
+
 export type UpdateTaskInput = {
   status?: TaskStatus;
   result?: unknown;
