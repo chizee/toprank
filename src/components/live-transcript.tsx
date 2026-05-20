@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronRight,
   Edit3,
   FileText,
   Globe,
@@ -277,82 +278,125 @@ export function LiveTranscript({
 
 // ── Rendering helpers ──────────────────────────────────────────────────
 
+type ToolEntry = {
+  toolCallId: string;
+  name: string;
+  label: string | null;
+  result: string | null;
+  ok: boolean;
+  done: boolean;
+};
+
 type RenderedItem =
   | { kind: "user_message"; key: string; body: string }
   | { kind: "assistant_text"; key: string; body: string }
-  | {
-      kind: "tool";
-      key: string;
-      name: string;
-      label: string | null;
-      result: string | null;
-      ok: boolean;
-      done: boolean;
-    }
+  | { kind: "tool_group"; key: string; tools: ToolEntry[] }
   | { kind: "system_unknown"; key: string; raw_type: string };
 
 /**
- * The on-disk JSONL writes `toolCall` and `toolResult` as separate parts.
- * Pair them up so the UI shows a single row that flips from spinner to
- * check (mirrors AgentChat's StepList behavior).
+ * The on-disk JSONL writes `toolCall` and `toolResult` as separate parts,
+ * sometimes interleaved across multiple message rows in one turn. We:
+ *   1. Pair calls with their later results by tool_call_id so each tool
+ *      renders as one logical entry (spinner → check).
+ *   2. Group runs of contiguous tool entries (no assistant_text or user_msg
+ *      between them) into a single collapsible "tool_group". Mirrors
+ *      Claude.ai's pattern — one card per cluster, summary shows the most
+ *      recent tool name, expand to see all of them.
  */
 function collapseToolPairs(events: TranscriptEvent[]): RenderedItem[] {
-  const out: RenderedItem[] = [];
+  // Pass 1: flatten + pair results into tool entries, preserving order.
+  type Step =
+    | { tag: "tool"; key: string; entry: ToolEntry }
+    | { tag: "msg"; item: RenderedItem };
+  const steps: Step[] = [];
   const callIndex = new Map<string, number>();
   for (const e of events) {
     if (e.kind === "tool_call") {
-      callIndex.set(e.tool_call_id, out.length);
-      out.push({
-        kind: "tool",
+      callIndex.set(e.tool_call_id, steps.length);
+      steps.push({
+        tag: "tool",
         key: e.id,
-        name: e.name,
-        label: e.label,
-        result: null,
-        ok: true,
-        done: false,
+        entry: {
+          toolCallId: e.tool_call_id,
+          name: e.name,
+          label: e.label,
+          result: null,
+          ok: true,
+          done: false,
+        },
       });
       continue;
     }
     if (e.kind === "tool_result") {
       const idx = callIndex.get(e.tool_call_id);
-      if (idx != null) {
-        const prev = out[idx];
-        if (prev && prev.kind === "tool") {
-          out[idx] = {
-            ...prev,
-            result: e.summary,
-            ok: e.ok,
-            done: true,
-          };
-          continue;
-        }
+      const step = idx != null ? steps[idx] : null;
+      if (step && step.tag === "tool") {
+        step.entry = {
+          ...step.entry,
+          result: e.summary,
+          ok: e.ok,
+          done: true,
+        };
+        continue;
       }
-      // Orphan result (no matching call earlier in the buffer) — render
-      // standalone so the user still sees something.
-      out.push({
-        kind: "tool",
+      // Orphan result — render standalone so the user still sees something.
+      steps.push({
+        tag: "tool",
         key: e.id,
-        name: e.name,
-        label: null,
-        result: e.summary,
-        ok: e.ok,
-        done: true,
+        entry: {
+          toolCallId: e.tool_call_id,
+          name: e.name,
+          label: null,
+          result: e.summary,
+          ok: e.ok,
+          done: true,
+        },
       });
       continue;
     }
     if (e.kind === "user_message") {
-      out.push({ kind: "user_message", key: e.id, body: e.body });
+      steps.push({
+        tag: "msg",
+        item: { kind: "user_message", key: e.id, body: e.body },
+      });
       continue;
     }
     if (e.kind === "assistant_text") {
-      out.push({ kind: "assistant_text", key: e.id, body: e.body });
+      steps.push({
+        tag: "msg",
+        item: { kind: "assistant_text", key: e.id, body: e.body },
+      });
       continue;
     }
     if (e.kind === "unknown") {
-      out.push({ kind: "system_unknown", key: e.id, raw_type: e.raw_type });
+      steps.push({
+        tag: "msg",
+        item: { kind: "system_unknown", key: e.id, raw_type: e.raw_type },
+      });
       continue;
     }
   }
+
+  // Pass 2: group contiguous tool entries into a single tool_group item.
+  const out: RenderedItem[] = [];
+  let buffer: ToolEntry[] = [];
+  let bufferKey: string | null = null;
+  const flush = () => {
+    if (buffer.length === 0) return;
+    out.push({ kind: "tool_group", key: `tg:${bufferKey}`, tools: buffer });
+    buffer = [];
+    bufferKey = null;
+  };
+  for (const step of steps) {
+    if (step.tag === "tool") {
+      if (bufferKey === null) bufferKey = step.key;
+      buffer.push(step.entry);
+    } else {
+      flush();
+      out.push(step.item);
+    }
+  }
+  flush();
   return out;
 }
 
@@ -398,8 +442,8 @@ function RenderItem({
       </div>
     );
   }
-  if (item.kind === "tool") {
-    return <ToolRow item={item} />;
+  if (item.kind === "tool_group") {
+    return <ToolGroup tools={item.tools} />;
   }
   // Unknown / system rows render as a thin divider so the eye can scan past.
   return null;
@@ -421,42 +465,115 @@ function KickoffBlock({ body }: { body: string }) {
   );
 }
 
-function ToolRow({
-  item,
-}: {
-  item: Extract<RenderedItem, { kind: "tool" }>;
-}) {
-  const Icon = iconForTool(item.name);
-  const StatusIcon = item.done
-    ? item.ok
+function ToolGroup({ tools }: { tools: ToolEntry[] }) {
+  // Auto-expand while any tool in the group is still in flight so the user
+  // can watch progress; collapse on completion (user can re-open via the
+  // chevron). The summary row always shows the most recent tool name +
+  // running/done count — mirrors Claude.ai's web chat behavior.
+  const inFlightCount = tools.filter((t) => !t.done).length;
+  const isLive = inFlightCount > 0;
+  // The "headline" is the newest tool: while running that's the in-flight
+  // one; when done it's just the last entry. Either way the user sees the
+  // most informative single line at a glance.
+  const headline =
+    tools.find((t) => !t.done) ?? tools[tools.length - 1] ?? null;
+  const hasError = tools.some((t) => t.done && !t.ok);
+  const HeadIcon = headline ? iconForTool(headline.name) : Wrench;
+  const StatusIcon = isLive
+    ? Loader2
+    : hasError
+      ? AlertCircle
+      : CheckCircle2;
+  const statusClass = isLive
+    ? "text-muted-foreground motion-safe:animate-spin"
+    : hasError
+      ? "text-destructive"
+      : "text-emerald-600";
+
+  // `key` includes the open-by-default signal so React rebuilds the
+  // <details> when liveness flips. Without this, a group that streamed in
+  // expanded would stay expanded after completion; we want the inverse
+  // (open while live, collapsed when done, but user choice always wins
+  // within a single liveness phase).
+  return (
+    <details
+      key={isLive ? "live" : "done"}
+      open={isLive}
+      className="group rounded-md border bg-muted/20"
+    >
+      <summary
+        className={cn(
+          "flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-xs",
+          "rounded-md hover:bg-muted/40 [&::-webkit-details-marker]:hidden",
+        )}
+      >
+        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+        <StatusIcon className={cn("size-3.5 shrink-0", statusClass)} />
+        <HeadIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="font-mono text-[11px] font-medium text-foreground">
+          {headline ? headline.name : "tool"}
+        </span>
+        {headline?.label && (
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+            {headline.label}
+          </span>
+        )}
+        <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
+          {isLive ? (
+            <span className="inline-flex items-center gap-1.5">
+              <RunningDot size="sm" aria-label="" />
+              {tools.length === 1
+                ? "running"
+                : `${tools.length} steps · ${inFlightCount} live`}
+            </span>
+          ) : (
+            <>
+              {tools.length} step{tools.length === 1 ? "" : "s"}
+            </>
+          )}
+        </span>
+      </summary>
+      <div className="space-y-1 border-t bg-background/40 px-3 py-2">
+        {tools.map((t) => (
+          <ToolRow key={t.toolCallId} entry={t} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function ToolRow({ entry }: { entry: ToolEntry }) {
+  const Icon = iconForTool(entry.name);
+  const StatusIcon = entry.done
+    ? entry.ok
       ? CheckCircle2
       : AlertCircle
     : Loader2;
-  const statusClass = item.done
-    ? item.ok
+  const statusClass = entry.done
+    ? entry.ok
       ? "text-emerald-600"
       : "text-destructive"
     : "text-muted-foreground motion-safe:animate-spin";
   return (
-    <div className="space-y-1 rounded-md border bg-muted/30 px-3 py-2">
+    <div className="space-y-0.5">
       <div className="flex items-center gap-2 text-xs">
         <StatusIcon className={cn("size-3.5 shrink-0", statusClass)} />
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="font-mono text-[11px] font-medium text-foreground">
-          {item.name}
+          {entry.name}
         </span>
-        {item.label && (
-          <span className="truncate font-mono text-[11px] text-muted-foreground">
-            {item.label}
+        {entry.label && (
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+            {entry.label}
           </span>
         )}
       </div>
-      {item.done && item.result && (
+      {entry.done && entry.result && (
         <div className="pl-6 font-mono text-[11px] text-muted-foreground/90">
           <span className="text-[10px] uppercase tracking-[0.18em]">
-            {item.ok ? "→ result" : "→ error"}
+            {entry.ok ? "→ result" : "→ error"}
           </span>{" "}
-          <span className="break-words">{item.result}</span>
+          <span className="break-words">{entry.result}</span>
         </div>
       )}
     </div>
