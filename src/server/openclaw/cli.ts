@@ -4,7 +4,14 @@ export class OpenClawError extends Error {
   readonly stderr: string;
   readonly exitCode: number | null;
   constructor(message: string, stderr: string, exitCode: number | null) {
-    super(message);
+    // Surface a short snippet of stderr in the message itself — the
+    // OAuth callback path only renders `error.message`, and silently
+    // throwing away "what openclaw actually said" turns every CLI
+    // failure into a black box. Cap at 240 chars so URL-encoded
+    // redirect query strings stay reasonable.
+    const snippet = stderr.trim().replace(/\s+/g, " ").slice(0, 240);
+    const fullMessage = snippet ? `${message}: ${snippet}` : message;
+    super(fullMessage);
     this.name = "OpenClawError";
     this.stderr = stderr;
     this.exitCode = exitCode;
@@ -19,6 +26,20 @@ export type OpenClawOptions = {
 };
 
 /**
+ * `openclaw mcp set`, `openclaw agents set` etc. all write to
+ * ~/.openclaw/openclaw.json. The CLI does not lock — two concurrent
+ * invocations can clobber each other's writes (provisioning fires
+ * during onboarding while the OAuth callback later runs `mcp set`;
+ * if they overlap, one exits non-zero with a corrupt-config message).
+ *
+ * Serialize every call from this process to remove the race. Calls
+ * stay in-order, the queue depth is naturally bounded (we only have
+ * a handful of openclaw invocations per user action), and read-only
+ * commands aren't expensive enough to justify a read/write split.
+ */
+let openclawQueue: Promise<unknown> = Promise.resolve();
+
+/**
  * Run an OpenClaw CLI command and return parsed stdout.
  * Always passes `--json` when `json: true` (default) — caller does not.
  */
@@ -26,6 +47,15 @@ export async function openclaw(
   args: string[],
   options: OpenClawOptions = {},
 ): Promise<unknown> {
+  const run = () => runOpenclaw(args, options);
+  const next = openclawQueue.then(run, run);
+  // Keep the chain alive even when a call rejects — without `.catch`
+  // a single failure would propagate forever to subsequent callers.
+  openclawQueue = next.catch(() => undefined);
+  return next;
+}
+
+function runOpenclaw(args: string[], options: OpenClawOptions): Promise<unknown> {
   const timeout = options.timeout ?? 30_000;
   const wantJson = options.json ?? true;
   const finalArgs = wantJson && !args.includes("--json") ? [...args, "--json"] : args;
