@@ -11,16 +11,14 @@ import { buildTaskKickoffMessage } from "./task-kickoff";
 /**
  * Idempotent "claim and kickoff" — flips a proposed task to running and
  * fires the server-side kickoff. No-op when the task isn't proposed (already
- * started, already done, etc.). Used by sub-task delegation paths (CMO
- * creates a task for a specialist, no client is watching) and the "Start
- * all" batch button.
+ * started, already done, etc.). Used by the agent workspace so opening a
+ * proposed task auto-starts it the same way "Start all" does for batches,
+ * without bouncing through the chat client.
  *
- * The kickoff itself runs fire-and-forget — callers shouldn't await it.
- * Since the gateway stream is consumed server-side, the page only sees
- * tokens once OpenClaw flushes the complete assistant message to JSONL
- * (typically when the turn ends). For tasks the user is actively watching
- * in the workspace, prefer `claimTaskIfProposed` and let the client run the
- * kickoff via `/api/chat` so SSE deltas stream live.
+ * Returns the post-transition task (still proposed if no claim happened, or
+ * running on success). The kickoff itself runs fire-and-forget — callers
+ * shouldn't await it; the workspace's live transcript polling will reveal
+ * progress.
  */
 export function startTaskIfProposed(task: Task): Task {
   if (task.status !== "proposed") return task;
@@ -30,26 +28,6 @@ export function startTaskIfProposed(task: Task): Task {
     console.error("[start-task] kickoff failed:", err);
   });
   return claimed;
-}
-
-/**
- * Flip a proposed task to running without firing the gateway. Used by the
- * task workspace so opening a proposed task immediately reflects "running"
- * in the UI while the client drives the kickoff itself via `/api/chat` —
- * that path streams the agent's tokens as SSE so the user sees the response
- * forming in real time instead of a wall of text dumping in at the end.
- *
- * Returns the (possibly-claimed) task plus a `justClaimed` flag the page
- * uses to decide whether the client should auto-send the kickoff message.
- */
-export function claimTaskIfProposed(task: Task): {
-  task: Task;
-  justClaimed: boolean;
-} {
-  if (task.status !== "proposed") return { task, justClaimed: false };
-  const claimed = updateTask(task.id, { status: "running" });
-  if (!claimed) return { task, justClaimed: false };
-  return { task: claimed, justClaimed: true };
 }
 
 /**

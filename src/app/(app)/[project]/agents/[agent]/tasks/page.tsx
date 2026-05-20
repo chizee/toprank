@@ -10,8 +10,7 @@ import {
   type TranscriptEvent,
 } from "@/server/openclaw/transcript-tail";
 import { generateTaskThreadId } from "@/server/orchestration/process-blocks";
-import { claimTaskIfProposed } from "@/server/orchestration/run-task";
-import { buildTaskKickoffMessage } from "@/server/orchestration/task-kickoff";
+import { startTaskIfProposed } from "@/server/orchestration/run-task";
 import type { Task } from "@/types";
 
 type Props = {
@@ -25,13 +24,6 @@ type SelectedBundle = {
   sessionKey: string;
   initialEvents: TranscriptEvent[];
   initialByteOffset: number;
-  /**
-   * When set, the client should auto-send this message via /api/chat to
-   * kick the task off — that path streams agent tokens as SSE in real
-   * time. Only populated when this page-load is the one that flipped the
-   * task from proposed to running.
-   */
-  kickoffMessage: string | null;
 };
 
 export default async function AgentTasksPage({ params, searchParams }: Props) {
@@ -88,14 +80,9 @@ async function loadSelectedBundle(
   if (!task.thread_id) return null;
   const threadId = task.thread_id;
 
-  // Claim proposed → running but DON'T fire the server-side kickoff. The
-  // client will send the kickoff message through /api/chat so the agent's
-  // tokens stream live as SSE deltas. No-op when the task isn't proposed,
-  // so reloading the page doesn't restart it. The justClaimed flag tells us
-  // whether this page-load is the one that should drive the kickoff.
-  const { task: nextTask, justClaimed } = claimTaskIfProposed(task);
-  task = nextTask;
-  const kickoffMessage = justClaimed ? buildTaskKickoffMessage(task) : null;
+  // Atomically transition proposed → running and fire the kickoff. No-op
+  // when the task isn't proposed, so reloading the page doesn't restart.
+  task = startTaskIfProposed(task);
 
   // Resolve canonical sessionKey for /api/chat composer sends (when task
   // is done and user wants to keep chatting). The pending key is a safe
@@ -112,6 +99,5 @@ async function loadSelectedBundle(
     sessionKey,
     initialEvents: events,
     initialByteOffset: byteOffset,
-    kickoffMessage,
   };
 }
