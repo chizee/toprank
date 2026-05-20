@@ -105,9 +105,19 @@ type Props = {
    * When true, the chat auto-sends a hidden kickoff on mount so the agent
    * produces its first turn without the user needing to type. Used after
    * onboarding when FIRST_TURN.md is sitting in the agent workspace and
-   * the agent system prompt is set up to read it and greet (D19).
+   * the agent system prompt is set up to read it and greet (D19), and on
+   * /tasks/[id] when the task's per-task thread is opened for the first
+   * time and the brief is delivered via the kickoff message.
    */
   autoKickoff?: boolean;
+  /**
+   * Override the default "(session start)" kickoff message. Used to
+   * deliver per-task briefs to a specialist on first open of a task's
+   * thread: the brief itself goes through the chat as a hidden message
+   * so the agent has the full PRD before its first reply. Ignored unless
+   * autoKickoff is also true.
+   */
+  kickoffMessage?: string;
 };
 
 export function AgentChat({
@@ -119,6 +129,7 @@ export function AgentChat({
   templateKey: _templateKey,
   initialMessages = [],
   autoKickoff = false,
+  kickoffMessage,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -175,9 +186,10 @@ export function AgentChat({
     if (messages.length > 0) return;
     if (pending) return;
     KICKOFF_FIRED.add(sessionId);
-    // Short, neutral kickoff — the agent's FIRST_TURN.md instruction does the
-    // rest. Hidden so the user sees the greeting land on a clean canvas.
-    send("(session start)", { hidden: true });
+    // Hidden kickoff — the agent's system prompt routes from here. Default
+    // is "(session start)" which trips FIRST_TURN.md handling; for task
+    // threads the caller passes a kickoffMessage carrying the task brief.
+    send(kickoffMessage ?? "(session start)", { hidden: true });
     // Intentionally do not depend on `send` (stable enough across renders) or
     // `messages` (would re-fire as the greeting streams in).
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActiveProject } from "@/server/active-project";
@@ -73,17 +75,26 @@ export default async function TasksPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {items.map((t) => (
-                    <div key={t.id} className="rounded-md border bg-card p-3 text-xs space-y-1">
+                    <Link
+                      key={t.id}
+                      href={`/tasks/${t.id}`}
+                      className="block rounded-md border bg-card p-3 text-xs space-y-1 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30"
+                    >
                       <div className="flex items-center gap-2">
                         <Badge variant={STATUS_VARIANT[t.status]} className="text-[10px]">
                           {t.agent_id}
                         </Badge>
                       </div>
-                      <p className="line-clamp-3 text-foreground">{t.brief}</p>
+                      <p className="font-medium text-foreground line-clamp-2">
+                        {t.title ?? t.brief}
+                      </p>
+                      {t.title && (
+                        <p className="line-clamp-2 text-muted-foreground">{t.brief}</p>
+                      )}
                       <p className="text-[10px] text-muted-foreground">
                         {new Date(t.updated_at).toLocaleString()}
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </CardContent>
               </Card>
