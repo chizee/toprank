@@ -114,7 +114,6 @@ export function changeProjectSlug(
     "approvals",
     "cost_events",
     "oauth_tokens",
-    "guardrails",
     "agent_actions",
     "sequence_runs",
   ];
@@ -188,7 +187,6 @@ export function deleteProjectRow(slug: string): void {
     "approvals",
     "cost_events",
     "oauth_tokens",
-    "guardrails",
     "agent_actions",
     "sequence_runs",
   ];

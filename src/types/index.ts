@@ -24,7 +24,7 @@ export type TaskStatus =
   | "failed"
   | "cancelled";
 
-// ┌──────────┐  approve(within guardrails)  ┌──────────┐  agent picks up  ┌─────────┐
+// ┌──────────┐  user approves                ┌──────────┐  agent picks up  ┌─────────┐
 // │ proposed │ ─────────────────────────────▶│ approved │ ────────────────▶│ running │
 // └──────────┘  needs_approval               └──────────┘                   └────┬────┘
 //      │   ▲                                                                     │
@@ -119,19 +119,6 @@ export type OAuthToken = {
   scope: string;
   created_at: string;
   updated_at: string;
-};
-
-export type Guardrails = {
-  project_slug: string;
-  max_daily_spend_usd: number;
-  max_concurrent_experiments: number;
-  require_approval_above: {
-    spend_per_action_usd: number;
-    new_channel_first_action: boolean;
-    content_publishing: boolean;
-    bid_changes_percent: number;
-    audience_change: boolean;
-  };
 };
 
 export type ToolErrorEnvelope = {

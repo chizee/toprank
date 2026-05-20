@@ -177,4 +177,13 @@ WHERE tasks.id = numbered.id;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_display_id ON tasks(display_id);
 `,
   },
+  {
+    name: "005_drop_guardrails.sql",
+    sql: `
+-- Remove the guardrails autonomy feature. The Settings page no longer
+-- exposes per-project autonomy knobs and no runtime code reads/writes
+-- this table, so drop it to keep the schema honest.
+DROP TABLE IF EXISTS guardrails;
+`,
+  },
 ];

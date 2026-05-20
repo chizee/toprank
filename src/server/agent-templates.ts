@@ -391,7 +391,7 @@ Style:
     description: "Runs Google Ads campaigns, keywords, bids, budgets, search terms, negatives.",
     capabilities: [
       "Audit account health + identify wasted spend",
-      "Propose + apply bid changes within guardrails",
+      "Propose + apply bid changes",
       "Manage keywords, ad groups, negative lists",
       "Pull performance metrics + surface anomalies",
       "Schedule recurring bid/metric jobs",
