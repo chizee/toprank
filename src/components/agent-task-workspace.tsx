@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -99,6 +99,12 @@ export function AgentTaskWorkspace({
 
   return (
     <div className="flex h-full min-h-0">
+      {/* Background poll while ANY task on this agent is in flight. The
+          LiveTranscript polls per-thread for the SELECTED task; this
+          keeps the rest of the page (task list groups, sidebar count
+          badge) refreshing for tasks that finish in the background —
+          e.g. CMO-delegated sub-tasks the user isn't watching. */}
+      <AgentLivenessPoller hasInFlight={inFlightCount > 0} />
       {/* ── Left pane: task list ─────────────────────────────────────── */}
       <aside className="flex w-80 shrink-0 flex-col border-r bg-muted/20">
         <div className="border-b px-4 py-3">
@@ -242,6 +248,24 @@ export function AgentTaskWorkspace({
       </section>
     </div>
   );
+}
+
+/**
+ * Tiny polling helper that fires router.refresh while any task on this
+ * agent is in flight. Stops the moment the server-rendered count drops
+ * to zero (the refresh that landed the 0 disables the effect). Covers
+ * the gap where a sub-task the user isn't watching finishes after the
+ * LiveTranscript's per-thread polling has stopped — without this the
+ * sidebar badge + task list stay frozen at the last-seen counts.
+ */
+function AgentLivenessPoller({ hasInFlight }: { hasInFlight: boolean }) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!hasInFlight) return;
+    const interval = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(interval);
+  }, [hasInFlight, router]);
+  return null;
 }
 
 function SelectedTaskPanel({
