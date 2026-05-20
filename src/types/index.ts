@@ -35,6 +35,13 @@ export type TaskStatus =
 //                                                              └───────────────┘
 export type Task = {
   id: string;
+  /**
+   * Human-readable per-project ID like "demo7-3". Used in URLs and UI
+   * surfaces. PK stays as `id` (UUID) for FK integrity; display_id is
+   * the surface humans see. Backfilled for pre-004 tasks; always set
+   * for new tasks.
+   */
+  display_id: string;
   project_slug: string;
   /** Assignee — the agent expected to do the work. */
   agent_id: string;

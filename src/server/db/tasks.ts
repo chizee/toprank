@@ -16,11 +16,34 @@ export type CreateTaskInput = {
   assigner_agent_id?: string | null;
 };
 
+/**
+ * Allocate the next display_id for a project — `<slug>-<n>` where n is one
+ * past the current MAX. better-sqlite3 is synchronous so two creates in
+ * one process can't race; cross-process collisions don't apply (single-user
+ * local CLI) and the UNIQUE index would catch them if they ever did.
+ */
+function nextDisplayId(project_slug: string): string {
+  const db = getDb();
+  // substr starts at length(slug) + 2 to skip past "slug-".
+  const row = db
+    .prepare(
+      `SELECT COALESCE(MAX(CAST(substr(display_id, ?) AS INTEGER)), 0) AS max_n
+       FROM tasks
+       WHERE project_slug = ? AND display_id LIKE ?`,
+    )
+    .get(project_slug.length + 2, project_slug, `${project_slug}-%`) as
+    | { max_n: number }
+    | undefined;
+  const n = (row?.max_n ?? 0) + 1;
+  return `${project_slug}-${n}`;
+}
+
 export function createTask(input: CreateTaskInput): Task {
   const db = getDb();
   const now = new Date().toISOString();
   const task: Task = {
     id: randomUUID(),
+    display_id: nextDisplayId(input.project_slug),
     project_slug: input.project_slug,
     agent_id: input.agent_id,
     title: input.title ?? null,
@@ -37,11 +60,12 @@ export function createTask(input: CreateTaskInput): Task {
   };
   db.prepare(
     `INSERT INTO tasks
-       (id, project_slug, agent_id, title, brief, success_criteria, deadline_iso,
+       (id, display_id, project_slug, agent_id, title, brief, success_criteria, deadline_iso,
         status, result_json, error_message, thread_id, assigner_agent_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)`,
   ).run(
     task.id,
+    task.display_id,
     task.project_slug,
     task.agent_id,
     task.title,
@@ -76,9 +100,16 @@ export function setTaskThreadIfMissing(
   return getTask(id);
 }
 
-export function getTask(id: string): Task | null {
+/**
+ * Look up a task by either the PK UUID or the human-readable display_id
+ * (`<slug>-<n>`). URLs prefer display_id; internal callers may pass
+ * either. Returns null when neither matches.
+ */
+export function getTask(idOrDisplayId: string): Task | null {
   const db = getDb();
-  const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+  const row = db
+    .prepare("SELECT * FROM tasks WHERE id = ? OR display_id = ?")
+    .get(idOrDisplayId, idOrDisplayId);
   return (row as Task) ?? null;
 }
 

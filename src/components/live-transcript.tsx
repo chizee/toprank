@@ -28,7 +28,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/markdown";
 import { RunningDot } from "@/components/running-dot";
+import { SlashCommandPopover } from "@/components/slash-command-popover";
 import { cn } from "@/lib/utils";
+import {
+  executeLocalSlashCommand,
+  filterSlashCommands,
+  parseSlashMessage,
+  type SlashCommand,
+} from "@/lib/slash-commands";
 import { stripOrchestrationBlocks } from "@/server/orchestration/blocks";
 import type { TranscriptEvent } from "@/server/openclaw/transcript-tail";
 
@@ -88,6 +95,38 @@ export function LiveTranscript({
   const [input, setInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const [stopPolling, setStopPolling] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Slash command autocomplete: open while input starts with "/" and the
+  // user is still composing the command name (no space yet). After they
+  // pick or type a space, the popover closes.
+  const slashQuery = input.startsWith("/") && !input.includes(" ") ? input : null;
+  const slashOpen = slashQuery !== null && !sendingChat && !composerDisabled;
+  const slashMatches = useMemo<SlashCommand[]>(
+    () => (slashOpen ? filterSlashCommands(slashQuery!) : []),
+    [slashOpen, slashQuery],
+  );
+  const safeSlashIndex =
+    slashMatches.length === 0
+      ? 0
+      : Math.min(slashIndex, slashMatches.length - 1);
+
+  function insertSlashCommand(cmd: SlashCommand) {
+    // Catalog `name` is the command without the leading slash ("new", "clear").
+    // Insert ends with a trailing space so the popover closes — a second
+    // Enter then submits.
+    const insert = cmd.insert ?? `/${cmd.name} `;
+    setInput(insert);
+    setSlashIndex(0);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(insert.length, insert.length);
+      }
+    });
+  }
 
   // Optimistic state for the active /api/chat send. Rendered after committed
   // events so the user sees their message + the streaming response before
@@ -173,6 +212,37 @@ export function LiveTranscript({
       const usingOverride = typeof overrideText === "string";
       const text = (usingOverride ? overrideText : input).trim();
       if (!text || sendingChat) return;
+
+      // Local slash commands intercept the send. Skip when the message
+      // was sent programmatically (overrides are always real prompts).
+      const parsed = usingOverride ? null : parseSlashMessage(text);
+      if (parsed) {
+        const action = executeLocalSlashCommand(parsed.command);
+        if (action) {
+          setInput("");
+          switch (action.kind) {
+            case "clear":
+              setEvents([]);
+              setByteOffset(0);
+              toast.info(
+                "Local view cleared. Full transcript is still on disk; the next agent reply will repopulate.",
+              );
+              return;
+            case "new-session": {
+              const newId = crypto.randomUUID();
+              router.push(`/agents/${agentSlug}/chat/${newId}`);
+              return;
+            }
+            case "stop":
+              abortRef.current?.abort();
+              return;
+            case "help":
+              toast.message("Slash commands", { description: action.content });
+              return;
+          }
+        }
+      }
+
       if (!usingOverride) setInput("");
       setSendingChat(true);
       setPendingUserMsg(opts.hidden ? null : text);
@@ -245,7 +315,7 @@ export function LiveTranscript({
         abortRef.current = null;
       }
     },
-    [agentSlug, input, pollOnce, sendingChat, sessionKey, threadId],
+    [agentSlug, input, pollOnce, router, sendingChat, sessionKey, threadId],
   );
 
   // ── Auto-kickoff for FIRST_TURN-style flows. ────────────────────────
@@ -312,7 +382,15 @@ export function LiveTranscript({
       </div>
 
       <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto w-full max-w-3xl px-6 py-3">
+        <div className="relative mx-auto w-full max-w-3xl px-6 py-3">
+          {slashOpen && (
+            <SlashCommandPopover
+              commands={slashMatches}
+              selectedIndex={safeSlashIndex}
+              onSelect={insertSlashCommand}
+              onHover={setSlashIndex}
+            />
+          )}
           <form
             className="flex items-end gap-2"
             onSubmit={(e) => {
@@ -321,9 +399,41 @@ export function LiveTranscript({
             }}
           >
             <textarea
+              ref={textareaRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                setSlashIndex(0);
+              }}
               onKeyDown={(e) => {
+                // Slash autocomplete: arrow keys cycle, Tab/Enter insert.
+                if (slashOpen && slashMatches.length > 0) {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSlashIndex((i) => (i + 1) % slashMatches.length);
+                    return;
+                  }
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSlashIndex(
+                      (i) =>
+                        (i - 1 + slashMatches.length) % slashMatches.length,
+                    );
+                    return;
+                  }
+                  if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+                    e.preventDefault();
+                    const picked = slashMatches[safeSlashIndex];
+                    if (picked) insertSlashCommand(picked);
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setInput("");
+                    setSlashIndex(0);
+                    return;
+                  }
+                }
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   void send();
@@ -333,7 +443,7 @@ export function LiveTranscript({
               placeholder={
                 composerDisabled
                   ? `${agentDisplayName} is on a task — the transcript updates live`
-                  : `Message ${agentDisplayName}…`
+                  : `Message ${agentDisplayName}…  (type / for commands)`
               }
               rows={1}
               className="flex min-h-[40px] flex-1 resize-none rounded-xl border bg-background px-3.5 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"

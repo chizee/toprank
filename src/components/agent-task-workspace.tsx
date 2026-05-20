@@ -81,9 +81,9 @@ export function AgentTaskWorkspace({
     (grouped.get("proposed")?.length ?? 0) +
     (grouped.get("approved")?.length ?? 0);
 
-  function selectTask(id: string) {
+  function selectTask(displayId: string) {
     const params = new URLSearchParams(search?.toString() ?? "");
-    params.set("task", id);
+    params.set("task", displayId);
     router.replace(`?${params.toString()}`, { scroll: false });
   }
 
@@ -146,8 +146,10 @@ export function AgentTaskWorkspace({
                       <li key={t.id}>
                         <TaskRow
                           task={t}
-                          selected={t.id === selectedId}
-                          onSelect={() => selectTask(t.id)}
+                          selected={
+                            t.display_id === selectedId || t.id === selectedId
+                          }
+                          onSelect={() => selectTask(t.display_id)}
                         />
                       </li>
                     ))}
@@ -172,9 +174,7 @@ export function AgentTaskWorkspace({
                         Tasks
                       </Link>
                       <span>/</span>
-                      <span className="font-mono">
-                        {selected.task.id.slice(0, 8)}
-                      </span>
+                      <span className="font-mono">{selected.task.display_id}</span>
                     </div>
                     <h1 className="mt-0.5 text-base font-semibold tracking-tight truncate">
                       {selected.task.title ?? "(untitled task)"}
@@ -302,14 +302,18 @@ function TaskRow({
             <StatusGlyph status={task.status} />
           )}
         </span>
-        <span
-          className={cn(
-            "flex-1 truncate text-xs",
-            selected ? "font-medium text-foreground" : "text-foreground/90",
-            !isInFlight && task.status !== "running" && "text-muted-foreground",
-          )}
-        >
-          {task.title ?? task.brief.slice(0, 80)}
+        <span className="min-w-0 flex-1 truncate text-xs">
+          <span className="mr-1.5 font-mono text-[10px] text-muted-foreground tabular-nums">
+            {task.display_id}
+          </span>
+          <span
+            className={cn(
+              selected ? "font-medium text-foreground" : "text-foreground/90",
+              !isInFlight && task.status !== "running" && "text-muted-foreground",
+            )}
+          >
+            {task.title ?? task.brief.slice(0, 80)}
+          </span>
         </span>
         <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
           {formatRelative(task.updated_at)}

@@ -35,5 +35,8 @@ export default async function TaskDetailPage({
   const templateKey = (meta?.template_key as AgentTemplateKey | undefined) ?? "google_ads";
   const agentSlug = meta?.slug ?? urlSlugForTemplate(templateKey);
 
-  redirect(`/agents/${agentSlug}/tasks?task=${task.id}`);
+  // Use the human-readable display_id in the canonical URL so the path
+  // someone bookmarks reads "?task=demo7-3" not a UUID. getTask in the
+  // workspace accepts either form, so legacy UUID deep-links still resolve.
+  redirect(`/agents/${agentSlug}/tasks?task=${task.display_id}`);
 }
