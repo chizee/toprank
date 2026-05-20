@@ -8,13 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getActiveProject } from "@/server/active-project";
 import { resolveAgentBySlug } from "@/server/agent-meta";
 import {
-  buildPendingSessionKey,
   findSessionBySessionId,
   listSessionsForAgent,
-  loadSessionHistory,
 } from "@/server/openclaw/sessions";
 import { storedMcpKey } from "@/server/mcp-catalog";
 import { getMcpStatus } from "@/server/mcp-state";
+import { loadThreadHistory } from "@/server/orchestration/thread-history";
 import { AgentChat } from "@/components/agent-chat";
 import { GoogleAdsMcpBanner } from "@/components/google-ads-mcp-banner";
 import { McpFlashBanner } from "@/components/mcp-flash-banner";
@@ -73,13 +72,10 @@ export default async function AgentChatThreadPage({
   const allSessions = listSessionsForAgent(agentFullId);
   const existing = findSessionBySessionId(agentFullId, threadId);
 
-  // Either we have a known session (use its registered sessionKey) or this is
-  // a brand-new thread the user just navigated into; use a self-named key so
-  // OpenClaw can create the entry on the first turn.
-  const sessionKey = existing?.sessionKey ?? buildPendingSessionKey(agentFullId, threadId);
-  // History lives in a JSONL file named after OpenClaw's internal sessionId,
-  // which is distinct from the URL thread id (the label half of the sessionKey).
-  const history = existing ? loadSessionHistory(agentFullId, existing.sessionId) : [];
+  // Both surfaces (this page + /tasks/[id]) load history via the shared
+  // helper that resolves the URL threadId to OpenClaw's internal sessionId
+  // before reading the transcript JSONL. See thread-history.ts.
+  const { sessionKey, history } = loadThreadHistory(agentFullId, threadId);
 
   // For the dropdown: surface the pending thread at the top so the user sees
   // it's "selected" even before sending the first message.

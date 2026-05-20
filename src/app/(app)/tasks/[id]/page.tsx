@@ -9,12 +9,9 @@ import { readAgentMeta } from "@/server/agent-meta";
 import { templateForKey, urlSlugForTemplate, type AgentTemplateKey } from "@/server/agent-templates";
 import { listAgentActions } from "@/server/db/agent-actions";
 import { getTask, setTaskThreadIfMissing } from "@/server/db/tasks";
-import {
-  buildPendingSessionKey,
-  loadSessionHistory,
-} from "@/server/openclaw/sessions";
 import { buildTaskKickoffMessage } from "@/server/orchestration/task-kickoff";
 import { generateTaskThreadId } from "@/server/orchestration/process-blocks";
+import { loadThreadHistory, shouldAutoKickoffTask } from "@/server/orchestration/thread-history";
 import type { TaskStatus } from "@/types";
 
 const STATUS_VARIANT: Record<
@@ -63,10 +60,14 @@ export default async function TaskDetailPage({
   const agentSlug = meta?.slug ?? urlSlugForTemplate(templateKey);
   const agentDisplayName = meta?.display_name ?? template?.display_name ?? "Specialist";
 
-  // Per-task chat history (an empty list when this is the first visit).
-  const history = loadSessionHistory(task.agent_id, threadId);
-  const sessionKey = buildPendingSessionKey(task.agent_id, threadId);
-  const autoKickoff = history.length === 0;
+  // Per-task chat history. loadThreadHistory resolves threadId → OpenClaw
+  // sessionId before reading the JSONL — direct loadSessionHistory(threadId)
+  // returns [] because the file is keyed by OpenClaw's internal sessionId,
+  // not by the URL label. That bug caused succeeded tasks to re-trigger
+  // when reopened. shouldAutoKickoffTask adds a defense-in-depth status
+  // gate so any non-proposed task is safe even if history loading regresses.
+  const { sessionKey, history } = loadThreadHistory(task.agent_id, threadId);
+  const autoKickoff = shouldAutoKickoffTask(task, history);
   const kickoffMessage = autoKickoff ? buildTaskKickoffMessage(task) : undefined;
 
   // Comments + status updates on this task (rendered as an activity list above
