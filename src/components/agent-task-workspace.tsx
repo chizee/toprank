@@ -1,14 +1,24 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Circle, CircleDot, Loader2, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  CircleDot,
+  Loader2,
+  StopCircle,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { LiveTranscript } from "@/components/live-transcript";
 import { RunningDot } from "@/components/running-dot";
 import { StartAllTasksButton } from "@/components/start-all-tasks-button";
+import { cancelTaskAction } from "@/server/actions/tasks";
 import { cn } from "@/lib/utils";
 import type { TranscriptEvent } from "@/server/openclaw/transcript-tail";
 import type { Task, TaskStatus } from "@/types";
@@ -184,7 +194,12 @@ export function AgentTaskWorkspace({
                     {(selected.task.status === "running" ||
                       selected.task.status === "proposed" ||
                       selected.task.status === "approved") && (
-                      <RunningDot size="md" />
+                      <>
+                        <RunningDot size="md" />
+                        <CancelTaskButton
+                          taskDisplayId={selected.task.display_id}
+                        />
+                      </>
                     )}
                     <Badge
                       variant={STATUS_VARIANT[selected.task.status]}
@@ -244,9 +259,18 @@ function SelectedTaskPanel({
   // the status badge in this panel's header + the task list grouping
   // catch up to the JSONL — the LiveTranscript handles its own rendering
   // updates, this hook just rebroadcasts to the rest of the page.
+  //
+  // Double-refresh: when the agent emits its final reply (with the
+  // <task_status>done</task_status> block), the JSONL bytes can land
+  // BEFORE processOrchestrationBlocks runs the DB status flip. The
+  // 600ms delayed refresh catches that follow-up DB write so the badge
+  // updates without the user having to manually reload.
   const onPolled = useCallback(
     ({ newEvents }: { newEvents: number; fileSize: number }) => {
-      if (newEvents > 0) router.refresh();
+      if (newEvents > 0) {
+        router.refresh();
+        setTimeout(() => router.refresh(), 600);
+      }
       // Return true to stop polling once the task is terminal AND the
       // poll returned nothing new (transcript fully drained).
       if (!isInFlight && newEvents === 0) return true;
@@ -266,6 +290,49 @@ function SelectedTaskPanel({
       composerDisabled={isInFlight}
       onPolled={onPolled}
     />
+  );
+}
+
+function CancelTaskButton({ taskDisplayId }: { taskDisplayId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+  function onClick() {
+    if (!confirming) {
+      setConfirming(true);
+      // Auto-clear the confirm prompt after a few seconds so the button
+      // doesn't sit in a scary "click again to cancel" state forever.
+      setTimeout(() => setConfirming(false), 3000);
+      return;
+    }
+    startTransition(async () => {
+      const r = await cancelTaskAction(taskDisplayId);
+      if (!r.ok) {
+        toast.error(r.error);
+        setConfirming(false);
+        return;
+      }
+      toast.success("Task cancelled.");
+      setConfirming(false);
+      router.refresh();
+    });
+  }
+  return (
+    <Button
+      type="button"
+      variant={confirming ? "destructive" : "outline"}
+      size="sm"
+      disabled={pending}
+      onClick={onClick}
+      className="h-7 px-2 text-[11px]"
+    >
+      {pending ? (
+        <Loader2 className="size-3 animate-spin" />
+      ) : (
+        <StopCircle className="size-3" />
+      )}
+      {confirming ? "Click again to cancel" : "Cancel"}
+    </Button>
   );
 }
 

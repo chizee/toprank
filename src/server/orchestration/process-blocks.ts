@@ -158,7 +158,15 @@ async function applyCreateTaskBlock(
     payload: { task_id: task.id, assignee: assigneeAgentId },
   });
 
-  return task;
+  // Auto-start the delegated task. When the CMO emits <create_task>, the
+  // user expects work to be in flight immediately — not parked as
+  // "proposed" until someone clicks Start. The kickoff is fire-and-forget;
+  // status flips proposed → running so the sidebar badge + workspace task
+  // list reflect activity on the very next poll cycle.
+  // Lazy import to avoid pulling the orchestration → run-task → gateway
+  // chain into modules that just want createTask.
+  const { startTaskIfProposed } = await import("./run-task");
+  return startTaskIfProposed(task);
 }
 
 function applyTaskStatusBlock(
@@ -178,6 +186,16 @@ function applyTaskStatusBlock(
     throw new Error(
       `Only the assignee (${task.agent_id}) can update task '${block.task_id}'; got update from '${ctx.agent_id}'`,
     );
+  }
+  // Already terminal? Skip — user cancellations + earlier failure updates
+  // shouldn't get overwritten by a late "done" from an agent that kept
+  // running for a bit after the user moved on.
+  if (
+    task.status === "cancelled" ||
+    task.status === "failed" ||
+    task.status === "succeeded"
+  ) {
+    return { task_id: block.task_id, status: task.status };
   }
 
   // Map the agent's status vocabulary to our TaskStatus enum.

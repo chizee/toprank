@@ -24,7 +24,7 @@ vi.mock("next/cache", () => ({
 // Dynamic imports inside setOnboardingAccountAction need mocks too — it
 // auto-creates the CMO's onboarding task as the final step of the action.
 const createTaskMock = vi.fn();
-const listTasksMock = vi.fn(() => [] as unknown[]);
+const listTasksMock = vi.fn<(slug: string) => unknown[]>(() => []);
 vi.mock("@/server/db/tasks", () => ({
   createTask: (input: unknown) => {
     createTaskMock(input);
@@ -46,7 +46,7 @@ vi.mock("@/server/db/tasks", () => ({
       updated_at: "now",
     };
   },
-  listTasks: (...args: unknown[]) => listTasksMock(...args),
+  listTasks: (slug: string) => listTasksMock(slug),
 }));
 vi.mock("@/server/agent-templates", () => ({
   agentNameFor: (slug: string, key: string) => `${slug}-${key.replace(/_/g, "-")}`,

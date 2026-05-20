@@ -186,6 +186,11 @@ export function LiveTranscript({
     }
   }, [agentSlug, byteOffset, onPolled, threadId]);
 
+  // Poll faster while the parent says the task is in flight — typical
+  // first-task experience is "land on workspace, watch the audit run."
+  // 2s feels laggy when nothing's on screen; 800ms keeps the pulse fresh.
+  const pollIntervalMs = composerDisabled ? 800 : POLL_INTERVAL_MS;
+
   // Background polling: runs while mounted, paused during an active send so
   // we don't double-render content we're already streaming via SSE.
   useEffect(() => {
@@ -197,14 +202,14 @@ export function LiveTranscript({
       if (cancelled) return;
       await pollOnce();
       if (cancelled) return;
-      timer = setTimeout(tick, POLL_INTERVAL_MS);
+      timer = setTimeout(tick, pollIntervalMs);
     };
-    timer = setTimeout(tick, POLL_INTERVAL_MS);
+    timer = setTimeout(tick, pollIntervalMs);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [pollOnce, sendingChat, stopPolling]);
+  }, [pollIntervalMs, pollOnce, sendingChat, stopPolling]);
 
   // ── Send: optimistic user message + SSE-driven streaming reply. ─────
   const send = useCallback(
@@ -330,7 +335,16 @@ export function LiveTranscript({
   }, [autoKickoff, threadId]);
 
   const rendered = useMemo(() => collapseEvents(events), [events]);
-  const showThinking = sendingChat && pendingAssistant === "" && pendingTools.length === 0;
+  // Pulse the "thinking" indicator any time the agent could plausibly be
+  // working: the user just sent (sendingChat) OR the parent told us this is
+  // an in-flight task (composerDisabled) with no streaming output yet to
+  // show. Without the second branch, server-side kickoffs land the user on
+  // a silent page until the first poll picks up bytes — that's the "did my
+  // task even get delivered?" gap the user flagged.
+  const showThinking =
+    pendingAssistant === "" &&
+    pendingTools.length === 0 &&
+    (sendingChat || composerDisabled);
 
   return (
     <div className="flex h-full flex-col">
@@ -342,7 +356,10 @@ export function LiveTranscript({
         aria-live="polite"
       >
         <div className="mx-auto w-full max-w-3xl px-6 py-6">
-          {rendered.length === 0 && !pendingUserMsg && !sendingChat ? (
+          {rendered.length === 0 &&
+          !pendingUserMsg &&
+          !sendingChat &&
+          !composerDisabled ? (
             <TranscriptEmptyState agentDisplayName={agentDisplayName} />
           ) : (
             <ol className="space-y-4">
@@ -717,10 +734,19 @@ function AssistantText({ body }: { body: string }) {
 }
 
 function KickoffBlock({ body }: { body: string }) {
+  // Open by default so the user sees the brief was actually delivered — the
+  // moment the page loads, this is the only proof the agent received its
+  // assignment. Users can collapse it once they've read it; the chevron
+  // makes that affordance obvious.
   return (
-    <details className="group rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 text-xs">
+    <details
+      open
+      className="group rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 text-xs"
+    >
       <summary className="flex cursor-pointer items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground select-none">
-        <span aria-hidden>›</span>
+        <span aria-hidden className="transition-transform group-open:rotate-90">
+          ›
+        </span>
         Task brief sent to agent
       </summary>
       <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">

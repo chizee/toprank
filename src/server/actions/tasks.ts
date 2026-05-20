@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getActiveProject } from "@/server/active-project";
-import { listTasksByAgent, updateTask } from "@/server/db/tasks";
+import { getTask, listTasksByAgent, updateTask } from "@/server/db/tasks";
 import { runTaskKickoffServerSide } from "@/server/orchestration/run-task";
 
 export type StartAllResult =
@@ -66,4 +66,41 @@ export async function startAllProposedTasksAction(
     ok: true,
     data: { started: validTasks.length, task_ids: validTasks.map((t) => t.id) },
   };
+}
+
+export type CancelTaskResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Mark a task as cancelled. The agent run on OpenClaw is fire-and-forget
+ * and may still complete in the background; processOrchestrationBlocks
+ * guards against overwriting a terminal status, so a late "done" from
+ * the agent won't flip cancelled → succeeded. Accepts either the PK
+ * UUID or the display_id (`<slug>-<n>`).
+ */
+export async function cancelTaskAction(
+  idOrDisplayId: string,
+): Promise<CancelTaskResult> {
+  const project = await getActiveProject();
+  if (!project) return { ok: false, error: "No active project." };
+  const task = getTask(idOrDisplayId);
+  if (!task) return { ok: false, error: "Task not found." };
+  if (task.project_slug !== project.slug) {
+    return { ok: false, error: "Task isn't in the active project." };
+  }
+  if (
+    task.status === "succeeded" ||
+    task.status === "failed" ||
+    task.status === "cancelled"
+  ) {
+    return { ok: false, error: `Task is already ${task.status}.` };
+  }
+  updateTask(task.id, {
+    status: "cancelled",
+    error_message: "Cancelled by user",
+  });
+  revalidatePath(`/agents`, "layout");
+  revalidatePath(`/tasks`, "layout");
+  return { ok: true };
 }
