@@ -1191,6 +1191,23 @@ function deriveWorkingView(input: {
       mood: "writing",
     };
   }
+  // Between-tools window: SSE has seen at least one tool finish this
+  // turn but the model hasn't started the next thing yet (no in-flight
+  // pending tool, no streaming text, no fresh JSONL event because Codex
+  // buffers the file until end-of-turn). Without this branch we'd fall
+  // through to "Starting", which is wrong — the agent IS thinking, just
+  // about its next move. Surface the last tool so the user has context.
+  if (pendingTools.length > 0) {
+    const lastDone = [...pendingTools].reverse().find((t) => t.done);
+    return {
+      headline: "Thinking",
+      subtitle: lastDone
+        ? `${formatToolName(lastDone.name)} ${lastDone.ok ? "✓" : "failed"} — picking next step`
+        : null,
+      phases,
+      mood: "waiting",
+    };
+  }
   if (!lastEvent || lastEvent.kind === "user_message" || lastEvent.kind === "unknown") {
     const lifecycleSummary = lifecyclePhase
       ? humanLifecyclePhase(lifecyclePhase)
