@@ -1085,6 +1085,11 @@ function LiveWorkingIndicator({
     lifecyclePhase: lifecyclePhase ?? null,
     pendingTools: pendingTools ?? [],
     hasPendingAssistant: hasPendingAssistant ?? false,
+    // The indicator must only reflect the current turn — without this
+    // filter, the trajectory chips show every tool call from the chat's
+    // entire history (e.g. a fresh "hi" lit up runScript / runScript /
+    // listConnectedAccounts from prior audit turns).
+    turnStartedAt,
   });
 
   // Anchor elapsed to whichever is later: the turn-start wallclock the
@@ -1141,21 +1146,34 @@ function deriveWorkingView(input: {
   lifecyclePhase: string | null;
   pendingTools: ToolEntry[];
   hasPendingAssistant: boolean;
+  /**
+   * Wallclock when the current turn started. We use it to scope the
+   * trajectory chips (and the in-flight tool detection) to the active
+   * turn — events from earlier turns in the same thread don't belong
+   * in "what is the agent doing right now?".
+   */
+  turnStartedAt: number | null;
 }): WorkingView {
-  const { agentDisplayName, events, lifecyclePhase, pendingTools, hasPendingAssistant } = input;
-  const lastEvent = events.length > 0 ? events[events.length - 1] : null;
+  const { agentDisplayName, events, lifecyclePhase, pendingTools, hasPendingAssistant, turnStartedAt } = input;
+  // Only consider events from the current turn. Anything older is part
+  // of the persistent transcript above this card, not the live status.
+  const turnEvents =
+    turnStartedAt != null
+      ? events.filter((e) => e.ts >= turnStartedAt)
+      : events;
+  const lastEvent = turnEvents.length > 0 ? turnEvents[turnEvents.length - 1] : null;
   const pendingInFlightTool = pendingTools.find((t) => !t.done) ?? null;
   const inFlightCommittedToolCall: Extract<
     TranscriptEvent,
     { kind: "tool_call" }
   > | null = (() => {
     if (!lastEvent || lastEvent.kind !== "tool_call") return null;
-    const matched = events.some(
+    const matched = turnEvents.some(
       (e) => e.kind === "tool_result" && e.tool_call_id === lastEvent.tool_call_id,
     );
     return matched ? null : lastEvent;
   })();
-  const phases = buildPhases(events, pendingTools);
+  const phases = buildPhases(turnEvents, pendingTools);
 
   if (pendingInFlightTool) {
     return {
@@ -1168,7 +1186,7 @@ function deriveWorkingView(input: {
   if (hasPendingAssistant) {
     return {
       headline: "Writing the response",
-      subtitle: subtitleForLastTool(pendingTools, events),
+      subtitle: subtitleForLastTool(pendingTools, turnEvents),
       phases,
       mood: "writing",
     };
@@ -1178,7 +1196,9 @@ function deriveWorkingView(input: {
       ? humanLifecyclePhase(lifecyclePhase)
       : null;
     return {
-      headline: `${agentDisplayName} is starting`,
+      // Agent name is rendered separately as the accent prefix in the
+      // indicator, so headlines stay tight + verb-only here.
+      headline: "Starting",
       subtitle: lifecycleSummary ?? "Delivering the brief to OpenClaw",
       phases,
       mood: "waiting",
@@ -1194,7 +1214,7 @@ function deriveWorkingView(input: {
   }
   if (lastEvent.kind === "tool_result") {
     return {
-      headline: `${agentDisplayName} is thinking`,
+      headline: "Thinking",
       subtitle: lastEvent.ok
         ? `${formatToolName(lastEvent.name)} ✓ — picking next step`
         : `${formatToolName(lastEvent.name)} failed — retrying`,

@@ -97,10 +97,10 @@ describe("LiveTranscript empty state", () => {
       screen.queryByText(/no messages yet/i),
     ).not.toBeInTheDocument();
     // WorkingIndicator renders the agent display name as the accent
-    // header. With no events yet, mood is "waiting" and the headline
-    // is "<agent> is starting".
+    // header and a verb-only headline next to it. With no events yet,
+    // mood is "waiting" and the headline reads "Starting".
     expect(screen.getByText("CMO")).toBeInTheDocument();
-    expect(screen.getByText(/is starting/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Starting$/)).toBeInTheDocument();
   });
 });
 
