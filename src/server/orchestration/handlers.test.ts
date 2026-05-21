@@ -40,6 +40,12 @@ vi.mock("./run-task", () => ({
   }),
 }));
 
+const syncProjectBriefToAgentsMock = vi.fn(
+  async (..._a: unknown[]) => ({
+    synced: ["demo-cmo", "demo-google-ads"] as string[],
+    failed: [] as Array<{ name: string; error: string }>,
+  }),
+);
 vi.mock("@/server/agent-templates", () => ({
   agentExists: async () => true,
   agentNameFor: (slug: string, key: string) =>
@@ -50,7 +56,18 @@ vi.mock("@/server/agent-templates", () => ({
       : k === "cmo"
         ? { key: "cmo", display_name: "CMO" }
         : undefined,
+  syncProjectBriefToAgents: (...a: unknown[]) =>
+    syncProjectBriefToAgentsMock(...a),
 }));
+
+// Use a tmpdir for the PROJECT.md canonical path so set_project_brief
+// tests don't litter the developer's real ~/.notfair-cmo.
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+process.env.NOTFAIR_CMO_DATA_DIR = mkdtempSync(
+  join(tmpdir(), "notfair-cmo-handlers-test-"),
+);
 
 import {
   handleCancelTask,
@@ -449,5 +466,161 @@ describe("enum discovery handlers", () => {
     expect(spend.cost_estimate_required).toBe(true);
     const content = r.data.find((a) => a.value === "content_publishing")!;
     expect(content.cost_estimate_required).toBe(false);
+  });
+});
+
+describe("handleSetProjectBrief", () => {
+  it("persists PROJECT.md and fans out to agents", async () => {
+    syncProjectBriefToAgentsMock.mockClear();
+    const { handleSetProjectBrief } = await import("./handlers");
+    const r = await handleSetProjectBrief(
+      { body: "# Demo\n\nWe sell paperclips to office managers." },
+      { project_slug: "demo", agent_id: "demo-cmo" },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.path).toMatch(/PROJECT\.md$/);
+    expect(syncProjectBriefToAgentsMock).toHaveBeenCalledWith("demo");
+
+    const { readProjectBrief } = await import(
+      "@/server/onboarding/project-brief"
+    );
+    const persisted = await readProjectBrief("demo");
+    expect(persisted).toContain("paperclips");
+  });
+
+  it("rejects empty body", async () => {
+    const { handleSetProjectBrief } = await import("./handlers");
+    const r = await handleSetProjectBrief(
+      { body: "   " },
+      { project_slug: "demo", agent_id: "demo-cmo" },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/empty/i);
+  });
+
+  it("rejects unknown project", async () => {
+    const { handleSetProjectBrief } = await import("./handlers");
+    const r = await handleSetProjectBrief(
+      { body: "valid body" },
+      { project_slug: "no-such-project", agent_id: "x" },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/unknown project/i);
+  });
+
+  it("rejects oversized body", async () => {
+    const { handleSetProjectBrief } = await import("./handlers");
+    const huge = "x".repeat(70 * 1024); // 70 KB > 64 KB cap
+    const r = await handleSetProjectBrief(
+      { body: huge },
+      { project_slug: "demo", agent_id: "demo-cmo" },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/exceeds/i);
+  });
+});
+
+describe("handleTaskStatus — blocked_by_task_id propagation", () => {
+  it("flipping a blocker to 'done' promotes its blocked dependents to 'proposed'", async () => {
+    const { handleTaskStatus } = await import("./handlers");
+
+    const blocker = createTask({
+      project_slug: "demo",
+      agent_id: "demo-cmo",
+      brief: "first",
+      title: "Learn the project",
+    });
+    const dependent = createTask({
+      project_slug: "demo",
+      agent_id: "demo-cmo",
+      brief: "audit",
+      title: "Audit the account",
+      blocked_by_task_id: blocker.id,
+    });
+    expect(dependent.status).toBe("blocked");
+
+    const r = handleTaskStatus(
+      { task_id: blocker.id, status: "done", summary: "wrote PROJECT.md" },
+      { project_slug: "demo", agent_id: "demo-cmo" },
+    );
+    expect(r.ok).toBe(true);
+
+    // Synchronous DB flip: dependent is proposed with cleared pointer
+    // before the (async) kickoff microtask runs.
+    const after = testDb
+      .prepare(
+        "SELECT status, blocked_by_task_id FROM tasks WHERE id = ?",
+      )
+      .get(dependent.id) as { status: string; blocked_by_task_id: string | null };
+    expect(after.status).toBe("proposed");
+    expect(after.blocked_by_task_id).toBeNull();
+  });
+
+  it("does NOT propagate on 'failed' — dependents remain blocked", async () => {
+    const { handleTaskStatus } = await import("./handlers");
+
+    const blocker = createTask({
+      project_slug: "demo",
+      agent_id: "demo-cmo",
+      brief: "first",
+    });
+    const dependent = createTask({
+      project_slug: "demo",
+      agent_id: "demo-cmo",
+      brief: "second",
+      blocked_by_task_id: blocker.id,
+    });
+
+    const r = handleTaskStatus(
+      { task_id: blocker.id, status: "failed", summary: "couldn't fetch site" },
+      { project_slug: "demo", agent_id: "demo-cmo" },
+    );
+    expect(r.ok).toBe(true);
+
+    const after = testDb
+      .prepare("SELECT status FROM tasks WHERE id = ?")
+      .get(dependent.id) as { status: string };
+    expect(after.status).toBe("blocked");
+  });
+
+  it("only promotes dependents that are still 'blocked' (skips cancelled ones)", async () => {
+    const { handleTaskStatus } = await import("./handlers");
+
+    const blocker = createTask({
+      project_slug: "demo",
+      agent_id: "demo-cmo",
+      brief: "first",
+    });
+    const dep1 = createTask({
+      project_slug: "demo",
+      agent_id: "demo-cmo",
+      brief: "d1",
+      blocked_by_task_id: blocker.id,
+    });
+    const dep2 = createTask({
+      project_slug: "demo",
+      agent_id: "demo-cmo",
+      brief: "d2",
+      blocked_by_task_id: blocker.id,
+    });
+    // User cancels dep2 before the blocker resolves.
+    testDb
+      .prepare("UPDATE tasks SET status='cancelled' WHERE id = ?")
+      .run(dep2.id);
+
+    handleTaskStatus(
+      { task_id: blocker.id, status: "done", summary: "ok" },
+      { project_slug: "demo", agent_id: "demo-cmo" },
+    );
+
+    const a1 = testDb
+      .prepare("SELECT status FROM tasks WHERE id = ?")
+      .get(dep1.id) as { status: string };
+    const a2 = testDb
+      .prepare("SELECT status FROM tasks WHERE id = ?")
+      .get(dep2.id) as { status: string };
+    expect(a1.status).toBe("proposed");
+    expect(a2.status).toBe("cancelled"); // untouched
   });
 });

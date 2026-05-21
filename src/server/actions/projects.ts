@@ -77,6 +77,11 @@ export async function createProjectAction(formData: FormData): Promise<void> {
  * Onboarding-flow variant of createProjectAction. Same create + async
  * provision (D6) but returns the slug to the caller instead of redirecting
  * to /. The client navigates to ?step=connect&slug=... after success.
+ *
+ * Also creates and starts the CMO's first task ("Learn the project and
+ * write PROJECT.md") in the background so it runs in parallel with the
+ * user doing OAuth. The downstream Google Ads audit task (minted in
+ * setOnboardingAccountAction) gates on this one via blocked_by_task_id.
  */
 export async function createProjectForOnboardingAction(
   formData: FormData,
@@ -84,7 +89,10 @@ export async function createProjectForOnboardingAction(
   const display_name = String(formData.get("display_name") ?? "").trim();
   if (!display_name) return { ok: false, error: "Please enter a project name." };
 
-  const result = createProject({ display_name });
+  const website_url = String(formData.get("website_url") ?? "").trim() || null;
+  const codebase_path = String(formData.get("codebase_path") ?? "").trim() || null;
+
+  const result = createProject({ display_name, website_url, codebase_path });
   if (!result.ok) return { ok: false, error: result.reason };
 
   // Same async-provisioning policy as createProjectAction (D4 + D6).
@@ -93,8 +101,12 @@ export async function createProjectForOnboardingAction(
     "google_ads",
   ]);
   startProvisioning(result.project.slug, provisionPromise);
+  // After provisioning resolves, mint + start the CMO's project-onboarding
+  // task. We chain off provisionPromise (not Promise.all) so a failed
+  // provision doesn't try to assign a task to an agent that doesn't exist;
+  // logAgentAction still fires regardless.
   provisionPromise
-    .then((prov) => {
+    .then(async (prov) => {
       logAgentAction({
         project_slug: result.project.slug,
         agent_id: "system",
@@ -102,6 +114,44 @@ export async function createProjectForOnboardingAction(
         summary: `Project '${result.project.display_name}' created. ${prov.created.length} agents provisioned${prov.failed.length > 0 ? `, ${prov.failed.length} failed` : ""}.`,
         payload: prov,
       });
+      // Only kick off the onboarding task when the CMO agent actually exists.
+      const { agentNameFor } = await import("@/server/agent-templates");
+      const cmoAgentId = agentNameFor(result.project.slug, "cmo");
+      const cmoOk =
+        prov.created.includes(cmoAgentId) || prov.existed.includes(cmoAgentId);
+      if (!cmoOk) {
+        console.error(
+          `[onboarding] CMO agent ${cmoAgentId} not provisioned; skipping onboarding task creation`,
+        );
+        return;
+      }
+      try {
+        const { buildProjectOnboardingBrief } = await import(
+          "@/server/onboarding/cmo-task-brief"
+        );
+        const { createTask } = await import("@/server/db/tasks");
+        const { startTaskIfProposed } = await import(
+          "@/server/orchestration/run-task"
+        );
+        const { title, brief, success_criteria } = buildProjectOnboardingBrief({
+          project_slug: result.project.slug,
+          project_display_name: result.project.display_name,
+          website_url,
+          codebase_path,
+        });
+        const task = createTask({
+          project_slug: result.project.slug,
+          agent_id: cmoAgentId,
+          title,
+          brief,
+          success_criteria,
+          assigner_agent_id: null,
+          status: "proposed",
+        });
+        startTaskIfProposed(task);
+      } catch (err) {
+        console.error("[onboarding] failed to create CMO onboarding task:", err);
+      }
     })
     .catch((err) => {
       console.error("Agent provisioning failed; project created but no agents:", err);

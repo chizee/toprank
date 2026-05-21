@@ -58,6 +58,11 @@ call the discovery tool first instead of guessing:
 - \`update_task\` — edit title / brief / success criteria on a task you
   created. Doesn't change status.
 - \`cancel_task\` — mark a task cancelled. Use when work is obsolete.
+- \`set_project_brief\` — write (or rewrite) PROJECT.md, the single source
+  of truth for what this project sells / who buys / positioning / voice.
+  Synced into every agent's IDENTITY.md. The CMO calls this once during
+  its first onboarding task and again whenever the user surfaces a
+  material change to who/what the project is.
 
 ### Reading tools (re-anchor context, check progress)
 

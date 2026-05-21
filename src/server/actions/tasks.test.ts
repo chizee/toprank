@@ -38,6 +38,8 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     created_at: "2026-01-01T00:00:00.000Z",
     archived_at: null,
     google_ads_account_id: null,
+    website_url: null,
+    codebase_path: null,
     ...overrides,
   };
 }
@@ -57,6 +59,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     error_message: null,
     thread_id: null,
     assigner_agent_id: "demo-cmo",
+    blocked_by_task_id: null,
     created_at: "2026-05-19T00:00:00Z",
     updated_at: "2026-05-19T00:00:00Z",
     ...overrides,

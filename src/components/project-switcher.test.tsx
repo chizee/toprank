@@ -47,8 +47,8 @@ function openMenu() {
 }
 
 const projects = [
-  { id: "1", slug: "proj-a", display_name: "Alpha", created_at: "", archived_at: null, google_ads_account_id: null },
-  { id: "2", slug: "proj-b", display_name: "Beta", created_at: "", archived_at: null, google_ads_account_id: null },
+  { id: "1", slug: "proj-a", display_name: "Alpha", created_at: "", archived_at: null, google_ads_account_id: null, website_url: null, codebase_path: null },
+  { id: "2", slug: "proj-b", display_name: "Beta", created_at: "", archived_at: null, google_ads_account_id: null, website_url: null, codebase_path: null },
 ];
 
 beforeEach(() => {

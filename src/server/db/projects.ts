@@ -6,6 +6,9 @@ import { slugify } from "@/lib/slug";
 export type CreateProjectInput = {
   display_name: string;
   slug?: string;
+  /** Optional onboarding hints. Free-text — CMO decides how to use them. */
+  website_url?: string | null;
+  codebase_path?: string | null;
 };
 
 export type CreateProjectResult =
@@ -35,6 +38,9 @@ export function createProject(input: CreateProjectInput): CreateProjectResult {
   const existing = db.prepare("SELECT 1 FROM projects WHERE slug = ?").get(slug.slug);
   if (existing) return { ok: false, reason: `project slug '${slug.slug}' already exists` };
 
+  const website_url = trimOrNull(input.website_url);
+  const codebase_path = trimOrNull(input.codebase_path);
+
   const project: Project = {
     id: randomUUID(),
     slug: slug.slug,
@@ -42,13 +48,28 @@ export function createProject(input: CreateProjectInput): CreateProjectResult {
     created_at: new Date().toISOString(),
     archived_at: null,
     google_ads_account_id: null,
+    website_url,
+    codebase_path,
   };
 
   db.prepare(
-    "INSERT INTO projects (id, slug, display_name, created_at, archived_at, google_ads_account_id) VALUES (?, ?, ?, ?, NULL, NULL)",
-  ).run(project.id, project.slug, project.display_name, project.created_at);
+    "INSERT INTO projects (id, slug, display_name, created_at, archived_at, google_ads_account_id, website_url, codebase_path) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)",
+  ).run(
+    project.id,
+    project.slug,
+    project.display_name,
+    project.created_at,
+    project.website_url,
+    project.codebase_path,
+  );
 
   return { ok: true, project };
+}
+
+function trimOrNull(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
 }
 
 /**

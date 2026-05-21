@@ -81,6 +81,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     error_message: null,
     thread_id: null,
     assigner_agent_id: "demo-cmo",
+    blocked_by_task_id: null,
     created_at: new Date(Date.now() - 5 * 60_000).toISOString(),
     updated_at: new Date(Date.now() - 60_000).toISOString(),
     ...overrides,

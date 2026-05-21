@@ -2,9 +2,28 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const getTaskMock = vi.fn();
 const updateTaskMock = vi.fn();
+// Dependent-propagation helpers (handlers.ts calls these on every `done`
+// transition). Default: no dependents — empty list keeps the propagation
+// branch a no-op for the bulk of submit_task_status tests.
+const listTasksBlockedByMock = vi.fn((..._a: unknown[]): unknown[] => []);
+const clearBlockerAndPromoteMock = vi.fn(
+  (..._a: unknown[]): unknown => null,
+);
 vi.mock("@/server/db/tasks", () => ({
   getTask: (...a: unknown[]) => getTaskMock(...a),
   updateTask: (...a: unknown[]) => updateTaskMock(...a),
+  listTasksBlockedBy: (...a: unknown[]) => listTasksBlockedByMock(...a),
+  clearBlockerAndPromote: (...a: unknown[]) => clearBlockerAndPromoteMock(...a),
+  // The rest of tasks.ts isn't called from handlers under test here, but
+  // ESM requires the module to expose any named import handlers.ts uses.
+  // Safe stubs — they'd throw if accidentally invoked, surfacing the gap.
+  createTask: () => {
+    throw new Error("createTask not mocked");
+  },
+  listTasks: () => [],
+  listTasksByAgent: () => [],
+  markTaskBlocked: () => null,
+  unblockTask: () => null,
 }));
 
 const logAgentActionMock = vi.fn();

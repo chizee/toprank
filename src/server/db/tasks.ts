@@ -14,6 +14,13 @@ export type CreateTaskInput = {
   status?: TaskStatus;
   /** Agent that created this task. CMO is the typical originator. */
   assigner_agent_id?: string | null;
+  /**
+   * Upstream task that must finish before this one can start. When set,
+   * the task is forced into `blocked` status regardless of the `status`
+   * input — caller intent to gate cannot be circumvented by leaving the
+   * default. Cleared automatically on blocker resolution.
+   */
+  blocked_by_task_id?: string | null;
 };
 
 /**
@@ -41,6 +48,25 @@ function nextDisplayId(project_slug: string): string {
 export function createTask(input: CreateTaskInput): Task {
   const db = getDb();
   const now = new Date().toISOString();
+
+  // If a blocker is named AND it isn't already terminal, force this task
+  // into `blocked` so it won't be picked up before the blocker resolves.
+  // Race-free because better-sqlite3 is synchronous in this process: by
+  // the time the propagation hook fires on the blocker's `done`, this
+  // row exists and is visible to the SELECT inside the hook.
+  let initialStatus: TaskStatus = input.status ?? "proposed";
+  let blocked_by_task_id: string | null = input.blocked_by_task_id ?? null;
+  if (blocked_by_task_id) {
+    const blocker = getTask(blocked_by_task_id);
+    if (blocker && !isTerminal(blocker.status)) {
+      initialStatus = "blocked";
+    } else {
+      // Blocker already done / failed / cancelled — no point gating.
+      // Drop the pointer so the dependent isn't permanently stuck.
+      blocked_by_task_id = null;
+    }
+  }
+
   const task: Task = {
     id: randomUUID(),
     display_id: nextDisplayId(input.project_slug),
@@ -50,19 +76,20 @@ export function createTask(input: CreateTaskInput): Task {
     brief: input.brief,
     success_criteria: input.success_criteria ?? null,
     deadline_iso: input.deadline_iso ?? null,
-    status: input.status ?? "proposed",
+    status: initialStatus,
     result_json: null,
     error_message: null,
     thread_id: null,
     assigner_agent_id: input.assigner_agent_id ?? null,
+    blocked_by_task_id,
     created_at: now,
     updated_at: now,
   };
   db.prepare(
     `INSERT INTO tasks
        (id, display_id, project_slug, agent_id, title, brief, success_criteria, deadline_iso,
-        status, result_json, error_message, thread_id, assigner_agent_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)`,
+        status, result_json, error_message, thread_id, assigner_agent_id, blocked_by_task_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
   ).run(
     task.id,
     task.display_id,
@@ -74,10 +101,15 @@ export function createTask(input: CreateTaskInput): Task {
     task.deadline_iso,
     task.status,
     task.assigner_agent_id,
+    task.blocked_by_task_id,
     task.created_at,
     task.updated_at,
   );
   return task;
+}
+
+function isTerminal(status: TaskStatus): boolean {
+  return status === "done" || status === "failed" || status === "cancelled";
 }
 
 /**
@@ -233,5 +265,40 @@ export function unblockTask(id: string): Task | null {
   db.prepare(
     "UPDATE tasks SET status = 'working', updated_at = ? WHERE id = ? AND status = 'blocked'",
   ).run(now, id);
+  return getTask(id);
+}
+
+/**
+ * Tasks gated on the given blocker (i.e. blocked_by_task_id = id) that are
+ * still in the `blocked` state. Used by the propagation hook in
+ * handleTaskStatus to find dependents to wake when the blocker resolves.
+ */
+export function listTasksBlockedBy(blocker_task_id: string): Task[] {
+  const db = getDb();
+  return db
+    .prepare(
+      "SELECT * FROM tasks WHERE blocked_by_task_id = ? AND status = 'blocked' ORDER BY created_at ASC",
+    )
+    .all(blocker_task_id) as Task[];
+}
+
+/**
+ * Atomically clear the blocked_by pointer and flip blocked→proposed so the
+ * task becomes eligible for the standard `startTaskIfProposed` claim. Done
+ * in one UPDATE so a concurrent kickoff can't observe an intermediate state
+ * where the task is proposed-but-still-pointed-at-a-resolved-blocker.
+ *
+ * Returns the post-flip task on success, null when the row wasn't blocked
+ * (e.g. someone cancelled it before the blocker finished).
+ */
+export function clearBlockerAndPromote(id: string): Task | null {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const info = db
+    .prepare(
+      "UPDATE tasks SET status = 'proposed', blocked_by_task_id = NULL, updated_at = ? WHERE id = ? AND status = 'blocked'",
+    )
+    .run(now, id);
+  if (info.changes === 0) return null;
   return getTask(id);
 }

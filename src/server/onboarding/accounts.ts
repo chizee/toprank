@@ -169,18 +169,35 @@ export async function setOnboardingAccountAction(
   const updated = setProjectGoogleAdsAccount(project_slug, match.id);
   if (!updated) return { ok: false, error: "Project not found." };
 
-  // Mint the onboarding task. Avoid duplicates if the user navigates back
-  // and resubmits — reuse the existing one when a CMO audit task is
-  // already pending for this project.
+  // Mint the audit task — gated on the project-onboarding task that
+  // createProjectForOnboardingAction kicked off in the background. The
+  // audit can't run until PROJECT.md exists; the propagation hook in
+  // handleTaskStatus auto-starts the audit the moment onboarding flips
+  // to `done`.
+  //
+  // Avoid duplicates if the user navigates back and resubmits — reuse
+  // the existing one when a CMO audit task is already present.
   const { buildOnboardingBrief } = await import("./cmo-task-brief");
   const { listTasks, createTask } = await import("@/server/db/tasks");
   const { agentNameFor } = await import("@/server/agent-templates");
   const cmoAgentId = agentNameFor(project_slug, "cmo");
-  const existing = listTasks(project_slug).find(
+  const allTasks = listTasks(project_slug);
+  const existingAudit = allTasks.find(
     (t) => t.agent_id === cmoAgentId && t.title?.startsWith("Audit the account"),
   );
-  let task = existing;
+  let task = existingAudit;
   if (!task) {
+    // Find the project-onboarding task to gate on. Match by exact title
+    // (createProjectForOnboardingAction uses a fixed string from
+    // buildProjectOnboardingBrief). When it's missing or already terminal,
+    // createTask drops the blocker automatically — the audit runs
+    // immediately in that case.
+    const onboardingTask = allTasks.find(
+      (t) =>
+        t.agent_id === cmoAgentId &&
+        t.title === "Learn the project and write PROJECT.md",
+    );
+
     const { title, brief, success_criteria } = buildOnboardingBrief({
       project_slug,
       project_display_name: updated.display_name,
@@ -194,14 +211,18 @@ export async function setOnboardingAccountAction(
       success_criteria,
       assigner_agent_id: null,
       status: "proposed",
+      blocked_by_task_id: onboardingTask?.id ?? null,
     });
   }
 
-  // Leave the task in `proposed`. The task workspace the caller redirects
-  // the user to will auto-fire the kickoff client-side via /api/chat so
-  // the user sees live gateway events stream in. /api/chat atomically
-  // claims the task before sending, so the resubmit branch (existing task
-  // already running/done) is a safe no-op there.
+  // Status now:
+  //   - If onboarding task was non-terminal at createTask time → audit is
+  //     `blocked`. The propagation hook in handleTaskStatus picks it up
+  //     when onboarding flips to `done`.
+  //   - Otherwise → audit is `proposed`. The task workspace the caller
+  //     redirects the user to auto-fires the kickoff client-side via
+  //     /api/chat (which atomically claims). For the resubmit branch
+  //     (audit already running/done) /api/chat is a safe no-op.
 
   revalidatePath("/", "layout");
   return { ok: true, project: updated, task_display_id: task.display_id };

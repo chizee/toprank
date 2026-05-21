@@ -9,6 +9,7 @@ import {
 } from "@/server/mcp-server/registration";
 import { listProjects } from "@/server/db/projects";
 import { getOrchestrationSkill } from "@/server/skills/orchestration-skill";
+import { readProjectBrief } from "@/server/onboarding/project-brief";
 
 /**
  * Role-specific behavior for the CMO. Concise — the procedural how-to
@@ -344,13 +345,29 @@ async function writeIdentityFile(
     // in lockstep across all three agents.
     await writeFile(join(workspaceAbs, "SKILL.md"), skill, "utf8");
 
+    // Project context: PROJECT.md is the single source of truth for "what
+    // is this company / project". Written by the CMO during the first
+    // onboarding task via `set_project_brief`. We inline it into IDENTITY.md
+    // so every agent in the project (CMO + specialists) shares the same
+    // context, and write a sidecar PROJECT.md copy so humans inspecting
+    // the workspace see what the agent has. The canonical file lives at
+    // ~/.notfair-cmo/projects/<slug>/PROJECT.md.
+    let projectContextSection = "";
+    if (project_slug) {
+      const brief = await readProjectBrief(project_slug);
+      if (brief !== null) {
+        await writeFile(join(workspaceAbs, "PROJECT.md"), brief, "utf8");
+        projectContextSection = `\n## Project context\n\nShared across every agent in this project — derived during onboarding\nand kept in sync via the \`set_project_brief\` MCP tool. Treat this as\nthe authoritative description of who the user is and what they sell.\n\n${brief.trim()}\n`;
+      }
+    }
+
     // IDENTITY.md = role-specific bits on top, shared skill verbatim
     // below a separator. The separator makes it obvious which half is
     // per-agent and which is shared when a human reads the file.
     const body = `# ${template.display_name}
 
 ${template.description}
-${identityBlock}
+${identityBlock}${projectContextSection}
 ${template.system_prompt}
 
 ---
@@ -430,6 +447,71 @@ async function writeMinimalWorkspaceStubs(workspaceAbs: string): Promise<void> {
     writeFile(join(workspaceAbs, "USER.md"), STUB_USER_MD, "utf8"),
     writeFile(join(workspaceAbs, "HEARTBEAT.md"), STUB_HEARTBEAT_MD, "utf8"),
   ]);
+}
+
+/**
+ * Re-write IDENTITY.md (and the PROJECT.md sidecar) for every agent in a
+ * project, picking up the current canonical PROJECT.md. Called by the
+ * `set_project_brief` MCP handler after writing the canonical file so
+ * specialists get the updated project context without waiting for the
+ * next ensureProjectAgents pass.
+ *
+ * Best-effort per agent: a write failure on one agent is logged but does
+ * not abort the others — the new brief is at least canonical on disk, and
+ * the next ensureProjectAgents will catch up.
+ */
+export async function syncProjectBriefToAgents(
+  project_slug: string,
+): Promise<{ synced: string[]; failed: Array<{ name: string; error: string }> }> {
+  // Lazy import to avoid a static cycle: agent-meta -> agent-templates.
+  const { listProjectAgents } = await import("./agent-meta");
+  const synced: string[] = [];
+  const failed: Array<{ name: string; error: string }> = [];
+
+  const entries = await listProjectAgents(project_slug);
+  for (const entry of entries) {
+    if (!entry.template_key) {
+      // Custom / cloned agent — we don't know its template, but it still
+      // has an IDENTITY.md we shouldn't overwrite blindly. Just refresh
+      // the sidecar PROJECT.md so a human inspecting sees the new brief.
+      try {
+        const workspaceAbs = workspaceDirFor(entry.agent_id);
+        const { readProjectBrief } = await import("./onboarding/project-brief");
+        const brief = await readProjectBrief(project_slug);
+        if (brief !== null) {
+          await mkdir(workspaceAbs, { recursive: true });
+          await writeFile(join(workspaceAbs, "PROJECT.md"), brief, "utf8");
+          synced.push(entry.agent_id);
+        }
+      } catch (err) {
+        failed.push({
+          name: entry.agent_id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      continue;
+    }
+    const template = TEMPLATES.find((t) => t.key === entry.template_key);
+    if (!template) {
+      failed.push({
+        name: entry.agent_id,
+        error: `Unknown template '${entry.template_key}'`,
+      });
+      continue;
+    }
+    try {
+      const workspaceAbs = workspaceDirFor(entry.agent_id);
+      await writeIdentityFile(workspaceAbs, template, project_slug, entry.agent_id);
+      synced.push(entry.agent_id);
+    } catch (err) {
+      failed.push({
+        name: entry.agent_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return { synced, failed };
 }
 
 export async function agentExists(name: string): Promise<boolean> {

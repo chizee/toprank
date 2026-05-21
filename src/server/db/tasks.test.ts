@@ -12,10 +12,12 @@ vi.mock("./db", () => ({
 
 import {
   claimProposedTask,
+  clearBlockerAndPromote,
   createTask,
   getTask,
   inFlightCountsByAgent,
   listTasks,
+  listTasksBlockedBy,
   listTasksByAgent,
   markTaskBlocked,
   setTaskThreadIfMissing,
@@ -493,5 +495,100 @@ describe("markTaskBlocked + unblockTask", () => {
     const t = createTask({ project_slug: "acme", agent_id: "agent-1", brief: "b" });
     markTaskBlocked(t.id);
     expect(inFlightCountsByAgent("acme").get("agent-1")).toBe(1);
+  });
+});
+
+describe("blocked_by_task_id (task-blocks-task)", () => {
+  it("createTask with blocked_by_task_id forces status to 'blocked'", () => {
+    seedProject();
+    const blocker = createTask({
+      project_slug: "acme",
+      agent_id: "acme-cmo",
+      brief: "first",
+    });
+    const dependent = createTask({
+      project_slug: "acme",
+      agent_id: "acme-google-ads",
+      brief: "second",
+      status: "proposed", // caller asked for proposed
+      blocked_by_task_id: blocker.id,
+    });
+    expect(dependent.status).toBe("blocked");
+    expect(dependent.blocked_by_task_id).toBe(blocker.id);
+  });
+
+  it("createTask drops the blocker pointer when blocker is already terminal", () => {
+    seedProject();
+    const blocker = createTask({
+      project_slug: "acme",
+      agent_id: "acme-cmo",
+      brief: "first",
+    });
+    updateTask(blocker.id, { status: "done" });
+    const dependent = createTask({
+      project_slug: "acme",
+      agent_id: "acme-google-ads",
+      brief: "second",
+      blocked_by_task_id: blocker.id,
+    });
+    expect(dependent.status).toBe("proposed");
+    expect(dependent.blocked_by_task_id).toBeNull();
+  });
+
+  it("listTasksBlockedBy returns only blocked dependents", () => {
+    seedProject();
+    const blocker = createTask({
+      project_slug: "acme",
+      agent_id: "acme-cmo",
+      brief: "b",
+    });
+    const dep1 = createTask({
+      project_slug: "acme",
+      agent_id: "x",
+      brief: "d1",
+      blocked_by_task_id: blocker.id,
+    });
+    const dep2 = createTask({
+      project_slug: "acme",
+      agent_id: "x",
+      brief: "d2",
+      blocked_by_task_id: blocker.id,
+    });
+    // Cancel dep2 — it should no longer appear in the blocked-by list even
+    // though its pointer is still set.
+    updateTask(dep2.id, { status: "cancelled" });
+
+    const found = listTasksBlockedBy(blocker.id);
+    expect(found.map((t) => t.id)).toEqual([dep1.id]);
+  });
+
+  it("clearBlockerAndPromote flips blocked→proposed and clears the pointer atomically", () => {
+    seedProject();
+    const blocker = createTask({
+      project_slug: "acme",
+      agent_id: "acme-cmo",
+      brief: "b",
+    });
+    const dep = createTask({
+      project_slug: "acme",
+      agent_id: "x",
+      brief: "d",
+      blocked_by_task_id: blocker.id,
+    });
+    expect(dep.status).toBe("blocked");
+
+    const promoted = clearBlockerAndPromote(dep.id);
+    expect(promoted).not.toBeNull();
+    expect(promoted!.status).toBe("proposed");
+    expect(promoted!.blocked_by_task_id).toBeNull();
+  });
+
+  it("clearBlockerAndPromote is a no-op when the task isn't blocked", () => {
+    seedProject();
+    const t = createTask({ project_slug: "acme", agent_id: "x", brief: "b" });
+    // status = proposed
+    const result = clearBlockerAndPromote(t.id);
+    expect(result).toBeNull();
+    expect(getTask(t.id)!.status).toBe("proposed");
   });
 });

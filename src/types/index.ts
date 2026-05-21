@@ -14,6 +14,13 @@ export type Project = {
    * Null until the user picks (or until /onboarding gets re-run).
    */
   google_ads_account_id: string | null;
+  /**
+   * Optional inputs the user provided at onboarding so the CMO has a
+   * starting point for its first task (writing PROJECT.md). Both are
+   * free-text — the CMO uses whichever exist + decides how to explore.
+   */
+  website_url: string | null;
+  codebase_path: string | null;
 };
 
 export type TaskStatus =
@@ -72,6 +79,15 @@ export type Task = {
    * own id so the chain back to the planner is walkable.
    */
   assigner_agent_id: string | null;
+  /**
+   * Task that must reach `done` before this one can start. When set, the
+   * task is created in `blocked` status; the orchestrator clears this
+   * pointer and flips blocked→proposed (then kicks off) when the blocker
+   * resolves. Co-exists with approval-blocking: approval-blocked tasks
+   * have a null blocked_by_task_id and resolve via the approval-wakeup
+   * path. Null for tasks with no upstream dependency.
+   */
+  blocked_by_task_id: string | null;
   created_at: string;
   updated_at: string;
 };

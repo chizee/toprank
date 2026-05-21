@@ -22,6 +22,8 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     created_at: "now",
     archived_at: null,
     google_ads_account_id: null,
+    website_url: null,
+    codebase_path: null,
     ...overrides,
   };
 }

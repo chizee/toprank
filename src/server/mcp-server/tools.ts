@@ -19,6 +19,7 @@ import {
   handleListTaskStatuses,
   handleListTasks,
   handleRequestApproval,
+  handleSetProjectBrief,
   handleTaskStatus,
   handleUpdateTask,
   TASK_STATUS_VALUES,
@@ -556,6 +557,41 @@ async function handleListApprovalActionTypesTool(
   return txt(JSON.stringify({ action_types: r.data }));
 }
 
+// ── Tool: set_project_brief ────────────────────────────────────────────
+
+const setProjectBriefInput = z.object({
+  project_slug: z
+    .string()
+    .min(1)
+    .describe(
+      "The project this brief belongs to. From your IDENTITY.md prompt header.",
+    ),
+  agent_id: z
+    .string()
+    .min(1)
+    .describe(
+      "Your agent_id (e.g. `acme-cmo`). From IDENTITY.md. The CMO is the expected caller — specialists should not write to PROJECT.md.",
+    ),
+  body: z
+    .string()
+    .min(1)
+    .describe(
+      "Full PROJECT.md content as markdown. Replaces any prior body. Capped at 64 KB. Aim for a 90-second read: what we sell, who we sell to, positioning, voice, key constraints.",
+    ),
+});
+
+async function handleSetProjectBriefTool(input: unknown): Promise<ToolResult> {
+  const parsed = setProjectBriefInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const { project_slug, agent_id, body } = parsed.data;
+  const r = await handleSetProjectBrief(
+    { body },
+    { project_slug, agent_id },
+  );
+  if (!r.ok) return { ok: false, error: r.error };
+  return txt(`PROJECT.md written; synced to project agents.`);
+}
+
 // ── Registry ───────────────────────────────────────────────────────────
 
 export const TOOLS: ToolDefinition[] = [
@@ -691,6 +727,13 @@ export const TOOLS: ToolDefinition[] = [
       "Discover valid `action_type` values for request_approval, with descriptions and which require a cost estimate. Call once if you're unsure which type fits your action.",
     inputSchema: listApprovalActionTypesInput,
     handler: handleListApprovalActionTypesTool,
+  },
+  {
+    name: "set_project_brief",
+    description:
+      "Write (or rewrite) PROJECT.md — the single source of truth for what this project sells, who it sells to, positioning, voice, and constraints. Synced into every agent's IDENTITY.md so the CMO + specialists share the same context. The CMO calls this once during its first onboarding task and again whenever the user surfaces a material change.",
+    inputSchema: setProjectBriefInput,
+    handler: handleSetProjectBriefTool,
   },
 ];
 

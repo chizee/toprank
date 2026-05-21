@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, ChevronRight, Loader2, Plug } from "lucide-react";
+import { AlertCircle, ChevronRight, FolderOpen, Loader2, Plug } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,71 @@ export function OnboardingFlow() {
   );
 }
 
+// ── Codebase folder picker (Step 1 helper) ─────────────────────────
+//
+// Browsers don't expose absolute paths from `<input type="file"
+// webkitdirectory>` or `showDirectoryPicker()` — security. Since this
+// server runs on the user's own machine (loopback only), we shell out
+// to the OS-native folder dialog via POST /api/fs/pick-folder and let
+// the OS handle the picker UI. The field stays editable so users on
+// platforms we don't yet support natively (Linux, Windows) can paste.
+
+function CodebasePathPicker({ disabled }: { disabled: boolean }) {
+  const [value, setValue] = useState("");
+  const [picking, setPicking] = useState(false);
+
+  async function onBrowse() {
+    setPicking(true);
+    try {
+      const res = await fetch("/api/fs/pick-folder", { method: "POST" });
+      const body = (await res.json()) as
+        | { ok: true; path: string }
+        | { ok: false; kind: "cancelled" }
+        | { ok: false; kind: "unsupported" | "error"; message?: string };
+      if (body.ok) {
+        setValue(body.path);
+        return;
+      }
+      if (body.kind === "cancelled") return; // silent — user closed dialog
+      toast.error(body.message ?? "Couldn't open the folder picker.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  return (
+    <div className="flex gap-2">
+      <Input
+        id="codebase_path"
+        name="codebase_path"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="No folder selected"
+        maxLength={500}
+        disabled={disabled || picking}
+        readOnly={picking}
+        aria-label="Local codebase folder"
+      />
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onBrowse}
+        disabled={disabled || picking}
+        aria-label="Browse for a folder"
+      >
+        {picking ? (
+          <Loader2 className="mr-1.5 size-4 animate-spin" />
+        ) : (
+          <FolderOpen className="mr-1.5 size-4" />
+        )}
+        Browse&hellip;
+      </Button>
+    </div>
+  );
+}
+
 // ── Step 1: Name ───────────────────────────────────────────────────
 
 function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
@@ -77,16 +142,17 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
           Let&rsquo;s set up your CMO.
         </h1>
         <p className="text-sm text-muted-foreground">
-          What should we call this project?
+          Tell me what this project is so I can hit the ground running.
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Project name</CardTitle>
+          <CardTitle className="text-base">Project basics</CardTitle>
           <CardDescription>
-            A project groups the agents and crons your CMO will manage. The slug
-            (used in agent names) is set once and immutable.
+            Name is required. Site and codebase are optional but help the
+            CMO write a more accurate first plan. Slug (used in agent
+            names) is derived from the name and immutable.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -102,6 +168,38 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
                 maxLength={80}
                 disabled={isPending}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="website_url">
+                Website URL{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </Label>
+              <Input
+                id="website_url"
+                name="website_url"
+                type="url"
+                placeholder="https://acme.com"
+                maxLength={500}
+                disabled={isPending}
+              />
+              <p className="text-xs text-muted-foreground">
+                The CMO will skim a few pages to learn what you sell.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="codebase_path">
+                Local codebase folder{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </Label>
+              <CodebasePathPicker disabled={isPending} />
+              <p className="text-xs text-muted-foreground">
+                Folder the CMO can read locally — README, package.json,
+                top-level files. Skim only, not a code review.
+              </p>
             </div>
             {errorMessage && (
               <p role="alert" className="text-sm text-destructive">

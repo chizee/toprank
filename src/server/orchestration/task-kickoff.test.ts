@@ -19,6 +19,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     error_message: null,
     thread_id: "thread-1",
     assigner_agent_id: "demo-cmo",
+    blocked_by_task_id: null,
     created_at: "2026-05-19T00:00:00Z",
     updated_at: "2026-05-19T00:00:00Z",
     ...overrides,

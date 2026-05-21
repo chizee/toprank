@@ -15,9 +15,11 @@ import {
 import { getDb } from "@/server/db/db";
 import { getProject } from "@/server/db/projects";
 import {
+  clearBlockerAndPromote,
   createTask,
   getTask,
   listTasks,
+  listTasksBlockedBy,
   listTasksByAgent,
   markTaskBlocked,
   unblockTask,
@@ -221,7 +223,101 @@ export function handleTaskStatus(
     payload: { task_id: task.id, status: newStatus, via: ctx ? "block" : "mcp" },
   });
 
+  // Propagation: when a task resolves to `done`, wake any tasks that were
+  // gated on it via blocked_by_task_id. The DB flip (blocked→proposed +
+  // clear pointer) happens synchronously here so subsequent SELECTs in
+  // the same process see the new state immediately; the kickoff itself
+  // is fire-and-forget (it already runs the gateway stream async).
+  //
+  // We don't propagate on `failed`/`cancelled` — those leave dependents
+  // stranded in `blocked`. That's deliberate: a failed prerequisite is a
+  // signal to the user, not something to silently route around. They can
+  // cancel the dependent or rerun the blocker.
+  if (newStatus === "done") {
+    const dependents = listTasksBlockedBy(task.id);
+    const promoted: Task[] = [];
+    for (const dep of dependents) {
+      const p = clearBlockerAndPromote(dep.id);
+      if (p) promoted.push(p);
+    }
+    if (promoted.length > 0) {
+      void (async () => {
+        const { startTaskIfProposed } = await import("./run-task");
+        for (const p of promoted) {
+          try {
+            startTaskIfProposed(p);
+          } catch (err) {
+            console.error(
+              `[block-prop] kickoff failed for ${p.display_id}:`,
+              err,
+            );
+          }
+        }
+      })().catch((err) => {
+        console.error("[block-prop] propagation IIFE failed:", err);
+      });
+    }
+  }
+
   return { ok: true, data: { task_id: task.id, status: newStatus } };
+}
+
+// ── set_project_brief ──────────────────────────────────────────────────
+
+export type SetProjectBriefInput = {
+  body: string;
+};
+
+/**
+ * Persist a new PROJECT.md body for this project, then propagate it into
+ * every agent's IDENTITY.md so specialists pick up the updated context on
+ * their next turn.
+ *
+ * The CMO calls this once during its project-onboarding task. It's
+ * idempotent — calling again with a revised body replaces the prior one,
+ * which is how PROJECT.md gets updated over the project's life (e.g. user
+ * asks the CMO to "remember we're targeting EU now").
+ */
+export async function handleSetProjectBrief(
+  input: SetProjectBriefInput,
+  ctx: HandlerContext,
+): Promise<HandlerResult<{ path: string }>> {
+  const project = getProject(ctx.project_slug);
+  if (!project) {
+    return { ok: false, error: `Unknown project '${ctx.project_slug}'` };
+  }
+
+  const body = input.body;
+  if (typeof body !== "string" || body.trim().length === 0) {
+    return { ok: false, error: "PROJECT.md body cannot be empty." };
+  }
+  const { PROJECT_BRIEF_MAX_BYTES, writeProjectBrief, projectBriefPath } =
+    await import("@/server/onboarding/project-brief");
+  if (Buffer.byteLength(body, "utf8") > PROJECT_BRIEF_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `PROJECT.md exceeds ${PROJECT_BRIEF_MAX_BYTES} bytes — tighten it before resubmitting.`,
+    };
+  }
+
+  await writeProjectBrief(ctx.project_slug, body);
+
+  // Fan out into every agent workspace so the IDENTITY.md prompts pick
+  // up the new context immediately. Best-effort per agent.
+  const { syncProjectBriefToAgents } = await import(
+    "@/server/agent-templates"
+  );
+  const sync = await syncProjectBriefToAgents(ctx.project_slug);
+
+  logAgentAction({
+    project_slug: ctx.project_slug,
+    agent_id: ctx.agent_id,
+    action_type: "project_brief_updated",
+    summary: `Wrote PROJECT.md (${Buffer.byteLength(body, "utf8")} bytes); synced ${sync.synced.length} agents${sync.failed.length > 0 ? `, ${sync.failed.length} failed` : ""}.`,
+    payload: { synced: sync.synced, failed: sync.failed },
+  });
+
+  return { ok: true, data: { path: projectBriefPath(ctx.project_slug) } };
 }
 
 // ── add_task_comment ───────────────────────────────────────────────────
