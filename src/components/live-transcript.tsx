@@ -163,6 +163,13 @@ export function LiveTranscript({
   const [pendingAssistant, setPendingAssistant] = useState("");
   const [pendingTools, setPendingTools] = useState<ToolEntry[]>([]);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  /**
+   * Most recent OpenClaw lifecycle phase for the in-flight turn (run.start,
+   * run.warming, etc.). Surfaced in the "thinking…" indicator so a long
+   * wait before the first model token at least shows forward motion.
+   * Cleared when the turn ends.
+   */
+  const [pendingLifecycle, setPendingLifecycle] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickyBottomRef = useRef(true);
@@ -225,6 +232,7 @@ export function LiveTranscript({
         setPendingAssistant("");
         setPendingTools([]);
         setPendingError(null);
+        setPendingLifecycle(null);
       }
       if (data.byteOffset !== byteOffset) setByteOffset(data.byteOffset);
       const shouldStop = onPolled?.({
@@ -360,6 +368,33 @@ export function LiveTranscript({
                 );
               },
               onError: (msg) => setPendingError(msg),
+              onLifecycle: (phase) => setPendingLifecycle(phase),
+              onMeta: (meta) => {
+                if (process.env.NODE_ENV !== "production") {
+                  // eslint-disable-next-line no-console
+                  console.log(
+                    `[chat-perf] turn start agent=${meta.agent} session=${meta.session_id} message_chars=${meta.message_chars}${meta.is_kickoff ? " (kickoff)" : ""}`,
+                  );
+                }
+              },
+              onPerf: (marks) => {
+                if (process.env.NODE_ENV !== "production") {
+                  // eslint-disable-next-line no-console
+                  console.groupCollapsed(
+                    `[chat-perf] turn complete (${marks.length} marks)`,
+                  );
+                  // eslint-disable-next-line no-console
+                  console.table(
+                    marks.map((m) => ({
+                      name: m.name,
+                      "at (ms)": Math.round(m.at),
+                      "Δ (ms)": Math.round(m.delta),
+                    })),
+                  );
+                  // eslint-disable-next-line no-console
+                  console.groupEnd();
+                }
+              },
             });
           }
         }
@@ -387,6 +422,7 @@ export function LiveTranscript({
       } finally {
         setSendingChat(false);
         setTurnStartedAt(null);
+        setPendingLifecycle(null);
         abortRef.current = null;
       }
     },
@@ -467,6 +503,7 @@ export function LiveTranscript({
                       agentDisplayName={agentDisplayName}
                       events={events}
                       turnStartedAt={turnStartedAt}
+                      lifecyclePhase={pendingLifecycle}
                     />
                   )}
                 </li>
@@ -591,12 +628,23 @@ type SseToolEvent = {
   label?: string;
 };
 
+type SsePerfMark = { name: string; at: number; delta: number };
+type SseMeta = {
+  message_chars?: number;
+  is_kickoff?: boolean;
+  agent?: string;
+  session_id?: string;
+};
+
 function handleSseEvent(
   raw: string,
   handlers: {
     onText: (chunk: string) => void;
     onTool: (evt: SseToolEvent) => void;
     onError: (msg: string) => void;
+    onLifecycle?: (phase: string) => void;
+    onMeta?: (meta: SseMeta) => void;
+    onPerf?: (marks: SsePerfMark[]) => void;
   },
 ) {
   const lines = raw.split("\n");
@@ -617,6 +665,22 @@ function handleSseEvent(
   }
   if (evt === "tool") {
     handlers.onTool(data as SseToolEvent);
+    return;
+  }
+  if (evt === "lifecycle") {
+    const phase = (data as { phase?: string }).phase;
+    if (typeof phase === "string" && handlers.onLifecycle) {
+      handlers.onLifecycle(phase);
+    }
+    return;
+  }
+  if (evt === "meta") {
+    if (handlers.onMeta) handlers.onMeta(data as SseMeta);
+    return;
+  }
+  if (evt === "perf") {
+    const marks = (data as { marks?: SsePerfMark[] }).marks;
+    if (Array.isArray(marks) && handlers.onPerf) handlers.onPerf(marks);
     return;
   }
   if (evt === "error") {
@@ -984,6 +1048,7 @@ function WorkingStatus({
   agentDisplayName,
   events,
   turnStartedAt,
+  lifecyclePhase,
 }: {
   agentDisplayName: string;
   events: TranscriptEvent[];
@@ -994,6 +1059,14 @@ function WorkingStatus({
    * turn's first event hasn't been written to JSONL yet.
    */
   turnStartedAt: number | null;
+  /**
+   * Most recent OpenClaw lifecycle phase (e.g. "run.start", "warming",
+   * "compacting") for the in-flight turn. Used to give the user a more
+   * specific status than "thinking…" during the pre-first-token wait,
+   * which is the dominant chunk of latency for kickoffs against codex/
+   * gpt-5.5 with a multi-KB system prompt.
+   */
+  lifecyclePhase?: string | null;
 }) {
   const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -1025,8 +1098,19 @@ function WorkingStatus({
   let headline = `${agentDisplayName} is thinking…`;
   let subtitle: string | null = null;
   if (!lastEvent || lastEvent.kind === "user_message" || lastEvent.kind === "unknown") {
-    headline = `Starting ${agentDisplayName}…`;
-    subtitle = "Delivering the brief to OpenClaw.";
+    // Pre-first-event window. For a kickoff this can be 10-20s while
+    // Codex chews through the system prompt. Use the gateway lifecycle
+    // hint if we got one — it tells us OpenClaw is alive and which phase
+    // it's in — otherwise fall back to a generic "starting" message.
+    const lifecycleSummary = lifecyclePhase
+      ? humanLifecyclePhase(lifecyclePhase)
+      : null;
+    headline = lifecycleSummary
+      ? `${agentDisplayName} · ${lifecycleSummary}`
+      : `Starting ${agentDisplayName}…`;
+    subtitle = lifecycleSummary
+      ? "Waiting on the model's first token."
+      : "Delivering the brief to OpenClaw.";
   } else if (inFlightToolCall) {
     headline = `Calling ${formatToolName(inFlightToolCall.name)}…`;
     subtitle = inFlightToolCall.label ?? null;
@@ -1093,6 +1177,24 @@ function formatElapsed(ms: number): string {
   if (m < 60) return rem === 0 ? `${m}m` : `${m}m ${rem}s`;
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
+}
+
+/**
+ * Translate an OpenClaw `agent` stream lifecycle phase into a short
+ * user-facing label. We don't try to enumerate every possible phase —
+ * unknown values fall through to a generic "starting up…" so a future
+ * gateway protocol bump doesn't render a blank status. Used by the
+ * pre-first-event branch of WorkingStatus (the ~15s pause where the
+ * model is parsing the system prompt and brief).
+ */
+function humanLifecyclePhase(phase: string): string {
+  const p = phase.toLowerCase();
+  if (p.includes("warming") || p.includes("warmup")) return "warming up…";
+  if (p.includes("compact")) return "compacting context…";
+  if (p === "start" || p.endsWith(".start") || p.includes("run.start"))
+    return "calling the model…";
+  if (p.includes("end") || p.includes("complete")) return "finishing up…";
+  return "starting up…";
 }
 
 /**

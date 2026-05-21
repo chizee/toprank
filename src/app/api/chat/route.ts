@@ -200,11 +200,17 @@ export async function POST(request: Request) {
       let assistantBuffer = "";
       try {
         perf.mark("stream_start");
+        // Surface input sizes so each perf trace tells us *why* this turn
+        // was fast/slow — a 24KB system prompt with a 1.8KB kickoff brief
+        // behaves very differently from a 200B reply. Browser console
+        // table includes these alongside the timing marks.
         send("meta", {
           project_slug: project.slug,
           agent: agentName,
           session_id: sessionId,
           session_key: sessionKey,
+          message_chars: body.message.length,
+          is_kickoff: Boolean(taskId),
         });
         for await (const evt of streamChatViaGateway({
           sessionKey,

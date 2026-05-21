@@ -406,6 +406,11 @@ export async function* streamChatViaGateway(
   let resolveWait: (() => void) | null = null;
   let firstEventSeen = false;
   let firstDeltaEmitted = false;
+  // Per-channel "first event" marks so the perf trace shows which OpenClaw
+  // stream type unblocked the user. Helps attribute latency to the model
+  // (first tool start / text) vs. plumbing (first lifecycle event).
+  let firstLifecycleSeen = false;
+  let firstToolStartSeen = false;
 
   const wake = () => {
     if (resolveWait) {
@@ -481,6 +486,10 @@ export async function* streamChatViaGateway(
       if (!phase) return;
       const name = typeof d.name === "string" ? d.name : "tool";
       const label = phase === "start" ? labelForTool(name, d.args) : undefined;
+      if (phase === "start" && !firstToolStartSeen) {
+        firstToolStartSeen = true;
+        perf?.mark("gw_first_tool_start");
+      }
       events.push({ kind: "tool", phase, toolCallId, name, label });
       wake();
       return;
@@ -490,6 +499,10 @@ export async function* streamChatViaGateway(
       const d = payload.data ?? {};
       const phase = typeof d.phase === "string" ? d.phase : payload.state;
       if (phase) {
+        if (!firstLifecycleSeen) {
+          firstLifecycleSeen = true;
+          perf?.mark("gw_first_lifecycle");
+        }
         events.push({ kind: "lifecycle", phase });
         wake();
       }

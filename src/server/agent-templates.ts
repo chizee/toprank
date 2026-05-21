@@ -357,9 +357,79 @@ ${template.system_prompt}
 
 ${skill}`;
     await writeFile(join(workspaceAbs, "IDENTITY.md"), body, "utf8");
+
+    // OpenClaw seeds every agent workspace with generic AGENTS.md / SOUL.md
+    // / TOOLS.md / USER.md / HEARTBEAT.md boilerplate (~11 KB total) aimed
+    // at general-purpose assistants — workspace memory rituals, camera/SSH
+    // tool notes, user-profile templates. None of it applies to a marketing
+    // CMO/specialist whose identity already lives in IDENTITY.md, and all
+    // of it inflates every model call's system prompt. Overwrite with thin
+    // pointer stubs after `openclaw agents add` runs so the runtime still
+    // finds the files but the injected bytes drop to ~1 KB.
+    await writeMinimalWorkspaceStubs(workspaceAbs);
   } catch (err) {
     console.error(`Could not write IDENTITY.md for ${template.key}:`, err);
   }
+}
+
+const STUB_AGENTS_MD = `# Workspace
+
+This agent's role and operating rules live in IDENTITY.md (loaded
+automatically). The other files in this directory exist only so the
+OpenClaw runtime finds the names it expects — they're intentionally
+empty for prompt-efficiency.
+`;
+
+const STUB_SOUL_MD = `# Personality
+
+Be terse, opinionated, and useful. Skip filler ("Great question!",
+"I'd be happy to help"). Lead with the point — a dollar figure, a
+specific gap, a recommendation. Have a point of view; the user can
+push back if they disagree.
+`;
+
+const STUB_TOOLS_MD = `# Local Notes
+
+Empty by design. Domain tool usage lives in IDENTITY.md; runtime
+infrastructure (cameras, SSH, TTS) does not apply to this agent.
+`;
+
+const STUB_USER_MD = `# About the user
+
+A solo marketer running their own business on the notfair-cmo
+platform. They pay attention to dollar figures and concrete next
+steps. Build context here as you learn it across sessions.
+`;
+
+const STUB_HEARTBEAT_MD = `# Heartbeat
+
+Empty by design — heartbeats are disabled. Cron-driven check-ins
+arrive as normal "(task assignment)" turns instead.
+`;
+
+/**
+ * Overwrite the OpenClaw-default workspace files with minimal stubs.
+ *
+ * Why: `openclaw agents add` seeds each workspace with five generic
+ * files aimed at general-purpose assistants (camera/SSH tool notes,
+ * memory-discipline lectures, user-profile templates). That's ~11 KB
+ * of irrelevant boilerplate injected into every model call. Replacing
+ * them with sub-300-char stubs that still satisfy whatever runtime
+ * filesystem expectations OpenClaw has cuts the system prompt by
+ * roughly that amount.
+ *
+ * Idempotent: re-running on an existing workspace just rewrites the
+ * stubs. We don't delete the files because OpenClaw may probe for them
+ * by name during session startup.
+ */
+async function writeMinimalWorkspaceStubs(workspaceAbs: string): Promise<void> {
+  await Promise.all([
+    writeFile(join(workspaceAbs, "AGENTS.md"), STUB_AGENTS_MD, "utf8"),
+    writeFile(join(workspaceAbs, "SOUL.md"), STUB_SOUL_MD, "utf8"),
+    writeFile(join(workspaceAbs, "TOOLS.md"), STUB_TOOLS_MD, "utf8"),
+    writeFile(join(workspaceAbs, "USER.md"), STUB_USER_MD, "utf8"),
+    writeFile(join(workspaceAbs, "HEARTBEAT.md"), STUB_HEARTBEAT_MD, "utf8"),
+  ]);
 }
 
 export async function agentExists(name: string): Promise<boolean> {

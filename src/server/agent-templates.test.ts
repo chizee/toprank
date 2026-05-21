@@ -81,6 +81,30 @@ describe("ensureProjectAgents — IDENTITY.md per-agent + SKILL.md shared", () =
     }
   });
 
+  // System-prompt-size regression guard: OpenClaw seeds each workspace with
+  // ~11 KB of generic boilerplate (camera tools, memory rituals, etc.) that
+  // gets injected into every model call but doesn't apply to a marketing
+  // CMO. We overwrite the five OpenClaw-default files with sub-300-char
+  // stubs so the system prompt stays lean. If someone resurrects the
+  // boilerplate, this test catches it.
+  it("overwrites OpenClaw default workspace files with minimal stubs", async () => {
+    await ensureProjectAgents("demo");
+    for (const fname of [
+      "AGENTS.md",
+      "SOUL.md",
+      "TOOLS.md",
+      "USER.md",
+      "HEARTBEAT.md",
+    ]) {
+      const path = join(tmpDataDir, "agents", "demo-cmo", fname);
+      expect(existsSync(path)).toBe(true);
+      const body = readFileSync(path, "utf8");
+      // Generous bound; the stubs are ~150–300 chars. Anything beyond 1 KB
+      // means the OpenClaw boilerplate snuck back in.
+      expect(body.length).toBeLessThan(1024);
+    }
+  });
+
   it("SKILL.md is byte-identical across all three agents (shared source of truth)", async () => {
     await ensureProjectAgents("demo");
     const cmo = read("demo-cmo", "SKILL.md");
