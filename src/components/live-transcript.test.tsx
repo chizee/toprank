@@ -96,8 +96,10 @@ describe("LiveTranscript empty state", () => {
     expect(
       screen.queryByText(/no messages yet/i),
     ).not.toBeInTheDocument();
-    // WorkingStatus pulse is shown via the role="status" RunningDot.
-    expect(screen.getByText(/Starting CMO/i)).toBeInTheDocument();
+    // WorkingStatus shows BeamingHeadline in "beam" mode (no specific
+    // tool/lifecycle info yet). The agent prefix is rendered alongside
+    // a cycling verb; assert on the prefix since the verb rotates.
+    expect(screen.getByText(/CMO/)).toBeInTheDocument();
   });
 });
 

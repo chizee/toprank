@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/markdown";
 import { RunningDot } from "@/components/running-dot";
+import { BeamingGlyph, BeamingHeadline } from "@/components/beaming-indicator";
 import { SlashCommandPopover } from "@/components/slash-command-popover";
 import { cn } from "@/lib/utils";
 import {
@@ -1095,31 +1096,44 @@ function WorkingStatus({
     0,
   );
 
-  let headline = `${agentDisplayName} is thinking…`;
+  // Two display modes:
+  //   - `beam`: cycle through "Pondering… / Cogitating… / Beaming…" verbs
+  //     with a morphing ✳ glyph. Used whenever we have nothing more
+  //     specific to say (pre-first-token wait, between tool calls). This
+  //     keeps the chat visibly alive during the 10-20s Codex pause that
+  //     used to read as "stuck".
+  //   - `static`: render a fixed headline + subtitle (specific tool in
+  //     flight, last tool result, wrapping up assistant text). The
+  //     specific info is more useful than a quirky verb, so we keep it.
+  //
+  // The leading glyph is morphing in both modes so the eye always has
+  // something animating.
+  let mode: "beam" | "static" = "beam";
+  let headline: string = `${agentDisplayName} is thinking…`;
   let subtitle: string | null = null;
+  let beamPrefix: string | null = agentDisplayName;
   if (!lastEvent || lastEvent.kind === "user_message" || lastEvent.kind === "unknown") {
-    // Pre-first-event window. For a kickoff this can be 10-20s while
-    // Codex chews through the system prompt. Use the gateway lifecycle
-    // hint if we got one — it tells us OpenClaw is alive and which phase
-    // it's in — otherwise fall back to a generic "starting" message.
+    // Pre-first-event window — typical kickoff wait. Use the gateway
+    // lifecycle hint as the subtitle so power users see "calling the
+    // model…" but the headline still gets the Beaming treatment.
+    mode = "beam";
+    beamPrefix = agentDisplayName;
     const lifecycleSummary = lifecyclePhase
       ? humanLifecyclePhase(lifecyclePhase)
       : null;
-    headline = lifecycleSummary
-      ? `${agentDisplayName} · ${lifecycleSummary}`
-      : `Starting ${agentDisplayName}…`;
-    subtitle = lifecycleSummary
-      ? "Waiting on the model's first token."
-      : "Delivering the brief to OpenClaw.";
+    subtitle = lifecycleSummary ?? "Delivering the brief to OpenClaw.";
   } else if (inFlightToolCall) {
+    mode = "static";
     headline = `Calling ${formatToolName(inFlightToolCall.name)}…`;
     subtitle = inFlightToolCall.label ?? null;
   } else if (lastEvent.kind === "tool_result") {
-    headline = `${agentDisplayName} is thinking…`;
+    mode = "beam";
+    beamPrefix = agentDisplayName;
     subtitle = lastEvent.ok
       ? `Last step · ${formatToolName(lastEvent.name)} ✓`
       : `Last step · ${formatToolName(lastEvent.name)} failed — retrying`;
   } else if (lastEvent.kind === "assistant_text") {
+    mode = "static";
     headline = `${agentDisplayName} is wrapping up…`;
   }
 
@@ -1132,10 +1146,16 @@ function WorkingStatus({
 
   return (
     <div className="flex items-start gap-2.5 rounded-md border border-dashed border-muted-foreground/25 bg-muted/10 px-3 py-2 text-xs">
-      <RunningDot size="sm" aria-label="" />
+      <span className="mt-0.5">
+        <BeamingGlyph />
+      </span>
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex items-baseline gap-2">
-          <span className="italic text-muted-foreground">{headline}</span>
+          {mode === "beam" ? (
+            <BeamingHeadline prefix={beamPrefix} />
+          ) : (
+            <span className="italic text-muted-foreground">{headline}</span>
+          )}
           {elapsedMs != null && (
             <span className="tabular-nums text-[10px] text-muted-foreground/70">
               {formatElapsed(elapsedMs)}
