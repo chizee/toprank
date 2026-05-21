@@ -1,6 +1,5 @@
 import {
   agentExists,
-  agentNameFor,
   templateForKey,
   type AgentTemplateKey,
 } from "@/server/agent-templates";
@@ -103,16 +102,19 @@ export async function handleCreateTask(
     return { ok: false, error: "CMO cannot assign tasks to itself — pick a specialist" };
   }
 
-  const assigneeAgentId = agentNameFor(
-    ctx.project_slug,
-    template.key as AgentTemplateKey,
+  // Look up the assignee by template_key — agent_ids encode the
+  // personal name (e.g. `acme-google-ads-ana`), so we can't synthesize
+  // one from the role alone.
+  const assigneeEntry = (await listProjectAgents(ctx.project_slug)).find(
+    (a) => a.template_key === template.key,
   );
-  if (!(await agentExists(assigneeAgentId))) {
+  if (!assigneeEntry || !(await agentExists(assigneeEntry.agent_id))) {
     return {
       ok: false,
-      error: `Assignee agent ${assigneeAgentId} is not provisioned for this project`,
+      error: `Assignee agent for role '${template.key}' is not provisioned for this project`,
     };
   }
+  const assigneeAgentId = assigneeEntry.agent_id;
 
   const task = createTask({
     project_slug: ctx.project_slug,

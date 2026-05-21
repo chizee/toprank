@@ -32,7 +32,7 @@ vi.mock("@/server/db/tasks", () => ({
       id: "task-uuid",
       display_id: "acme-1",
       project_slug: "acme",
-      agent_id: "acme-cmo",
+      agent_id: "acme-cmo-greg",
       title: "Audit the account and propose a starter playbook",
       brief: "...",
       success_criteria: null,
@@ -49,7 +49,10 @@ vi.mock("@/server/db/tasks", () => ({
   listTasks: (slug: string) => listTasksMock(slug),
 }));
 vi.mock("@/server/agent-templates", () => ({
-  agentNameFor: (slug: string, key: string) => `${slug}-${key.replace(/_/g, "-")}`,
+  agentNameFor: (slug: string, key: string, name: string) =>
+    `${slug}-${key.replace(/_/g, "-")}-${name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")}`,
   agentUrlSlug: (key: string, name: string) =>
     `${key.replace(/_/g, "-")}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
   TEMPLATES: [
@@ -59,8 +62,19 @@ vi.mock("@/server/agent-templates", () => ({
   ],
 }));
 
+// setOnboardingAccountAction resolves the CMO via listProjectAgents now —
+// agent_ids encode the personal name, so it can't be synthesized.
 vi.mock("@/server/agent-meta", () => ({
   readAgentMeta: () => null,
+  listProjectAgents: async () => [
+    {
+      agent_id: "acme-cmo-greg",
+      slug: "cmo-greg",
+      name: "Greg",
+      template_key: "cmo",
+      is_template_default: true,
+    },
+  ],
 }));
 
 import {
@@ -210,7 +224,7 @@ describe("setOnboardingAccountAction", () => {
     expect(createTaskMock).toHaveBeenCalledWith(
       expect.objectContaining({
         project_slug: "acme",
-        agent_id: "acme-cmo",
+        agent_id: "acme-cmo-greg",
         status: "proposed",
         title: expect.stringContaining("Audit"),
         brief: expect.stringContaining("3251706605"),
@@ -224,7 +238,7 @@ describe("setOnboardingAccountAction", () => {
         id: "prior-uuid",
         display_id: "acme-7",
         project_slug: "acme",
-        agent_id: "acme-cmo",
+        agent_id: "acme-cmo-greg",
         title: "Audit the account and propose a starter playbook",
         status: "working",
       },

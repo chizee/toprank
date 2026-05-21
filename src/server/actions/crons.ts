@@ -9,7 +9,8 @@ import {
   removeCron,
 } from "@/server/openclaw/crons";
 import { updateCronMessage } from "@/server/openclaw/gateway-rpc";
-import { agentNameFor, type AgentTemplate } from "@/server/agent-templates";
+import { type AgentTemplate } from "@/server/agent-templates";
+import { listProjectAgents } from "@/server/agent-meta";
 import { slugify } from "@/lib/slug";
 import { logAgentAction } from "@/server/db/agent-actions";
 
@@ -37,8 +38,19 @@ export async function scheduleCronAction(input: ScheduleCronInput): Promise<Sche
   const scheduleValueTrimmed = input.schedule_value.trim();
   if (!scheduleValueTrimmed) return { ok: false, error: "Schedule is required." };
 
-  const agent_slug = input.specialist.replace(/_/g, "-");
-  const agent_full_id = agentNameFor(input.project_slug, input.specialist);
+  // Look up the agent's actual id/slug from the project — agent_ids now
+  // encode the personal name (e.g. `demo3-cmo-greg`) so we can't
+  // synthesize them from the template key alone.
+  const projectAgents = await listProjectAgents(input.project_slug);
+  const target = projectAgents.find((a) => a.template_key === input.specialist);
+  if (!target) {
+    return {
+      ok: false,
+      error: `No '${input.specialist}' agent found in project ${input.project_slug}.`,
+    };
+  }
+  const agent_slug = target.slug;
+  const agent_full_id = target.agent_id;
 
   try {
     const result = await createCron({

@@ -28,6 +28,36 @@ vi.mock("@/server/db/agent-actions", () => ({
   logAgentAction: (...a: unknown[]) => logAgentActionMock(...a),
 }));
 
+// scheduleCronAction looks up the agent's full id from the project's
+// agent roster — the id encodes the personal name now, so we can't
+// synthesize it from template key alone.
+const listProjectAgentsMock = vi.fn(async () => [
+  {
+    agent_id: "demo-cmo-greg",
+    slug: "cmo-greg",
+    name: "Greg",
+    template_key: "cmo" as const,
+    is_template_default: true,
+  },
+  {
+    agent_id: "demo-google-ads-ana",
+    slug: "google-ads-ana",
+    name: "Ana",
+    template_key: "google_ads" as const,
+    is_template_default: true,
+  },
+  {
+    agent_id: "demo-seo-sam",
+    slug: "seo-sam",
+    name: "Sam",
+    template_key: "seo" as const,
+    is_template_default: false,
+  },
+]);
+vi.mock("@/server/agent-meta", () => ({
+  listProjectAgents: (...a: unknown[]) => listProjectAgentsMock(...a),
+}));
+
 import {
   deleteCronAction,
   pauseCronAction,
@@ -56,15 +86,15 @@ describe("scheduleCronAction", () => {
     expect(out).toEqual({ ok: true, cron_id: "cron-1", cron_name: "demo/google-ads/morning" });
     expect(createCronMock).toHaveBeenCalledWith({
       project_slug: "demo",
-      agent_slug: "google-ads",
-      agent_full_id: "demo-google-ads",
+      agent_slug: "google-ads-ana",
+      agent_full_id: "demo-google-ads-ana",
       cron_name: "morning-audit",
       schedule: { kind: "cron", expr: "0 9 * * *", tz: "UTC" },
       message: "Run a daily account health check.",
     });
     expect(logAgentActionMock).toHaveBeenCalledWith({
       project_slug: "demo",
-      agent_id: "demo-google-ads",
+      agent_id: "demo-google-ads-ana",
       action_type: "cron_created",
       summary: "Scheduled 'morning-audit' (cron 0 9 * * *)",
       payload: {
@@ -87,14 +117,14 @@ describe("scheduleCronAction", () => {
     });
     expect(createCronMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        agent_slug: "seo",
-        agent_full_id: "demo-seo",
+        agent_slug: "seo-sam",
+        agent_full_id: "demo-seo-sam",
         schedule: { kind: "every", duration: "1h" },
       }),
     );
   });
 
-  it("converts underscore specialist key to hyphenated agent_slug", async () => {
+  it("resolves agent_full_id from the project roster (encodes role + personal name)", async () => {
     await scheduleCronAction({
       project_slug: "demo",
       specialist: "google_ads",
@@ -104,8 +134,8 @@ describe("scheduleCronAction", () => {
       brief: "x",
     });
     const call = createCronMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(call.agent_slug).toBe("google-ads");
-    expect(call.agent_full_id).toBe("demo-google-ads");
+    expect(call.agent_slug).toBe("google-ads-ana");
+    expect(call.agent_full_id).toBe("demo-google-ads-ana");
   });
 
   it("trims brief whitespace before sending and logging", async () => {

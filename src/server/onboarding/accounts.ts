@@ -186,8 +186,15 @@ export async function setOnboardingAccountAction(
   // the existing one when a CMO audit task is already present.
   const { buildOnboardingBrief } = await import("./cmo-task-brief");
   const { listTasks, createTask } = await import("@/server/db/tasks");
-  const { agentNameFor } = await import("@/server/agent-templates");
-  const cmoAgentId = agentNameFor(project_slug, "cmo");
+  const { listProjectAgents } = await import("@/server/agent-meta");
+  // Resolve the CMO agent by template_key — agent_ids now encode the
+  // personal name, so we can't synthesize one from project_slug alone.
+  const projectAgents = await listProjectAgents(project_slug);
+  const cmo = projectAgents.find((a) => a.template_key === "cmo");
+  if (!cmo) {
+    return { ok: false, error: "CMO agent has not been provisioned yet." };
+  }
+  const cmoAgentId = cmo.agent_id;
   const allTasks = listTasks(project_slug);
   const existingAudit = allTasks.find(
     (t) => t.agent_id === cmoAgentId && t.title?.startsWith("Audit the account"),
@@ -231,20 +238,14 @@ export async function setOnboardingAccountAction(
   //     /api/chat (which atomically claims). For the resubmit branch
   //     (audit already running/done) /api/chat is a safe no-op.
 
-  // Resolve the CMO's URL slug so the client can land on its tasks page
-  // without computing the role-name slug itself.
-  const { readAgentMeta } = await import("@/server/agent-meta");
-  const { agentUrlSlug, TEMPLATES } = await import("@/server/agent-templates");
-  const cmoMeta = readAgentMeta(cmoAgentId);
-  const cmoName =
-    cmoMeta?.name ?? TEMPLATES.find((t) => t.key === "cmo")!.default_name;
-  const cmo_agent_slug = agentUrlSlug("cmo", cmoName);
-
+  // The CMO's URL slug was already resolved above (via listProjectAgents);
+  // hand it to the client so the redirect uses the role-name path without
+  // the client computing anything itself.
   revalidatePath("/", "layout");
   return {
     ok: true,
     project: updated,
     task_display_id: task.display_id,
-    cmo_agent_slug,
+    cmo_agent_slug: cmo.slug,
   };
 }

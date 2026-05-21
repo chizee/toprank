@@ -231,13 +231,16 @@ for files in your workspace, and the orchestration MCP for coordination.`,
   },
 ];
 
-export function agentNameFor(project_slug: string, template_key: AgentTemplate["key"]): string {
-  // OpenClaw agent name format: <project-slug>-<template-key>
-  // Avoids reserved names; lowercase + hyphen-only. Note this is the
-  // BACKEND id used by OpenClaw — distinct from the URL slug, which
-  // also encodes the personal name (see agentUrlSlug).
-  const safe_template = template_key.replace(/_/g, "-");
-  return `${project_slug}-${safe_template}`;
+export function agentNameFor(
+  project_slug: string,
+  template_key: AgentTemplate["key"],
+  name: string,
+): string {
+  // OpenClaw agent name format: <project-slug>-<role>-<slugified-name>
+  // (e.g. `acme-cmo-greg`). Encoding the personal name in the backend
+  // id keeps the agent_id and URL slug in lockstep: the URL slug is
+  // exactly `<role>-<slugified-name>`, the project-prefix dropped.
+  return `${project_slug}-${agentUrlSlug(template_key, name)}`;
 }
 
 /**
@@ -313,7 +316,10 @@ export async function ensureProjectAgents(
     : TEMPLATES;
 
   for (const template of templates) {
-    const agentId = agentNameFor(project_slug, template.key);
+    // Resolve the personal name FIRST. The agent_id encodes it, so this
+    // value drives both the OpenClaw backend name and the URL slug.
+    const personalName = names?.[template.key] ?? template.default_name;
+    const agentId = agentNameFor(project_slug, template.key, personalName);
     const workspaceAbs = workspaceDirFor(agentId);
     const already = await agentExists(agentId);
     if (already) {
@@ -324,12 +330,11 @@ export async function ensureProjectAgents(
       // (immutable per the agent model). Only when no sidecar exists yet
       // do we fall back to the onboarding `names` map / template default.
       const existing = readAgentMeta(agentId);
-      const personalName =
-        existing?.name ?? names?.[template.key] ?? template.default_name;
+      const finalName = existing?.name ?? personalName;
       await writeAgentMeta({
         agent_id: agentId,
         project_slug,
-        name: personalName,
+        name: finalName,
         template_key: template.key,
         created_at: existing?.created_at ?? new Date().toISOString(),
       });
@@ -353,7 +358,6 @@ export async function ensureProjectAgents(
         workspaceAbs,
       ]);
       await writeIdentityFile(workspaceAbs, template, project_slug, agentId);
-      const personalName = names?.[template.key] ?? template.default_name;
       await writeAgentMeta({
         agent_id: agentId,
         project_slug,

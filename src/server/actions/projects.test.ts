@@ -53,6 +53,34 @@ vi.mock("@/server/agent-templates", () => ({
   // createProjectForOnboardingAction read it from agent-templates; the
   // reprovisionAgentsAction also passes it explicitly.
   DEFAULT_ONBOARDING_TEMPLATE_KEYS: ["cmo", "google_ads"],
+  // createProjectForOnboardingAction now mints the onboarding task
+  // synchronously, so it imports agentNameFor to derive the CMO id.
+  agentNameFor: (slug: string, key: string, name: string) =>
+    `${slug}-${key.replace(/_/g, "-")}-${name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")}`,
+}));
+
+// Same flow needs cmo-task-brief + tasks + run-task. Stub them all.
+vi.mock("@/server/onboarding/cmo-task-brief", () => ({
+  buildProjectOnboardingBrief: () => ({
+    title: "Learn the project and write PROJECT.md",
+    brief: "stub brief",
+    success_criteria: "stub criteria",
+  }),
+}));
+vi.mock("@/server/db/tasks", () => ({
+  createTask: vi.fn(() => ({
+    id: "onb-uuid",
+    display_id: "acme-1",
+    project_slug: "acme",
+    agent_id: "acme-cmo-greg",
+    title: "Learn the project and write PROJECT.md",
+    status: "proposed",
+  })),
+}));
+vi.mock("@/server/orchestration/run-task", () => ({
+  startTaskIfProposed: vi.fn((t: unknown) => t),
 }));
 
 const startProvisioningMock = vi.fn();

@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
-import { agentNameFor, type AgentTemplateKey } from "@/server/agent-templates";
+import type { AgentTemplateKey } from "@/server/agent-templates";
 
 /**
  * Sessions are owned by OpenClaw. We never persist threads, history, or
@@ -118,16 +118,22 @@ function cookieName(project_slug: string, agent_template_key: string): string {
 }
 
 /**
- * Return the active session for (project, agent_template) along with the
- * full list of sessions in dropdown order. If the cookie points at a UUID
- * not yet in OpenClaw's store (pending first-message), it appears at the top
- * as a synthetic entry tagged pending.
+ * Return the active session for an agent along with the full list of
+ * sessions in dropdown order. If the cookie points at a UUID not yet in
+ * OpenClaw's store (pending first-message), it appears at the top as a
+ * synthetic entry tagged pending.
+ *
+ * `agent_full_id` is the canonical OpenClaw agent id (already includes
+ * the role + personal name suffix); `agent_template_key` is used only
+ * for the cookie name so different roles keep separate active sessions
+ * per project.
  */
 export async function getSessionsView(
   project_slug: string,
   agent_template_key: AgentTemplateKey,
+  agent_full_id: string,
 ): Promise<{ active: OpenClawSession; all: OpenClawSession[] }> {
-  const agentFullId = agentNameFor(project_slug, agent_template_key);
+  const agentFullId = agent_full_id;
   const existing = listSessionsForAgent(agentFullId);
 
   const c = await cookies();

@@ -100,11 +100,11 @@ export async function listProjectAgents(project_slug: string): Promise<ProjectAg
   //    pretending SEO exists when the onboarding scope is cmo+google-ads.
   for (const t of TEMPLATES) {
     if (!t.default_onboarding) continue;
-    const agentId = agentNameFor(project_slug, t.key);
     // Placeholder entry shown before a meta sidecar exists on disk.
-    // Uses the template's default_name as the personal name so the
-    // sidebar reads sensibly even during the brief window between
-    // project-create and ensureProjectAgents finishing.
+    // Both the agent_id and the URL slug encode the template's
+    // default_name; the moment ensureProjectAgents writes a sidecar
+    // with the user-chosen name, the overlay below replaces this row.
+    const agentId = agentNameFor(project_slug, t.key, t.default_name);
     result.set(agentId, {
       agent_id: agentId,
       slug: agentUrlSlug(t.key, t.default_name),

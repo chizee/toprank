@@ -194,14 +194,14 @@ describe("getSessionsView", () => {
       "agent:alpha-cmo:m1": { sessionId: "s1", updatedAt: 100 },
       "agent:alpha-cmo:m2": { sessionId: "s2", updatedAt: 200 },
     });
-    const view = await getSessionsView("alpha", "cmo");
+    const view = await getSessionsView("alpha", "cmo", "alpha-cmo");
     expect(view.active.sessionId).toBe("s2");
     expect(view.all.length).toBe(2);
     expect(view.active.pending).toBe(false);
   });
 
   it("synthesizes a fresh pending session when no sessions exist + no cookie", async () => {
-    const view = await getSessionsView("beta", "cmo");
+    const view = await getSessionsView("beta", "cmo", "beta-cmo");
     expect(view.active.pending).toBe(true);
     expect(view.active.label).toBe("main");
     expect(view.active.sessionKey).toBe(
@@ -218,7 +218,7 @@ describe("getSessionsView", () => {
       "agent:gamma-cmo:t-new": { sessionId: "cookie-id", updatedAt: 2 },
     });
     cookieStore.set("notfair_active_session_gamma_cmo", "cookie-id");
-    const view = await getSessionsView("gamma", "cmo");
+    const view = await getSessionsView("gamma", "cmo", "gamma-cmo");
     expect(view.active.sessionId).toBe("cookie-id");
     expect(view.active.pending).toBe(false);
     // All sessions returned in newest-first order.
@@ -230,7 +230,7 @@ describe("getSessionsView", () => {
       "agent:delta-cmo:t-real": { sessionId: "real-id", updatedAt: 1 },
     });
     cookieStore.set("notfair_active_session_delta_cmo", "imaginary-id");
-    const view = await getSessionsView("delta", "cmo");
+    const view = await getSessionsView("delta", "cmo", "delta-cmo");
     expect(view.active.sessionId).toBe("imaginary-id");
     expect(view.active.pending).toBe(true);
     // Label is the first 8 chars of the cookie id.
