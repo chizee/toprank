@@ -49,7 +49,7 @@ const NAV: NavItem[] = [
   { href: "/tasks", label: "Tasks", icon: ListChecks },
   { href: "/crons", label: "Crons", icon: Clock },
   { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/connections", label: "Connections", icon: Plug },
+  { href: "/connections", label: "MCP Connections", icon: Plug },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

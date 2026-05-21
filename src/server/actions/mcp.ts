@@ -106,6 +106,74 @@ export async function disconnectMcpAction(input: {
   return { ok: true };
 }
 
+/**
+ * Fetch the tool list for an external (OAuth-connected) MCP. Driven by the
+ * tools modal on the Connections page — lazy on dialog-open so we don't
+ * pay the RPC roundtrip when the user is just glancing at the page.
+ *
+ * Probes the MCP's tools/list endpoint with the stored bearer, then
+ * normalizes each entry into the same ToolSummary shape we ship for
+ * built-in tools — the modal renders both identically.
+ */
+export async function listMcpToolsAction(input: {
+  mcp_key: string;
+}): Promise<
+  | { ok: true; tools: import("@/server/mcp-server/tool-summaries").ToolSummary[] }
+  | { ok: false; error: string }
+> {
+  const project = await getActiveProject();
+  if (!project) {
+    return { ok: false, error: "No active project." };
+  }
+  const stored_key = storedMcpKey(project.slug, input.mcp_key);
+  const { getMcpConfig, mcpRpc } = await import("@/server/mcp/rpc");
+  const cfg = await getMcpConfig(stored_key);
+  if (!cfg) {
+    return { ok: false, error: "MCP is not configured for this project." };
+  }
+  const r = await mcpRpc<{ tools?: Array<{ name?: unknown; description?: unknown; inputSchema?: unknown }> }>(
+    cfg.url,
+    cfg.token,
+    "tools/list",
+    {},
+    { timeoutMs: 5_000 },
+  );
+  if (!r.ok) {
+    const message =
+      r.kind === "http_error"
+        ? `HTTP ${r.status}`
+        : r.kind === "rpc_error"
+          ? `RPC ${r.code}: ${r.message}`
+          : r.kind === "timeout"
+            ? "MCP call timed out"
+            : r.kind === "aborted"
+              ? "MCP call aborted"
+              : r.kind === "malformed_response"
+                ? r.message
+                : r.message;
+    return { ok: false, error: message };
+  }
+  const { argsFromJsonSchema } = await import("@/server/mcp-server/tool-summaries");
+  const tools = Array.isArray(r.result?.tools)
+    ? r.result.tools
+        .filter(
+          (
+            t,
+          ): t is { name: string; description?: string; inputSchema?: Record<string, unknown> } =>
+            typeof t?.name === "string",
+        )
+        .map((t) => ({
+          name: t.name,
+          description: typeof t.description === "string" ? t.description : "",
+          args:
+            t.inputSchema && typeof t.inputSchema === "object"
+              ? argsFromJsonSchema(t.inputSchema)
+              : [],
+        }))
+    : [];
+  return { ok: true, tools };
+}
+
 // ─── helpers ────────────────────────────────────────────────────────
 
 type ResolvedAuthServer = {
