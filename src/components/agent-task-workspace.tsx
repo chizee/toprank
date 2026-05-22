@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -314,22 +314,33 @@ function SelectedTaskPanel({
   //
   // Why: OpenClaw doesn't flush the JSONL file until session.ended —
   // a long-running audit can spend minutes calling MCP tools (which
-  // update the DB synchronously) while the JSONL stays empty. If we
-  // only refresh on `newEvents > 0`, the badge stays stuck on
-  // "Working" until the very end of the session even though the
-  // agent already called submit_task_status seconds earlier. Polling
-  // is cheap (every 800ms in-flight, 2s otherwise) and the refresh
-  // is RSC-only.
+  // update the DB synchronously) while the JSONL stays empty.
   //
-  // When the task is terminal AND the poll returned no new events,
-  // we stop polling — the transcript is fully drained.
+  // Stop-polling rule: we hang on for a few empty ticks AFTER the task
+  // hits a terminal status. The JSONL flush can land AFTER the
+  // status-flip — if we stopped immediately, the transcript would stay
+  // blank until the next manual refresh. Counting empty terminal ticks
+  // and stopping only after a small grace window (~5 s at 2 s cadence)
+  // gives the flush a chance to catch up.
+  const emptyTerminalTicksRef = useRef(0);
+  const GRACE_TICKS_AFTER_TERMINAL = 3;
   const onPolled = useCallback(
     ({ newEvents }: { newEvents: number; fileSize: number }) => {
       if (newEvents > 0 || isInFlight) {
         router.refresh();
       }
-      if (!isInFlight && newEvents === 0) return true;
-      return false;
+      if (isInFlight) {
+        emptyTerminalTicksRef.current = 0;
+        return false;
+      }
+      if (newEvents > 0) {
+        // Flush landed something. Reset the grace counter — there might
+        // be more bytes coming as OpenClaw drains.
+        emptyTerminalTicksRef.current = 0;
+        return false;
+      }
+      emptyTerminalTicksRef.current += 1;
+      return emptyTerminalTicksRef.current >= GRACE_TICKS_AFTER_TERMINAL;
     },
     [isInFlight, router],
   );
