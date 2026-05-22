@@ -27,9 +27,14 @@ import type { Approval, Task, TaskStatus } from "@/types";
 
 const TASK_IN_FLIGHT: TaskStatus[] = ["proposed", "approved", "working", "blocked"];
 
+// `blocked` covers two distinct reasons: waiting on an approval, or
+// waiting on another task to finish. The section header stays generic
+// ("Blocked") and each row's subline spells out the actual reason —
+// avoids the previous "Waiting on approval" label being a lie when the
+// real blocker is an upstream task.
 const STATUS_GROUPS: Array<{ status: TaskStatus; label: string }> = [
   { status: "working", label: "Working" },
-  { status: "blocked", label: "Waiting on approval" },
+  { status: "blocked", label: "Blocked" },
   { status: "proposed", label: "Proposed" },
   { status: "approved", label: "Approved" },
   { status: "done", label: "Done" },
@@ -98,6 +103,17 @@ export function AgentTaskWorkspace({
       map.set(t.status, list);
     }
     return map;
+  }, [tasks]);
+
+  // Resolve blocker → blocker task. Used by TaskRow to show a
+  //   "Waiting on <display_id>" subline on tasks blocked by an upstream
+  // task (vs. tasks blocked by an approval). Internal-only — only the
+  // sidebar list needs this; the chat-side blockedReason is computed
+  // separately further below.
+  const taskById = useMemo(() => {
+    const m = new Map<string, Task>();
+    for (const t of tasks) m.set(t.id, t);
+    return m;
   }, [tasks]);
 
   const totalCount = tasks.length;
@@ -175,6 +191,11 @@ export function AgentTaskWorkspace({
                       <li key={t.id}>
                         <TaskRow
                           task={t}
+                          blocker={
+                            t.blocked_by_task_id
+                              ? taskById.get(t.blocked_by_task_id)
+                              : undefined
+                          }
                           selected={
                             t.display_id === selectedId || t.id === selectedId
                           }
@@ -257,6 +278,7 @@ export function AgentTaskWorkspace({
                 projectSlug={projectSlug}
                 agentSlug={agentSlug}
                 agentDisplayName={agentDisplayName}
+                taskById={taskById}
               />
             </div>
           </>
@@ -276,11 +298,13 @@ function SelectedTaskPanel({
   projectSlug,
   agentSlug,
   agentDisplayName,
+  taskById,
 }: {
   selected: SelectedTaskBundle;
   projectSlug: string;
   agentSlug: string;
   agentDisplayName: string;
+  taskById: Map<string, Task>;
 }) {
   const router = useRouter();
   const isInFlight = TASK_IN_FLIGHT.includes(selected.task.status);
@@ -318,18 +342,26 @@ function SelectedTaskPanel({
   const liveApprovals = selected.approvals.filter(
     (a) => a.status === "pending" || a.status === "revision_requested",
   );
-  // When the task is parked in `blocked`, build a short "why" string so the
-  // LiveTranscript can replace its forward-motion indicator ("thinking…",
-  // "wrapping up…") with an honest paused-state pill. The most common reason
-  // is a pending approval, and we have those right here.
-  const blockedReason =
-    selected.task.status === "blocked"
-      ? liveApprovals.length > 0
-        ? liveApprovals.length === 1
+  // When the task is parked in `blocked`, build a short "why" string so
+  // the LiveTranscript can replace its forward-motion indicator
+  // ("thinking…", "wrapping up…") with an honest paused-state pill.
+  // Two distinct reasons: (a) approval pending (b) gated on another task.
+  let blockedReason: string | undefined;
+  if (selected.task.status === "blocked") {
+    if (selected.task.blocked_by_task_id) {
+      const blocker = taskById.get(selected.task.blocked_by_task_id);
+      blockedReason = blocker
+        ? `waiting on ${blocker.display_id}`
+        : "waiting on an upstream task";
+    } else if (liveApprovals.length > 0) {
+      blockedReason =
+        liveApprovals.length === 1
           ? "waiting on approval"
-          : `waiting on ${liveApprovals.length} approvals`
-        : "waiting for the gating condition to resolve"
-      : undefined;
+          : `waiting on ${liveApprovals.length} approvals`;
+    } else {
+      blockedReason = "waiting for the gating condition to resolve";
+    }
+  }
   return (
     <div className="flex h-full min-h-0 flex-col">
       {liveApprovals.length > 0 && (
@@ -406,10 +438,14 @@ function CancelTaskButton({ taskDisplayId }: { taskDisplayId: string }) {
 
 function TaskRow({
   task,
+  blocker,
   selected,
   onSelect,
 }: {
   task: Task;
+  /** When this task is blocked by another task, the blocker (for the
+   *  "Waiting on <id>" subline). Undefined for approval-blocked tasks. */
+  blocker?: Task;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -457,6 +493,20 @@ function TaskRow({
       {task.status === "failed" && task.error_message && (
         <div className="ml-6 mt-1 line-clamp-1 text-[10px] text-destructive/80">
           {task.error_message}
+        </div>
+      )}
+      {task.status === "blocked" && (
+        <div className="ml-6 mt-1 line-clamp-1 text-[10px] text-muted-foreground">
+          {blocker ? (
+            <>
+              Waiting on{" "}
+              <span className="font-mono tabular-nums">
+                {blocker.display_id}
+              </span>
+            </>
+          ) : (
+            "Waiting on approval"
+          )}
         </div>
       )}
     </button>
