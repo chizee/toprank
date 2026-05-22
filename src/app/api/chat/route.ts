@@ -11,7 +11,7 @@ import {
   openShadowWriter,
   shadowStreamEvent,
 } from "@/server/openclaw/shadow-transcript";
-import { claimProposedTask, getTask } from "@/server/db/tasks";
+import { claimProposedTask, getTask, updateTask } from "@/server/db/tasks";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -258,6 +258,21 @@ export async function POST(request: Request) {
             send("lifecycle", { phase: evt.phase });
           } else if (evt.kind === "error") {
             send("error", { message: evt.message });
+            // When this turn is a task kickoff (we atomically claimed
+            // proposed → working above), a gateway error means the agent
+            // never actually ran. Without this rollback the task is
+            // stranded in `working` forever — the UI shows a permanent
+            // "Starting" with no events. Mark it failed so the error
+            // surfaces in the task row and the user can decide to retry.
+            if (taskId) {
+              console.error(
+                `[api/chat] kickoff gateway error for task ${taskId} (agent=${agentName}): ${evt.message}`,
+              );
+              updateTask(taskId, {
+                status: "failed",
+                error_message: evt.message,
+              });
+            }
           }
           // "final" implicitly ends the loop after; no separate signal needed.
         }
@@ -274,9 +289,19 @@ export async function POST(request: Request) {
         send("perf", { marks: perf.summary() });
         send("done", {});
       } catch (err) {
-        send("error", {
-          message: err instanceof Error ? err.message : String(err),
-        });
+        const message = err instanceof Error ? err.message : String(err);
+        send("error", { message });
+        // Same kickoff-stranding fix as the in-stream error branch above:
+        // if we claimed the task at the top of the handler, the gateway
+        // tearing down before any progress means the agent never ran.
+        // Mark it failed so the UI surfaces the error instead of sitting
+        // on "Starting" forever.
+        if (taskId) {
+          console.error(
+            `[api/chat] kickoff threw for task ${taskId} (agent=${agentName}): ${message}`,
+          );
+          updateTask(taskId, { status: "failed", error_message: message });
+        }
       } finally {
         // Close the shadow if it's still open (error path). Idempotent
         // close — calling twice when the success path already closed is

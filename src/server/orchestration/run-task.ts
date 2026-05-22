@@ -74,31 +74,69 @@ export async function runTaskKickoffServerSide(task: Task): Promise<void> {
   // post-process the buffer for pseudo-XML blocks — any side effects
   // (task_status, comments, approvals) happen via the agent calling
   // notfair-orchestration MCP tools mid-stream.
-  try {
-    for await (const evt of streamChatViaGateway({
-      sessionKey,
-      sessionId: finalTask.thread_id,
-      message: kickoffMessage,
-    })) {
-      // Best-effort forward to the shadow; a shadow-write failure must
-      // not abort the actual gateway stream.
-      try {
-        await shadowStreamEvent(shadow, evt);
-      } catch (err) {
-        console.error("[run-task] shadow write failed:", err);
+  console.log(
+    `[run-task] kickoff start task=${finalTask.id} agent=${finalTask.agent_id} thread=${finalTask.thread_id}`,
+  );
+  // Retry on the post-provisioning race: `openclaw agents add` updates the
+  // config file but the gateway's pinned runtime snapshot needs a moment
+  // before it sees the new agent. Until that catches up, chat.send fails
+  // with INVALID_REQUEST "Agent '<id>' no longer exists in configuration".
+  // 2s/4s/8s backoff covers a ~14s race window we've observed in dev.
+  const RETRY_DELAYS_MS = [2_000, 4_000, 8_000];
+  let lastError: unknown = null;
+  let streamed = false;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      for await (const evt of streamChatViaGateway({
+        sessionKey,
+        sessionId: finalTask.thread_id,
+        message: kickoffMessage,
+      })) {
+        try {
+          await shadowStreamEvent(shadow, evt);
+        } catch (err) {
+          console.error("[run-task] shadow write failed:", err);
+        }
+        if (evt.kind === "error") {
+          throw new Error(evt.message);
+        }
       }
-      if (evt.kind === "error") {
-        throw new Error(evt.message);
+      streamed = true;
+      break;
+    } catch (err) {
+      lastError = err;
+      const message = err instanceof Error ? err.message : String(err);
+      if (!isAgentNotInConfigError(message) || attempt >= RETRY_DELAYS_MS.length) {
+        break;
       }
+      const delay = RETRY_DELAYS_MS[attempt]!;
+      console.warn(
+        `[run-task] gateway snapshot stale for ${finalTask.agent_id}; retrying in ${delay}ms (attempt ${attempt + 1}/${RETRY_DELAYS_MS.length})`,
+      );
+      await new Promise((r) => setTimeout(r, delay));
     }
-    await shadow.close();
-  } catch (err) {
-    await shadow.close().catch(() => undefined);
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[run-task] kickoff failed for ${finalTask.id}:`, err);
-    updateTask(finalTask.id, {
-      status: "failed",
-      error_message: message,
-    });
   }
+  if (streamed) {
+    await shadow.close();
+    console.log(`[run-task] kickoff stream done task=${finalTask.id}`);
+    return;
+  }
+  await shadow.close().catch(() => undefined);
+  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  console.error(
+    `[run-task] kickoff failed task=${finalTask.id} agent=${finalTask.agent_id}: ${message}`,
+  );
+  updateTask(finalTask.id, {
+    status: "failed",
+    error_message: message,
+  });
+}
+
+/**
+ * Matches the gateway's "Agent '<id>' no longer exists in configuration"
+ * INVALID_REQUEST. Surfaced when the gateway hasn't refreshed its agents
+ * snapshot yet after a fresh `openclaw agents add`. Idempotently retryable.
+ */
+function isAgentNotInConfigError(message: string): boolean {
+  return message.includes("no longer exists in configuration");
 }

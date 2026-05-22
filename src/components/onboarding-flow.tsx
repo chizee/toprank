@@ -17,6 +17,7 @@ import { createProjectForOnboardingAction } from "@/server/actions/projects";
 import {
   listGoogleAdsAccounts,
   setOnboardingAccountAction,
+  getOnboardingTaskForSkipAction,
   type GoogleAdsAccount,
 } from "@/server/onboarding/accounts";
 
@@ -271,10 +272,6 @@ function ConnectStep({ slug }: { slug: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const connectionsHref = projectHref(slug, "/connections");
-  // Project home — sidebar leads the user to the CMO from there.
-  // (We can't hardcode /agents/<role-name>/tasks because the URL slug is
-  // user-customizable as <role>-<name>.)
-  const projectHome = projectHref(slug, "");
 
   async function onConnect() {
     setBusy(true);
@@ -296,11 +293,31 @@ function ConnectStep({ slug }: { slug: string }) {
     }
   }
 
-  function onSkip() {
-    // Without Google Ads connected, there's nothing for the CMO to audit
-    // yet — drop the user on the CMO's task tab so they can see "no tasks
-    // assigned, connect Google Ads to start".
-    router.push(projectHome);
+  async function onSkip() {
+    // Drop the user on the CMO's PROJECT.md onboarding task — the same
+    // workspace the connect path lands on. The kickoff already fired
+    // server-side in createProjectForOnboardingAction, so this is just a
+    // navigation: the user sees streaming events (or, if the kickoff
+    // errored, the failed-task error message — much better than the
+    // earlier "land on project home and figure it out" fallback).
+    setBusy(true);
+    try {
+      const result = await getOnboardingTaskForSkipAction(slug);
+      if (!result.ok) {
+        toast.error(result.error);
+        setBusy(false);
+        return;
+      }
+      router.replace(
+        projectHref(
+          slug,
+          `/agents/${result.cmo_agent_slug}/tasks?task=${encodeURIComponent(result.task_display_id)}`,
+        ),
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
   }
 
   return (

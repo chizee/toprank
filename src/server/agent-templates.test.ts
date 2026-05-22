@@ -16,8 +16,13 @@ vi.mock("@/server/openclaw/cli", () => ({
   openclaw: vi.fn(async (args: string[]) => {
     // ensureProjectAgents calls `openclaw agents list` to check existence,
     // and `openclaw agents add` to provision. Stub both as no-ops returning
-    // an empty agent list so every template is treated as "new".
+    // an empty agent list so every template is treated as "new". Track
+    // the added ids so the gateway-list mock below can pretend the
+    // gateway already knows about them (closes the test-time race).
     if (args[0] === "agents" && args[1] === "list") return "";
+    if (args[0] === "agents" && args[1] === "add" && typeof args[2] === "string") {
+      seenAgentIds.add(args[2]);
+    }
     return undefined;
   }),
   OpenClawError: class extends Error {},
@@ -39,6 +44,20 @@ vi.mock("@/server/mcp-server/registration", () => ({
 
 vi.mock("@/server/agent-meta", () => ({
   writeAgentMeta: vi.fn(async () => {}),
+}));
+
+// Provisioning now waits for the gateway's runtime agents list to include
+// the newly-created ids before returning (closes the post-`openclaw agents
+// add` race that stranded onboarding kickoffs). Use a permissive mock that
+// claims every requested id is already present — the wait drops out on its
+// first iteration so provisioning returns synchronously like before.
+const seenAgentIds = new Set<string>();
+vi.mock("@/server/openclaw/gateway-rpc", () => ({
+  listAllAgents: vi.fn(async () => ({
+    defaultId: "main",
+    mainKey: "main",
+    agents: [...seenAgentIds].map((id) => ({ id })),
+  })),
 }));
 
 import { ensureProjectAgents, agentNameFor } from "./agent-templates";

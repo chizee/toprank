@@ -7,6 +7,7 @@ const {
   startMcpConnect,
   listGoogleAdsAccounts,
   setOnboardingAccountAction,
+  getOnboardingTaskForSkipAction,
   routerPush,
   routerReplace,
   toastFns,
@@ -16,6 +17,7 @@ const {
   startMcpConnect: vi.fn(),
   listGoogleAdsAccounts: vi.fn(),
   setOnboardingAccountAction: vi.fn(),
+  getOnboardingTaskForSkipAction: vi.fn(),
   routerPush: vi.fn(),
   routerReplace: vi.fn(),
   toastFns: {
@@ -38,6 +40,8 @@ vi.mock("@/server/onboarding/accounts", () => ({
   listGoogleAdsAccounts: (...args: unknown[]) => listGoogleAdsAccounts(...args),
   setOnboardingAccountAction: (...args: unknown[]) =>
     setOnboardingAccountAction(...args),
+  getOnboardingTaskForSkipAction: (...args: unknown[]) =>
+    getOnboardingTaskForSkipAction(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -80,6 +84,7 @@ beforeEach(() => {
   startMcpConnect.mockReset();
   listGoogleAdsAccounts.mockReset();
   setOnboardingAccountAction.mockReset();
+  getOnboardingTaskForSkipAction.mockReset();
   routerPush.mockReset();
   routerReplace.mockReset();
   toastFns.success.mockReset();
@@ -238,15 +243,33 @@ describe("OnboardingFlow — ConnectStep", () => {
     );
   });
 
-  it("pushes the project home when the user clicks Skip", () => {
+  it("redirects to the CMO onboarding task when the user clicks Skip", async () => {
+    getOnboardingTaskForSkipAction.mockResolvedValue({
+      ok: true,
+      task_display_id: "acme-1",
+      cmo_agent_slug: "cmo-greg",
+    });
     setStep("connect", "acme");
     render(<OnboardingFlow />);
     fireEvent.click(screen.getByRole("button", { name: /Skip Google Ads/i }));
-    // After the agent-identity refactor, CMO URL slugs encode the user-
-    // chosen name (`cmo-<name>`), so we can't hardcode `/agents/cmo/tasks`
-    // here. Sending the user to the project home is correct — the sidebar
-    // surfaces the named CMO from there.
-    expect(routerPush).toHaveBeenCalledWith("/acme");
+    await waitFor(() =>
+      expect(routerReplace).toHaveBeenCalledWith(
+        "/acme/agents/cmo-greg/tasks?task=acme-1",
+      ),
+    );
+  });
+
+  it("toasts when the skip lookup fails", async () => {
+    getOnboardingTaskForSkipAction.mockResolvedValue({
+      ok: false,
+      error: "Onboarding task not found.",
+    });
+    setStep("connect", "acme");
+    render(<OnboardingFlow />);
+    fireEvent.click(screen.getByRole("button", { name: /Skip Google Ads/i }));
+    await waitFor(() =>
+      expect(toastFns.error).toHaveBeenCalledWith("Onboarding task not found."),
+    );
   });
 });
 

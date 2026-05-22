@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { openclaw } from "@/server/openclaw/cli";
+import { listAllAgents } from "@/server/openclaw/gateway-rpc";
 import { readAgentMeta, writeAgentMeta } from "@/server/agent-meta";
 import {
   cleanupLegacyOrchestrationRows,
@@ -374,6 +375,19 @@ export async function ensureProjectAgents(
     }
   }
 
+  // After provisioning, the openclaw config file has the new agent rows
+  // but the gateway daemon's pinned runtime snapshot lags by a beat —
+  // sending chat.send during that window hits an INVALID_REQUEST
+  // "Agent '<id>' no longer exists in configuration". Wait until the
+  // gateway's agents.list reports every newly-created id so the kickoff
+  // path immediately after this (createProjectForOnboardingAction's
+  // startTaskIfProposed) finds a warm gateway. Best-effort: a timeout
+  // here doesn't block provisioning — runTaskKickoffServerSide also has
+  // retry-on-this-error as a second line of defense.
+  if (created.length > 0) {
+    await waitForGatewayToSeeAgents(created);
+  }
+
   // Register the orchestration MCP server with OpenClaw — once, globally.
   // Tools are project-scoped via a required `project_slug` argument on every
   // call, so a single registration serves every project + every agent in
@@ -397,6 +411,40 @@ export async function ensureProjectAgents(
   }
 
   return { created, existed, failed };
+}
+
+/**
+ * Poll the gateway's `agents.list` until every newly-provisioned id shows
+ * up (or the timeout expires). Closes the post-`openclaw agents add` race
+ * where the runtime config snapshot hasn't caught up to the on-disk
+ * config file yet, so chat.send hits "Agent '<id>' no longer exists in
+ * configuration".
+ */
+async function waitForGatewayToSeeAgents(
+  expected: string[],
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const intervalMs = opts.intervalMs ?? 500;
+  const deadline = Date.now() + timeoutMs;
+  const want = new Set(expected);
+  while (Date.now() < deadline) {
+    try {
+      const list = await listAllAgents();
+      const seen = new Set(list.agents.map((a) => a.id));
+      if ([...want].every((id) => seen.has(id))) return;
+    } catch (err) {
+      // Transient — gateway may be momentarily unreachable during config
+      // rewrites. Fall through to the sleep + retry.
+      console.warn(
+        `[provision] gateway agents.list probe failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  console.warn(
+    `[provision] gateway didn't surface all new agents within ${timeoutMs}ms; kickoffs will rely on the retry-on-stale-snapshot path`,
+  );
 }
 
 function workspaceDirFor(name: string): string {

@@ -248,3 +248,50 @@ export async function setOnboardingAccountAction(
     cmo_agent_slug: cmo.slug,
   };
 }
+
+export type SkipAccountResult =
+  | { ok: true; task_display_id: string; cmo_agent_slug: string }
+  | { ok: false; error: string };
+
+/**
+ * Skip-Google-Ads variant of the onboarding finish. Resolves the CMO agent
+ * and its already-created "Learn the project and write PROJECT.md" task so
+ * the client can land the user on the same task workspace the connect path
+ * lands on. No account is persisted, no audit task is minted — the audit
+ * task is only meaningful once Google Ads is wired up, and the user can
+ * always reach the connect screen later from /connections.
+ *
+ * The PROJECT.md kickoff was already fired server-side by
+ * createProjectForOnboardingAction (post-provisioning .then). All we do
+ * here is forward the slugs the client needs to navigate.
+ */
+export async function getOnboardingTaskForSkipAction(
+  project_slug: string,
+): Promise<SkipAccountResult> {
+  if (!project_slug.trim()) {
+    return { ok: false, error: "Missing project slug." };
+  }
+  const project = getProject(project_slug);
+  if (!project) return { ok: false, error: "Project not found." };
+
+  const { listTasks } = await import("@/server/db/tasks");
+  const { listProjectAgents } = await import("@/server/agent-meta");
+  const projectAgents = await listProjectAgents(project_slug);
+  const cmo = projectAgents.find((a) => a.template_key === "cmo");
+  if (!cmo) {
+    return { ok: false, error: "CMO agent has not been provisioned yet." };
+  }
+  const onboardingTask = listTasks(project_slug).find(
+    (t) =>
+      t.agent_id === cmo.agent_id &&
+      t.title === "Learn the project and write PROJECT.md",
+  );
+  if (!onboardingTask) {
+    return { ok: false, error: "Onboarding task not found." };
+  }
+  return {
+    ok: true,
+    task_display_id: onboardingTask.display_id,
+    cmo_agent_slug: cmo.slug,
+  };
+}
