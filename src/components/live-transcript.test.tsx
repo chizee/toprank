@@ -137,13 +137,13 @@ describe("LiveTranscript rendering events", () => {
     expect(screen.getByText(/→ result/)).toBeInTheDocument();
   });
 
-  it("renders kickoff-style user messages as a collapsible task brief block", () => {
+  it("hides kickoff-style user messages from the transcript", () => {
     const events: TranscriptEvent[] = [
       { kind: "user_message", id: "u1", ts: 1, body: "(task assignment) audit the account" },
     ];
     render(<LiveTranscript {...defaultProps({ initialEvents: events, threadId: "t-kickoff" })} />);
-    expect(screen.getByText(/Task brief sent to agent/i)).toBeInTheDocument();
-    expect(screen.getByText(/audit the account/)).toBeInTheDocument();
+    expect(screen.queryByText(/Task brief sent to agent/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/audit the account/)).not.toBeInTheDocument();
   });
 
   it("shows error-status icon when the latest tool result failed", () => {

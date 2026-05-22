@@ -268,7 +268,7 @@ describe("AgentTaskWorkspace selected-task panel", () => {
         })}
       />,
     );
-    expect(screen.getAllByText("demo-42").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("DEMO-42").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Audit yesterday's spend").length).toBeGreaterThan(0);
     expect(screen.getAllByText("working").length).toBeGreaterThan(0);
     const stub = screen.getByTestId("live-transcript");

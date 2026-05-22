@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
@@ -137,15 +136,7 @@ export function AgentTaskWorkspace({
       {/* ── Left pane: task list ─────────────────────────────────────── */}
       <aside className="flex w-80 shrink-0 flex-col border-r bg-muted/20">
         <div className="border-b px-4 py-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {agentDisplayName} · Tasks
-            </h2>
-            <span className="text-[10px] tabular-nums text-muted-foreground">
-              {totalCount}
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {inFlightCount > 0 ? (
               <span className="inline-flex items-center gap-1.5">
                 <RunningDot size="sm" aria-label="" />
@@ -219,14 +210,7 @@ export function AgentTaskWorkspace({
               <div className="mx-auto w-full max-w-3xl px-6 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                      <Link
-                        href={projectHref(projectSlug, "/tasks")}
-                        className="hover:text-foreground"
-                      >
-                        Tasks
-                      </Link>
-                      <span>/</span>
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                       <span className="font-mono">{selected.task.display_id.toUpperCase()}</span>
                     </div>
                     <h1 className="mt-0.5 text-base font-semibold tracking-tight truncate">

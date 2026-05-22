@@ -323,13 +323,18 @@ export function LiveTranscript({
     };
   }, [pollIntervalMs, pollOnce, sendingChat, stopPolling]);
 
-  // ── Live re-attach: SSE bridge to OpenClaw's sessions.messages stream. ─
-  // OpenClaw buffers session JSONL until session.ended, so the polling
-  // path above sees nothing mid-turn. For an in-flight task (especially
-  // one auto-kicked-off server-side without a /api/chat SSE channel),
-  // this re-attaches to the gateway and forwards every session.message
-  // event live. Same dedup set as polling, so events that later land in
-  // JSONL don't double-render.
+  // ── Live re-attach: SSE bridge to the shadow-transcript stream. ─────
+  // OpenClaw buffers session JSONL until session.ended, so JSONL polling
+  // sees nothing mid-turn. Both server-side task kickoffs and /api/chat
+  // tee their gateway events to a shadow JSONL — this bridge tails that
+  // file so a tab switching back to a thread mid-run picks up the stream
+  // instead of staring at a frozen transcript until the turn flushes.
+  //
+  // The bridge runs on every thread mount, not just tasks. The shadow
+  // file may not exist (idle thread) or exist-but-be-idle (run already
+  // finished); both cases are no-ops on the server. Same dedup set as
+  // polling, so events that later land in OpenClaw's JSONL don't
+  // double-render.
   //
   // Skipped during an active /api/chat send — that path already streams
   // its own deltas; layering re-attach on top would just duplicate work.
@@ -339,12 +344,6 @@ export function LiveTranscript({
     // dev-server pair shows the full path. Toggle off in prod later.
     const log = (...args: unknown[]) =>
       console.log("[live-bridge]", ...args);
-    if (!composerDisabled) {
-      log("skip: composerDisabled=false (task not in flight)", {
-        threadId,
-      });
-      return;
-    }
     if (sendingChat) {
       log("skip: sendingChat=true (/api/chat path owns streaming)", {
         threadId,
@@ -404,14 +403,7 @@ export function LiveTranscript({
       log("closing", { threadId });
       es.close();
     };
-  }, [
-    agentSlug,
-    composerDisabled,
-    projectSlug,
-    sendingChat,
-    stopPolling,
-    threadId,
-  ]);
+  }, [agentSlug, projectSlug, sendingChat, stopPolling, threadId]);
 
   // ── Send: optimistic user message + SSE-driven streaming reply. ─────
   const send = useCallback(
@@ -989,7 +981,11 @@ function RenderItem({ item }: { item: RenderedItem }) {
       item.body.startsWith("(session start)") ||
       item.body.startsWith("TASK_BRIEF") ||
       item.body.startsWith("FIRST_TURN");
-    if (isKickoff) return <KickoffBlock body={item.body} />;
+    // Kickoff messages duplicate the task header's Brief expandable
+    // (and for FIRST_TURN flows, the on-screen onboarding context).
+    // Drop them from the transcript so the chat starts with the
+    // assistant's reply instead of the raw assignment payload.
+    if (isKickoff) return null;
     return <UserBubble body={item.body} />;
   }
   if (item.kind === "assistant_text") {
@@ -1019,29 +1015,6 @@ function AssistantText({ body }: { body: string }) {
     <div className="text-sm leading-relaxed">
       <Markdown>{body}</Markdown>
     </div>
-  );
-}
-
-function KickoffBlock({ body }: { body: string }) {
-  // Open by default so the user sees the brief was actually delivered — the
-  // moment the page loads, this is the only proof the agent received its
-  // assignment. Users can collapse it once they've read it; the chevron
-  // makes that affordance obvious.
-  return (
-    <details
-      open
-      className="group rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 text-xs"
-    >
-      <summary className="flex cursor-pointer items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground select-none">
-        <span aria-hidden className="transition-transform group-open:rotate-90">
-          ›
-        </span>
-        Task brief sent to agent
-      </summary>
-      <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
-        {body}
-      </pre>
-    </details>
   );
 }
 
