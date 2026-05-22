@@ -236,28 +236,17 @@ export function handleTaskStatus(
   // signal to the user, not something to silently route around. They can
   // cancel the dependent or rerun the blocker.
   if (newStatus === "done") {
-    const dependents = listTasksBlockedBy(task.id);
-    const promoted: Task[] = [];
-    for (const dep of dependents) {
-      const p = clearBlockerAndPromote(dep.id);
-      if (p) promoted.push(p);
-    }
-    if (promoted.length > 0) {
-      void (async () => {
-        const { startTaskIfProposed } = await import("./run-task");
-        for (const p of promoted) {
-          try {
-            startTaskIfProposed(p);
-          } catch (err) {
-            console.error(
-              `[block-prop] kickoff failed for ${p.display_id}:`,
-              err,
-            );
-          }
-        }
-      })().catch((err) => {
-        console.error("[block-prop] propagation IIFE failed:", err);
-      });
+    // Promote dependents from `blocked` to `proposed` so they're eligible
+    // to start. We DO NOT fire the kickoff here — server-side kickoffs
+    // (runTaskKickoffServerSide) bypass /api/chat's SSE channel, so the
+    // user's browser sees nothing live and OpenClaw's buffered JSONL
+    // only flushes at session end. Leaving the task in `proposed` lets
+    // the task workspace page run its own client-side auto-kickoff via
+    // /api/chat the moment the user opens it — that DOES stream events
+    // back to the browser. The "Start all" button on the agent's tasks
+    // tab is also still available for batch start.
+    for (const dep of listTasksBlockedBy(task.id)) {
+      clearBlockerAndPromote(dep.id);
     }
   }
 
