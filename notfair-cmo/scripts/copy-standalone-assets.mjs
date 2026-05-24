@@ -36,24 +36,25 @@ for (const { src, dest } of targets) {
   console.log(`Copied ${src.replace(ROOT + "/", "")} → ${dest.replace(ROOT + "/", "")}`);
 }
 
-// Dereference symlinks in-place so npm pack ships real files. We use `cp -RL`
-// via the system shell because Node's cpSync has trouble with the pnpm-style
-// symlink layout (multiple symlinks pointing into the same .pnpm dir create
-// cpSync EISDIR errors).
+// Dereference symlinks in-place so npm pack ships real files. We pipe `tar
+// -ch | tar -x` because it follows chained pnpm symlinks correctly during
+// archive creation. Earlier approaches (`cp -RL`, `rsync -aL`) silently
+// dropped entries whose symlink chain had any dangling link, which produced
+// broken standalone bundles missing transitive deps like `@swc/helpers` and
+// `@next/env`.
 const DEREF = STANDALONE + ".deref-tmp";
 rmSync(DEREF, { recursive: true, force: true });
 const parent = dirname(STANDALONE);
 const standaloneName = basename(STANDALONE);
-// `cp -RL` exits 1 on any dangling symlink it encounters (pnpm sometimes
-// leaves a `.pnpm/node_modules/semver` symlink with no target). The copy
-// still completes successfully — the dangling entry is just dropped. We
-// verify the result via countSymlinks() below rather than relying on cp's
-// exit code.
-try {
-  execSync(`cp -RL "${standaloneName}" "${basename(DEREF)}"`, { cwd: parent, stdio: "inherit" });
-} catch (err) {
-  if (!existsSync(DEREF)) throw err;
-}
+const derefName = basename(DEREF);
+// tar -h dereferences symlinks during archive creation; the second tar
+// extracts. Both run inside the parent dir so relative paths stay clean.
+// 2>/dev/null on the first tar swallows the warnings about dangling pnpm
+// links that we intentionally want to skip.
+execSync(
+  `mkdir -p "${derefName}" && tar -ch -f - -C "${standaloneName}" . 2>/dev/null | tar -x -C "${derefName}"`,
+  { cwd: parent, stdio: "inherit", shell: "/bin/bash" },
+);
 rmSync(STANDALONE, { recursive: true, force: true });
 renameSync(DEREF, STANDALONE);
 console.log(`Dereferenced symlinks under ${STANDALONE.replace(ROOT + "/", "")}`);

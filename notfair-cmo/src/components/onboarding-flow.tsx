@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { Suspense, useActionState, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, ChevronRight, FolderOpen, Loader2, Plug } from "lucide-react";
@@ -25,6 +25,14 @@ import {
 type Step = "name" | "connect" | "account" | "setup";
 
 export function OnboardingFlow() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingFlowInner />
+    </Suspense>
+  );
+}
+
+function OnboardingFlowInner() {
   const router = useRouter();
   const params = useSearchParams();
   const stepParam = params.get("step");
