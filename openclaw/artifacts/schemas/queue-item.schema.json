@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Toprank OpenClaw Queue Item",
+  "title": "NotFair OpenClaw Queue Item",
   "type": "object",
   "properties": {
     "item_id": {

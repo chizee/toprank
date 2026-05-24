@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Toprank will be documented here.
+All notable changes to the NotFair plugin (formerly `toprank`) will be documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
@@ -8,6 +8,100 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
 ## [Unreleased]
+
+---
+
+## [0.24.0] — 2026-05-24
+
+### ⚠️ Breaking — plugin renamed `toprank` → `notfair`
+
+The Claude Code plugin name, slash-command prefix, and several internal
+directories and binaries have been renamed from `toprank` to `notfair` to
+align with the user-facing NotFair brand. This is a breaking change for
+every installed user.
+
+**You must uninstall the old plugin and reinstall under the new name:**
+
+```
+/plugin uninstall toprank@nowork-studio
+/plugin marketplace add nowork-studio/notfair
+/plugin install notfair@nowork-studio
+```
+
+After reinstall, every slash command moves from `/toprank:foo` →
+`/notfair:foo` (e.g. `/notfair:google-ads-audit`, `/notfair:seo-analysis`).
+The upgrade skill is now `/notfair:upgrade` (previously
+`/toprank:toprank-upgrade`).
+
+### Renamed
+
+- **Plugin** — `name` in `.claude-plugin/plugin.json` and
+  `.claude-plugin/marketplace.json` is now `notfair` (previously `toprank`).
+- **Skill directories** — `toprank-upgrade-skill/` →
+  `notfair-upgrade-skill/`; `openclaw/skills/toprank-{site-onboard,
+  portfolio-review,weekly-review,improve-page,investigate-drop}/` →
+  `openclaw/skills/notfair-{...}/`.
+- **Bin scripts** — `bin/toprank-{config,update-check,change-watch,
+  content-calendar}` → `bin/notfair-{...}`. SessionStart hooks that ran the
+  old path will need to be re-pointed.
+- **Cron / launchd example** — `openclaw/install/toprank-openclaw.cron.example`
+  → `notfair-openclaw.cron.example`.
+- **Upgrade skill name** — frontmatter `name: toprank-upgrade` →
+  `name: upgrade`; slash command consequently `/notfair:upgrade`.
+- **Managed-block fence** — installers now write `<!-- notfair:managed -->`
+  fences (previously `<!-- toprank:managed -->`). Re-running an installer
+  against a file that has the old fence will create a second fence; users
+  who want a fully clean state can delete the old block manually.
+- **GitHub repository** — `nowork-studio/toprank` → `nowork-studio/notfair`
+  (GitHub auto-redirects the old URL).
+
+### Intentionally preserved (carve-outs)
+
+The following paths and identifiers were **not** renamed in this release so
+existing installs keep working without a migration step. A future release
+may migrate them with proper backup logic.
+
+- **`~/.toprank/` runtime state directory** — holds OpenClaw portfolio
+  artifacts (`~/.toprank/openclaw/`), Google Ads change logs
+  (`~/.toprank/ads/<account>/change-log.json`), SEO audit history
+  (`~/.toprank/audit-log/<domain>.json`), business-context cache
+  (`~/.toprank/business-context/<domain>.json`), and upgrade markers.
+  Renaming this would orphan every existing user's accumulated data.
+- **`TOPRANK_*` environment variables** — `TOPRANK_DIR`, `TOPRANK_STATE_DIR`,
+  `TOPRANK_REMOTE_URL`, `TOPRANK_OPENCLAW_HOME`,
+  `TOPRANK_VERCEL_PROTECTION_BYPASS`. These are internal testing /
+  configuration overrides; renaming would silently break any user, cron job,
+  or CI pipeline that sets them.
+- **`com.noworkstudio.toprank.openclaw.scheduler` launchd label** —
+  renaming would orphan the existing launchd job; the user would have to
+  manually `launchctl unload` the old one.
+- **`~/.toprank-evals/` test result store** — used only by the test suite.
+
+### CHANGELOG history preserved verbatim
+
+Past releases shipped under the `toprank` name and the historical record
+reflects that. CHANGELOG entries below this one are unchanged.
+
+### Out of scope (pre-existing)
+
+- `meta-ads/manage/` and `meta-ads/audit/` do not ship `evals/evals.json`
+  files. This gap predates 0.24.0 (introduced in 0.17.0). The renamed
+  `test/install.test.sh` now enumerates all 18 skills correctly and surfaces
+  the missing eval files as 2 failures; the prior test masked them by
+  enumerating only 16 skills. A follow-up release should add the missing
+  evals; this release does not change skill behavior.
+
+### Migration footnotes
+
+- **OpenClaw users** who ran `./openclaw/install/install-openclaw-cron.sh`
+  on a prior release will have cron jobs named `Toprank OpenClaw Scheduler`
+  and `Toprank Weekly Review — <site>`. After upgrading, re-running the
+  install script will register new jobs named `NotFair ...` alongside the
+  old `Toprank ...` ones. To clean up, run
+  `openclaw cron remove "Toprank OpenClaw Scheduler"` and equivalent for
+  each per-site weekly review job before re-installing.
+- **Hooks pointing at `bin/toprank-change-watch`** in `~/.claude/settings.json`
+  must be updated to `bin/notfair-change-watch` after reinstall.
 
 ---
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Process due items from the Toprank OpenClaw schedule."""
+"""Process due items from the NotFair OpenClaw schedule."""
 
 from __future__ import annotations
 

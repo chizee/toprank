@@ -105,7 +105,7 @@ def build_payload(entry: dict, body: str) -> dict[str, Any]:
         "inlineImages": entry.get("inlineImages") or [],
         "structuredData": entry.get("structuredData"),
         "scheduledAt": entry.get("scheduledDate"),
-        "source": {"tool": "toprank", "skill": "content-planner", "version": "1"},
+        "source": {"tool": "notfair", "skill": "content-planner", "version": "1"},
     }
 
 
@@ -122,7 +122,7 @@ def post_to_webhook(
             "Content-Type": "application/json",
             "Accept": "application/json",
             "Authorization": f"Bearer {token}",
-            "User-Agent": "toprank-publisher/1",
+            "User-Agent": "notfair-publisher/1",
         },
     )
     try:

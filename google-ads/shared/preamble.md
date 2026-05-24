@@ -2,17 +2,17 @@
 
 Every google-ads skill reads this before doing anything else. It handles updates, MCP detection, config resolution, and onboarding in one place — so individual skills don't repeat this logic.
 
-## Step 0: Check for toprank updates
+## Step 0: Check for NotFair updates
 
 ```bash
-_UPD_BIN=$(ls ~/.claude/plugins/cache/nowork-studio/toprank/*/bin/toprank-update-check 2>/dev/null | head -1)
+_UPD_BIN=$(ls ~/.claude/plugins/cache/nowork-studio/notfair/*/bin/notfair-update-check 2>/dev/null | head -1)
 [ -n "$_UPD_BIN" ] && _UPD=$("$_UPD_BIN" 2>/dev/null || true) || _UPD=""
 [ -n "$_UPD" ] && echo "$_UPD" || true
 ```
 
-If the output contains `UPGRADE_AVAILABLE <old> <new>`: immediately follow the inline upgrade flow in the `/toprank-upgrade` skill (Step 1 onward) to auto-upgrade. After the upgrade completes, re-read the updated preamble from the new plugin cache and restart from Step 1 (the upgrade check itself doesn't need to run again).
+If the output contains `UPGRADE_AVAILABLE <old> <new>`: immediately follow the inline upgrade flow in the `/notfair:upgrade` skill (Step 1 onward) to auto-upgrade. After the upgrade completes, re-read the updated preamble from the new plugin cache and restart from Step 1 (the upgrade check itself doesn't need to run again).
 
-If the output contains `JUST_UPGRADED <old> <new>`: mention "toprank upgraded from v{old} to v{new}" briefly, then continue to Step 1.
+If the output contains `JUST_UPGRADED <old> <new>`: mention "NotFair upgraded from v{old} to v{new}" briefly, then continue to Step 1.
 
 If neither: continue to Step 1 silently.
 
@@ -46,7 +46,7 @@ Continue to Step 2 (MCP detection always runs).
 Always verify that a Google Ads MCP server is available — the MCP server could be down, unauthorized, or misconfigured even with a saved accountId.
 
 1. Check for NotFair tools. The MCP server may be exposed under several different tool-name prefixes depending on the host (across the NotFair → NotFair-GoogleAds namespace split, multiple prefixes may briefly coexist):
-   - `mcp__NotFair-GoogleAds__*` / `mcp__notfair_googleads__*` / `mcp__NotFair_GoogleAds__*` — Claude Code CLI (toprank plugin default, current; exact form depends on Claude Code's key sanitization)
+   - `mcp__NotFair-GoogleAds__*` / `mcp__notfair_googleads__*` / `mcp__NotFair_GoogleAds__*` — Claude Code CLI (NotFair plugin default, current; exact form depends on Claude Code's key sanitization)
    - `mcp__claude_ai_NotFairGoogleAds__*` — Claude Desktop / claude.ai plugin connector (current)
    - `mcp__notfair__*` / `mcp__claude_ai_NotFair__*` — pre-0.16.0 plugin (legacy NotFair prefix, before the GoogleAds namespace split)
    - any other prefix matching `mcp__.*[Nn]ot[Ff]air.*__` (future hosts)

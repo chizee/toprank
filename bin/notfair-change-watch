@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# toprank-change-watch — surface pending Google Ads change-impact reviews
+# notfair-change-watch — surface pending Google Ads change-impact reviews
 #
 # Designed to be wired as a Claude Code SessionStart hook:
 #   {
 #     "hooks": {
 #       "SessionStart": [
-#         { "hooks": [ { "type": "command", "command": "toprank-change-watch" } ] }
+#         { "hooks": [ { "type": "command", "command": "notfair-change-watch" } ] }
 #       ]
 #     }
 #   }
@@ -18,11 +18,11 @@
 # Also supports generating an .ics calendar file for a specific change so the user
 # gets a cross-platform reminder in their own calendar app:
 #
-#   toprank-change-watch ics <account> <change_id> > reminder.ics
+#   notfair-change-watch ics <account> <change_id> > reminder.ics
 #
-# Change log schema (written by /ads when it executes a mutation):
+# Change log schema (written by /notfair:google-ads when it executes a mutation):
 #   {
-#   (see google-ads/ads/references/change-tracking.md for the authoritative schema)
+#   (see google-ads/manage/references/change-tracking.md for the authoritative schema)
 #     "changes": [
 #       {
 #         "id": "chg_1729872000000",
@@ -43,8 +43,8 @@ TODAY="$(date -u +%Y-%m-%d)"
 
 # Subcommand: ics <account> <change_id>
 if [ "${1:-}" = "ics" ]; then
-  ACCOUNT="${2:?Usage: toprank-change-watch ics <account> <change_id>}"
-  CHANGE_ID="${3:?Usage: toprank-change-watch ics <account> <change_id>}"
+  ACCOUNT="${2:?Usage: notfair-change-watch ics <account> <change_id>}"
+  CHANGE_ID="${3:?Usage: notfair-change-watch ics <account> <change_id>}"
   LOG="$ADS_DIR/$ACCOUNT/change-log.json"
   [ -f "$LOG" ] || { echo "No change log for account $ACCOUNT" >&2; exit 1; }
 
@@ -59,18 +59,18 @@ if not change:
     sys.exit(f"change {change_id} not found")
 d = change["reviewAfter"].replace("-", "")
 summary = change["summary"].replace("\n", " ")
-uid = f"{change_id}-{uuid.uuid4().hex[:8]}@toprank"
+uid = f"{change_id}-{uuid.uuid4().hex[:8]}@notfair"
 now = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
 ics = f"""BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//toprank//change-watch//EN
+PRODID:-//notfair//change-watch//EN
 BEGIN:VEVENT
 UID:{uid}
 DTSTAMP:{now}
 DTSTART;VALUE=DATE:{d}
 DTEND;VALUE=DATE:{d}
 SUMMARY:Review Google Ads change: {summary}
-DESCRIPTION:Run /ads-audit to measure impact against baseline.\\nChange ID: {change_id}
+DESCRIPTION:Run /notfair:google-ads-audit to measure impact against baseline.\\nChange ID: {change_id}
 BEGIN:VALARM
 TRIGGER:-PT9H
 ACTION:DISPLAY
@@ -99,8 +99,8 @@ for log in "$ADS_DIR"/*/change-log.json; do
       echo "## Pending Google Ads change-impact reviews"
       echo ""
       echo "The following changes have reached their review window. Offer to run"
-      echo "a scoped /ads-audit to measure impact against the baseline captured"
-      echo "when each change was made:"
+      echo "a scoped /notfair:google-ads-audit to measure impact against the"
+      echo "baseline captured when each change was made:"
       echo ""
     fi
     pending=1

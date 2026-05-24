@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Initialize a per-site work folder inside the Toprank OpenClaw runtime workspace."""
+"""Initialize a per-site work folder inside the NotFair OpenClaw runtime workspace."""
 
 from __future__ import annotations
 

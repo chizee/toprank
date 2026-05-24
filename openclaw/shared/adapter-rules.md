@@ -4,7 +4,7 @@ These rules apply to every `openclaw/skills/*` wrapper.
 
 ## 1. Preserve the canonical skills
 
-The existing Toprank skills under `seo/` and `google-ads/` remain the source of truth for domain expertise. Do not fork or silently rewrite them inside the OpenClaw surface.
+The existing NotFair skills under `seo/` and `google-ads/` remain the source of truth for domain expertise. Do not fork or silently rewrite them inside the OpenClaw surface.
 
 ## 2. Treat OpenClaw as the operator layer
 
@@ -37,7 +37,7 @@ python3 {baseDir}/../../bin/site_id.py https://example.com
 
 If the user did not specify a site and multiple sites are active, either:
 
-- run `toprank-portfolio-review`, or
+- run `notfair-portfolio-review`, or
 - ask the user which site they mean.
 
 ## 5. Required artifacts

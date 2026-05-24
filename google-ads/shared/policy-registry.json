@@ -1,6 +1,6 @@
 {
   "$schema": "policy-registry/v1",
-  "description": "Versioned registry of Google Ads policy and behavior assumptions used across toprank ads skills. Each entry tracks a specific assumption, its volatility, verification source, and when it should be re-verified.",
+  "description": "Versioned registry of Google Ads policy and behavior assumptions used across notfair ads skills. Each entry tracks a specific assumption, its volatility, verification source, and when it should be re-verified.",
   "last_full_review": "2026-04-04",
   "entries": [
     {

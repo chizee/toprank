@@ -4,7 +4,7 @@
 # Usage:
 #   ./test/install.test.sh
 #
-# Validates that the toprank repo has the correct Claude Code plugin structure.
+# Validates that the notfair repo has the correct Claude Code plugin structure.
 
 set -eo pipefail
 
@@ -43,12 +43,16 @@ assert_not_contains() {
   ! grep -q "$needle" "$path" 2>/dev/null && pass "$label" || fail "$label — '$needle' found in $path (should not be)"
 }
 
-# Skill paths relative to repo root (name:path pairs)
+# Skill paths relative to repo root (name:path pairs). Names mirror the
+# SKILL.md frontmatter `name:` field, which becomes the slash command tail
+# after the `notfair:` plugin prefix (e.g. `name: upgrade` → `/notfair:upgrade`).
 SKILL_ENTRIES=(
   "google-ads:google-ads/manage"
   "google-ads-audit:google-ads/audit"
   "google-ads-copy:google-ads/copy"
   "google-ads-landing:google-ads/landing"
+  "meta-ads:meta-ads/manage"
+  "meta-ads-audit:meta-ads/audit"
   "seo-analysis:seo/seo-analysis"
   "content-writer:seo/content-writer"
   "content-planner:seo/content-planner"
@@ -59,7 +63,7 @@ SKILL_ENTRIES=(
   "seo-page:seo/seo-page"
   "broken-link-checker:seo/broken-link-checker"
   "geo-optimizer:seo/geo-optimizer"
-  "toprank-upgrade:toprank-upgrade-skill"
+  "upgrade:notfair-upgrade-skill"
   "gemini:gemini"
 )
 
@@ -80,6 +84,18 @@ assert_json_field "$REPO_ROOT/.claude-plugin/plugin.json" "version" "plugin.json
 assert_json_field "$REPO_ROOT/.claude-plugin/plugin.json" "skills" "plugin.json has skills"
 
 assert_json_field "$REPO_ROOT/.claude-plugin/marketplace.json" "plugins" "marketplace.json has plugins"
+
+# Plugin name in plugin.json must be 'notfair' (post-0.24.0 rename)
+PLUGIN_NAME=$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.claude-plugin/plugin.json'))['name'])")
+[ "$PLUGIN_NAME" = "notfair" ] \
+  && pass "plugin.json name is 'notfair'" \
+  || fail "plugin.json name is '$PLUGIN_NAME', expected 'notfair'"
+
+# marketplace.json plugin entry name must also be 'notfair'
+MKT_PLUGIN_NAME=$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.claude-plugin/marketplace.json'))['plugins'][0]['name'])")
+[ "$MKT_PLUGIN_NAME" = "notfair" ] \
+  && pass "marketplace.json plugins[0].name is 'notfair'" \
+  || fail "marketplace.json plugins[0].name is '$MKT_PLUGIN_NAME', expected 'notfair'"
 
 # Plugin version matches VERSION file
 PLUGIN_VERSION=$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.claude-plugin/plugin.json'))['version'])")
@@ -117,7 +133,7 @@ for entry in "${SKILL_ENTRIES[@]}"; do
 done
 
 # Guard: actual SKILL.md count must match
-actual_skill_count=$(find "$REPO_ROOT/google-ads" "$REPO_ROOT/seo" "$REPO_ROOT/toprank-upgrade-skill" "$REPO_ROOT/gemini" -name "SKILL.md" | wc -l | tr -d ' ')
+actual_skill_count=$(find "$REPO_ROOT/google-ads" "$REPO_ROOT/seo" "$REPO_ROOT/meta-ads" "$REPO_ROOT/notfair-upgrade-skill" "$REPO_ROOT/gemini" -name "SKILL.md" | wc -l | tr -d ' ')
 if [ "$actual_skill_count" -ne "${#SKILL_ENTRIES[@]}" ]; then
   fail "Expected ${#SKILL_ENTRIES[@]} SKILL.md files but found $actual_skill_count"
 else
@@ -134,13 +150,23 @@ echo "=== 3. Legacy structure + helpers ==="
   || fail "setup script still exists (should be deleted)"
 
 assert_dir "$REPO_ROOT/bin" "bin/ helper directory exists"
-assert_file "$REPO_ROOT/bin/toprank-config" "bin/toprank-config exists"
-assert_file "$REPO_ROOT/bin/toprank-update-check" "bin/toprank-update-check exists"
-assert_file "$REPO_ROOT/bin/toprank-change-watch" "bin/toprank-change-watch exists"
+assert_file "$REPO_ROOT/bin/notfair-config" "bin/notfair-config exists"
+assert_file "$REPO_ROOT/bin/notfair-update-check" "bin/notfair-update-check exists"
+assert_file "$REPO_ROOT/bin/notfair-change-watch" "bin/notfair-change-watch exists"
+
+# Old toprank-* bin names must not coexist (0.24.0 rename should be clean)
+[ ! -f "$REPO_ROOT/bin/toprank-config" ] \
+  && pass "legacy bin/toprank-config removed" \
+  || fail "bin/toprank-config still exists (should have been git-mv'd to notfair-config)"
+
+# Old toprank-upgrade-skill/ directory must not coexist
+[ ! -d "$REPO_ROOT/toprank-upgrade-skill" ] \
+  && pass "legacy toprank-upgrade-skill/ removed" \
+  || fail "toprank-upgrade-skill/ still exists (should have been git-mv'd to notfair-upgrade-skill/)"
 
 [ ! -d "$REPO_ROOT/skills" ] \
   && pass "skills/ flat directory removed" \
-  || fail "skills/ directory still exists (skills should be in google-ads/, seo/, toprank-upgrade-skill/, gemini/)"
+  || fail "skills/ directory still exists (skills should be in google-ads/, seo/, meta-ads/, notfair-upgrade-skill/, gemini/)"
 
 [ ! -d "$REPO_ROOT/.agents" ] \
   && pass ".agents/ directory removed" \
@@ -152,14 +178,15 @@ echo ""
 echo "=== 4. Shared preambles ==="
 
 assert_file "$REPO_ROOT/google-ads/shared/preamble.md" "Google Ads shared preamble exists"
+assert_file "$REPO_ROOT/meta-ads/shared/preamble.md" "Meta Ads shared preamble exists"
 assert_file "$REPO_ROOT/seo/shared/preamble.md" "SEO shared preamble exists"
 
 # Ads skills reference the shared preamble (not inline MCP detection)
 for skill in manage audit copy; do
   assert_contains "$REPO_ROOT/google-ads/$skill/SKILL.md" "../shared/preamble.md" \
-    "$skill references shared preamble"
+    "google-ads/$skill references shared preamble"
   assert_not_contains "$REPO_ROOT/google-ads/$skill/SKILL.md" "mcp__notfair__listConnectedAccounts" \
-    "$skill does not inline MCP detection (notfair prefix)"
+    "google-ads/$skill does not inline MCP detection (notfair prefix)"
 done
 
 # SEO skills that need GSC reference the shared preamble

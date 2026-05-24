@@ -1,10 +1,10 @@
 # Per-host install adapters
 
-This directory is the home for **thin install adapters** that wire Toprank into a specific AI agent host. Each adapter registers the *same* host-agnostic skills (under `seo/`, `google-ads/`, `meta-ads/`, `gemini/` at the repo root) into the host's expected layout.
+This directory is the home for **thin install adapters** that wire NotFair into a specific AI agent host. Each adapter registers the *same* host-agnostic skills (under `seo/`, `google-ads/`, `meta-ads/`, `gemini/` at the repo root) into the host's expected layout.
 
 ## Why this exists
 
-Toprank ships one source of truth for skills. Different agent hosts expect skills in different places:
+NotFair ships one source of truth for skills. Different agent hosts expect skills in different places:
 
 - **Claude Code** — reads `.claude-plugin/plugin.json` directly from the repo. No adapter needed; the manifest at the repo root *is* the adapter.
 - **OpenClaw** — expects skills under `~/.openclaw/skills/`. The adapter lives at `../openclaw/install/install.sh` (kept there for back-compat). Future relocations will preserve a stub here.
@@ -26,15 +26,15 @@ Toprank ships one source of truth for skills. Different agent hosts expect skill
 If your adapter writes into a file the user also edits (their workspace `AGENTS.md`, `CLAUDE.md`, host config, etc.), wrap inserted content like this:
 
 ```
-<!-- toprank:managed -->
+<!-- notfair:managed -->
 ... auto-generated rows ...
-<!-- /toprank:managed -->
+<!-- /notfair:managed -->
 ```
 
-Re-running the installer rewrites only inside the fence. Anything the user wrote outside is preserved. This is what makes `toprank-upgrade` safe across hosts where users have hand-customized their config.
+Re-running the installer rewrites only inside the fence. Anything the user wrote outside is preserved. This is what makes `/notfair:upgrade` safe across hosts where users have hand-customized their config.
 
 ## What not to put here
 
 - **Skill source code.** Skills belong in `seo/`, `google-ads/`, `meta-ads/`, `gemini/`. Adapters point at them; adapters do not own them.
 - **Host-specific orchestrators.** Those go alongside the host (e.g., `openclaw/skills/`), not under `install/`.
-- **Runtime state.** Use `~/.toprank/<host>/` or the host's standard runtime directory.
+- **Runtime state.** Use `~/.toprank/<host>/` (path retained from the toprank → notfair rename; see CHANGELOG 0.24.0) or the host's standard runtime directory.

@@ -1,0 +1,6 @@
+# Run the NotFair OpenClaw scheduler every hour.
+# Edit TOPRANK_OPENCLAW_HOME if you keep runtime state elsewhere (env var
+# name retained from the toprank → notfair rename to preserve existing
+# config; see CHANGELOG 0.24.0).
+
+0 * * * * TOPRANK_OPENCLAW_HOME="$HOME/.toprank/openclaw" /usr/bin/env python3 /ABSOLUTE/PATH/TO/notfair/openclaw/bin/run_scheduler.py >> "$HOME/.toprank/openclaw/logs/cron.log" 2>&1

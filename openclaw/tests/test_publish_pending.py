@@ -316,7 +316,7 @@ class PublishPendingTest(unittest.TestCase):
         self.assertEqual(p["body"], "# Body\n\nText.")
         self.assertEqual(p["bodyFormat"], "markdown")
         self.assertEqual(p["featuredImage"], {"url": "https://x/img.png", "alt": "a"})
-        self.assertEqual(p["source"], {"tool": "toprank", "skill": "content-planner", "version": "1"})
+        self.assertEqual(p["source"], {"tool": "notfair", "skill": "content-planner", "version": "1"})
         self.assertEqual(captured["token"], "secret-token")
         self.assertEqual(captured["url"], "https://hook.example")
 

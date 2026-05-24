@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Broken Link Checker for Toprank.
+Broken Link Checker for NotFair.
 Crawls a website starting from a given URL and identifies broken links (HTTP 4xx/5xx).
 
 Usage:
@@ -39,7 +39,7 @@ class LinkParser(HTMLParser):
 
 def check_url(url, timeout=10):
     """Checks a URL and returns (status_code, error_msg)."""
-    headers = {'User-Agent': 'ToprankBrokenLinkChecker/1.0'}
+    headers = {'User-Agent': 'NotFairBrokenLinkChecker/1.0'}
 
     # Try HEAD first for efficiency
     req = urllib.request.Request(url, method='HEAD', headers=headers)
@@ -92,7 +92,7 @@ def crawl(start_url, max_pages=50):
             continue
 
         # Check robots.txt Disallow
-        if rp and not rp.can_fetch("ToprankBrokenLinkChecker/1.0", current_url):
+        if rp and not rp.can_fetch("NotFairBrokenLinkChecker/1.0", current_url):
             print(f"Skipping (blocked by robots.txt): {current_url}", file=sys.stderr)
             continue
 
@@ -102,7 +102,7 @@ def crawl(start_url, max_pages=50):
         print(f"[{pages_crawled}/{max_pages}] Checking: {current_url}", file=sys.stderr)
 
         try:
-            req = urllib.request.Request(current_url, headers={'User-Agent': 'ToprankBrokenLinkChecker/1.0'})
+            req = urllib.request.Request(current_url, headers={'User-Agent': 'NotFairBrokenLinkChecker/1.0'})
             with urllib.request.urlopen(req, timeout=10) as response:
                 status = response.getcode()
                 if status >= 400:

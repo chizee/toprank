@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for the Toprank OpenClaw runtime workspace."""
+"""Shared helpers for the NotFair OpenClaw runtime workspace."""
 
 from __future__ import annotations
 

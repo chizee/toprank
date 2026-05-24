@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Connect my WordPress site to toprank.",
+      "prompt": "Connect my WordPress site to notfair.",
       "expected_output": "The skill should detect if a CMS is already configured, then guide the user through WordPress setup: asking for the WordPress URL, username, and Application Password. It should explain how to create an Application Password in WordPress Admin.",
       "files": [],
       "expectations": [

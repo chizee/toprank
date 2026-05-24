@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Toprank OpenClaw Site Profile",
+  "title": "NotFair OpenClaw Site Profile",
   "type": "object",
   "properties": {
     "schema_version": {

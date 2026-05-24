@@ -84,7 +84,7 @@ def parse_ndjson(lines: list[str]) -> tuple[list[Any], Any, int, list[ToolCall]]
 
 def create_skill_workdir(skill_path: str, skill_name: str) -> str:
     """Copy skill into a temp dir so Claude auto-discovers it at .claude/skills/<name>."""
-    tmpdir = tempfile.mkdtemp(prefix=f'toprank-test-')
+    tmpdir = tempfile.mkdtemp(prefix=f'notfair-test-')
     dest = os.path.join(tmpdir, '.claude', 'skills', skill_name)
     shutil.copytree(skill_path, dest)
     return tmpdir

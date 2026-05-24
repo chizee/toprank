@@ -2,7 +2,7 @@
 name: setup-cms
 argument-hint: "<CMS name: wordpress, strapi, contentful, or ghost>"
 description: >
-  Connect a CMS to toprank SEO tools. Guides users through configuring
+  Connect a CMS to notfair SEO tools. Guides users through configuring
   WordPress, Strapi, Contentful, or Ghost — tests the connection, and writes
   credentials to .env.local. Once set up, seo-analysis automatically cross-
   references CMS content against Google Search Console data. Use whenever the
@@ -18,7 +18,7 @@ allowed-tools:
 
 # /setup-cms
 
-Guide the user through connecting their CMS to toprank's SEO analysis tools.
+Guide the user through connecting their CMS to notfair's SEO analysis tools.
 
 Once configured, `/seo-analysis` automatically pulls published content from
 the CMS and cross-references it against Google Search Console data — finding
@@ -85,7 +85,7 @@ Tell the user:
 > 2. **Your WordPress username** (the one you log in with)
 > 3. **An Application Password** — create one in:
 >    WordPress Admin → Users → Profile → scroll to **Application Passwords**
->    → enter a name like "toprank" → click **Add New** → copy the generated password
+>    → enter a name like "notfair" → click **Add New** → copy the generated password
 >
 > Paste each value when ready."
 

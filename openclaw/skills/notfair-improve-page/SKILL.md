@@ -1,16 +1,16 @@
 ---
-name: toprank-improve-page
+name: notfair-improve-page
 description: Improve one URL inside a registered site by producing a focused diagnosis, proposal, and verification artifact.
-metadata: { "openclaw": { "emoji": "🧱", "homepage": "https://github.com/nowork-studio/toprank", "requires": { "bins": ["python3"] } } }
+metadata: { "openclaw": { "emoji": "🧱", "homepage": "https://github.com/nowork-studio/notfair", "requires": { "bins": ["python3"] } } }
 ---
 
-# Toprank Improve Page
+# NotFair Improve Page
 
 1. Read `{baseDir}/../../shared/adapter-rules.md`.
 2. Read `{baseDir}/../../shared/artifact-contract.md`.
 3. Read `{baseDir}/../../shared/policy.md`.
 4. Load the site work folder, then focus on the target URL and choose the canonical page-level skills that best fit the issue.
-5. Read and follow the canonical Toprank skill at `{baseDir}/../../../seo/seo-page/SKILL.md`.
+5. Read and follow the canonical NotFair skill at `{baseDir}/../../../seo/seo-page/SKILL.md`.
 6. Convert the page diagnosis into a structured proposal using `python3 {baseDir}/../../bin/improve_page.py <site> --url <url> --issue-summary "..." --proposal-summary "..."`.
 7. If you also have file-level edits to suggest, include `--patch-path` and `--patch-summary` so a `patch-set.json` artifact is written.
 8. Verify that the run wrote `proposal.json` and `verification.json`, plus `patch-set.json` when relevant.

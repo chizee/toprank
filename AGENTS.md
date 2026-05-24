@@ -1,6 +1,6 @@
-# Toprank — Skill Resolver for AI Agents
+# NotFair — Skill Resolver for AI Agents
 
-**This file is the universal entry point.** Any AI coding agent (Claude Code, OpenClaw, Codex, Hermes, Cursor, etc.) reads this to know which Toprank skill to run for which user intent.
+**This file is the universal entry point.** Any AI coding agent (Claude Code, OpenClaw, Codex, Hermes, Cursor, etc.) reads this to know which NotFair skill to run for which user intent.
 
 If you are an agent and a user mentions Google Ads, Meta Ads, SEO, GEO, or anything in the tables below, route to the named skill.
 
@@ -12,7 +12,7 @@ If you are an agent and a user mentions Google Ads, Meta Ads, SEO, GEO, or anyth
 2. **Read the named skill's `SKILL.md`** from the path shown.
 3. **Follow the procedure** in that SKILL.md exactly.
 
-Skills under `seo/`, `google-ads/`, `meta-ads/`, `gemini/`, and `toprank-upgrade-skill/` are **host-agnostic** — they work the same on every agent host. The skills under `openclaw/skills/` are **OpenClaw-only orchestrators** that compose the host-agnostic skills into multi-site adaptive workflows; only invoke them inside an OpenClaw workspace.
+Skills under `seo/`, `google-ads/`, `meta-ads/`, `gemini/`, and `notfair-upgrade-skill/` are **host-agnostic** — they work the same on every agent host. The skills under `openclaw/skills/` are **OpenClaw-only orchestrators** that compose the host-agnostic skills into multi-site adaptive workflows; only invoke them inside an OpenClaw workspace.
 
 ---
 
@@ -57,21 +57,21 @@ Skills under `seo/`, `google-ads/`, `meta-ads/`, `gemini/`, and `toprank-upgrade
 
 | Intent | Skill | Path |
 |---|---|---|
-| Upgrade Toprank to the latest version | `toprank-upgrade` | `toprank-upgrade-skill/SKILL.md` |
+| Upgrade NotFair to the latest version | `upgrade` | `notfair-upgrade-skill/SKILL.md` |
 
 ---
 
 ## OpenClaw multi-site orchestrators
 
-These skills only apply inside an OpenClaw workspace that has been initialized via `./openclaw/install/install.sh`. They compose the host-agnostic SEO skills above into closed-loop, multi-site workflows with persisted artifacts under `~/.toprank/openclaw/`.
+These skills only apply inside an OpenClaw workspace that has been initialized via `./openclaw/install/install.sh`. They compose the host-agnostic SEO skills above into closed-loop, multi-site workflows with persisted artifacts under `~/.toprank/openclaw/` (path retained from the toprank → notfair rename to preserve existing portfolio state; see CHANGELOG 0.24.0).
 
 | Intent | Skill | Path |
 |---|---|---|
-| Register a new site in the portfolio | `toprank-site-onboard` | `openclaw/skills/toprank-site-onboard/SKILL.md` |
-| Pick which site in the portfolio deserves attention next | `toprank-portfolio-review` | `openclaw/skills/toprank-portfolio-review/SKILL.md` |
-| Weekly SEO review for one registered site | `toprank-weekly-review` | `openclaw/skills/toprank-weekly-review/SKILL.md` |
-| Improve one URL inside a registered site | `toprank-improve-page` | `openclaw/skills/toprank-improve-page/SKILL.md` |
-| Investigate an organic traffic drop on a registered site | `toprank-investigate-drop` | `openclaw/skills/toprank-investigate-drop/SKILL.md` |
+| Register a new site in the portfolio | `notfair-site-onboard` | `openclaw/skills/notfair-site-onboard/SKILL.md` |
+| Pick which site in the portfolio deserves attention next | `notfair-portfolio-review` | `openclaw/skills/notfair-portfolio-review/SKILL.md` |
+| Weekly SEO review for one registered site | `notfair-weekly-review` | `openclaw/skills/notfair-weekly-review/SKILL.md` |
+| Improve one URL inside a registered site | `notfair-improve-page` | `openclaw/skills/notfair-improve-page/SKILL.md` |
+| Investigate an organic traffic drop on a registered site | `notfair-investigate-drop` | `openclaw/skills/notfair-investigate-drop/SKILL.md` |
 
 If the user mentions multi-site work, portfolio, scheduled follow-ups, or "the next best action across my sites," prefer an OpenClaw orchestrator. For single ad-hoc requests on one site, use the canonical SEO skill directly.
 
@@ -93,9 +93,9 @@ Skills check for missing credentials at startup and walk the user through setup.
 Any installer that writes into a file the user also edits (e.g., a user's workspace `AGENTS.md`, `CLAUDE.md`, or `~/.openclaw/AGENTS.md`) MUST wrap its inserted content in a fence:
 
 ```
-<!-- toprank:managed -->
+<!-- notfair:managed -->
 ... auto-generated rows ...
-<!-- /toprank:managed -->
+<!-- /notfair:managed -->
 ```
 
 Re-running the installer rewrites only inside the fence. Anything outside is preserved.

@@ -2,17 +2,17 @@
 
 Every meta-ads skill reads this before doing anything else. Handles update checks, MCP detection, config resolution, and onboarding so individual skills don't repeat this logic.
 
-## Step 0: Check for toprank updates
+## Step 0: Check for NotFair updates
 
 ```bash
-_UPD_BIN=$(ls ~/.claude/plugins/cache/nowork-studio/toprank/*/bin/toprank-update-check 2>/dev/null | head -1)
+_UPD_BIN=$(ls ~/.claude/plugins/cache/nowork-studio/notfair/*/bin/notfair-update-check 2>/dev/null | head -1)
 [ -n "$_UPD_BIN" ] && _UPD=$("$_UPD_BIN" 2>/dev/null || true) || _UPD=""
 [ -n "$_UPD" ] && echo "$_UPD" || true
 ```
 
-If the output contains `UPGRADE_AVAILABLE <old> <new>`: immediately follow the inline upgrade flow in the `/toprank-upgrade` skill (Step 1 onward) to auto-upgrade. After the upgrade completes, re-read the updated preamble from the new plugin cache and restart from Step 1.
+If the output contains `UPGRADE_AVAILABLE <old> <new>`: immediately follow the inline upgrade flow in the `/notfair:upgrade` skill (Step 1 onward) to auto-upgrade. After the upgrade completes, re-read the updated preamble from the new plugin cache and restart from Step 1.
 
-If the output contains `JUST_UPGRADED <old> <new>`: mention "toprank upgraded from v{old} to v{new}" briefly, then continue to Step 1.
+If the output contains `JUST_UPGRADED <old> <new>`: mention "NotFair upgraded from v{old} to v{new}" briefly, then continue to Step 1.
 
 If neither: continue to Step 1 silently.
 
@@ -57,21 +57,21 @@ Continue to Step 2 (MCP detection always runs).
 Always verify that a Meta Ads MCP server is available — the MCP server could be down, unauthorized, or misconfigured even with a saved `metaAccountId`.
 
 1. Check for the NotFair Meta tools. The MCP server may be exposed under several different tool-name prefixes depending on the host:
-   - `mcp__NotFair-MetaAds__*` / `mcp__notfair_metaads__*` / `mcp__NotFair_MetaAds__*` — Claude Code CLI (toprank plugin default; exact form depends on Claude Code's key sanitization)
+   - `mcp__NotFair-MetaAds__*` / `mcp__notfair_metaads__*` / `mcp__NotFair_MetaAds__*` — Claude Code CLI (NotFair plugin default; exact form depends on Claude Code's key sanitization)
    - `mcp__claude_ai_NotFair-MetaAds__*` / `mcp__claude_ai_NotFairMetaAds__*` — Claude Desktop / claude.ai plugin connector
    - any other prefix matching `mcp__.*([Nn]ot[Ff]air[-_]?[Mm]eta[Aa]ds?)__` (future hosts)
 
    **How to detect:** scan your available tool list for any tool whose name ends in `listAdAccounts` AND whose prefix references Meta (matches the regex above — do not pick a generic `listAdAccounts` from another platform's MCP). Take everything before `listAdAccounts` as the detected prefix. Save the prefix and the result for reuse in Steps 3 and 4.
 
-2. If no NotFair-MetaAds variant exists, check for Meta's official MCP or community Meta MCP servers (any `mcp__.*meta.*ads__listAdAccounts`). If you find one, fall back to it but warn the user that toprank's heuristics are tuned for the NotFair surface (specifically `runScript`'s `ads.graphParallel`).
+2. If no NotFair-MetaAds variant exists, check for Meta's official MCP or community Meta MCP servers (any `mcp__.*meta.*ads__listAdAccounts`). If you find one, fall back to it but warn the user that NotFair's heuristics are tuned for the NotFair MCP surface (specifically `runScript`'s `ads.graphParallel`).
 
 3. If none exists, guide the user:
 
 > No Meta Ads MCP server detected.
 >
-> The toprank plugin registers the `NotFair-MetaAds` HTTP MCP server (`https://notfair.co/api/mcp/meta_ads`) in `.mcp.json`. Try restarting Claude Code — on first connection it opens a browser tab for OAuth sign-in to NotFair. You can also trigger sign-in manually with `/mcp`.
+> The NotFair plugin registers the `NotFair-MetaAds` HTTP MCP server (`https://notfair.co/api/mcp/meta_ads`) in `.mcp.json`. Try restarting Claude Code — on first connection it opens a browser tab for OAuth sign-in to NotFair. You can also trigger sign-in manually with `/mcp`.
 >
-> If the problem persists, run `/toprank-upgrade` to make sure your plugin includes the Meta server registration, or configure a Meta Ads MCP server manually.
+> If the problem persists, run `/notfair:upgrade` to make sure your NotFair plugin includes the Meta server registration, or configure a Meta Ads MCP server manually.
 
 Stop here until the MCP server is available.
 

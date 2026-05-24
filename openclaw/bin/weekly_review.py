@@ -811,7 +811,7 @@ def cannibalization_issue(cannibal: dict[str, Any], brand_terms: list[str] | Non
 def technical_consistency_findings(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract index/sitemap/canonical/link findings from analyzer or crawler output.
 
-    Toprank does not assume one crawler schema. Site-specific analyzers can pass a
+    NotFair does not assume one crawler schema. Site-specific analyzers can pass a
     compact `index_sitemap_consistency` block, or nest the same block under
     `technical_seo` / `technical_audit`.
     """
@@ -1087,7 +1087,7 @@ class PageSnapshotParser(HTMLParser):
 
 def live_fetch_headers(site_profile: dict[str, Any] | None = None) -> dict[str, str]:
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; ToprankOpenClawSEOOperator/1.0; +https://openclaw.ai)",
+        "User-Agent": "Mozilla/5.0 (compatible; NotFairOpenClawSEOOperator/1.0; +https://openclaw.ai)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
     profile = site_profile or {}
@@ -2337,7 +2337,7 @@ def build_payload(
 
 
 def run_analysis(site_property: str, days: int, brand_terms: str | None) -> dict[str, Any]:
-    with tempfile.NamedTemporaryFile(prefix="toprank_weekly_review_", suffix=".json", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(prefix="notfair_weekly_review_", suffix=".json", delete=False) as tmp:
         output_path = Path(tmp.name)
     cmd = [sys.executable, str(ANALYZE_GSC), "--site", site_property, "--days", str(days), "--output", str(output_path)]
     if brand_terms:

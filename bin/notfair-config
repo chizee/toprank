@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# toprank-config — read/write ~/.toprank/config.yaml
+# notfair-config — read/write ~/.toprank/config.yaml
 #
 # Usage:
-#   toprank-config get <key>          — read a config value
-#   toprank-config set <key> <value>  — write a config value
-#   toprank-config list               — show all config
+#   notfair-config get <key>          — read a config value
+#   notfair-config set <key> <value>  — write a config value
+#   notfair-config list               — show all config
 #
-# Env overrides (for testing):
+# Env overrides (for testing; name retained from the toprank → notfair rename):
 #   TOPRANK_STATE_DIR  — override ~/.toprank state directory
 set -euo pipefail
 
@@ -15,12 +15,12 @@ CONFIG_FILE="$STATE_DIR/config.yaml"
 
 case "${1:-}" in
   get)
-    KEY="${2:?Usage: toprank-config get <key>}"
+    KEY="${2:?Usage: notfair-config get <key>}"
     grep -E "^${KEY}:" "$CONFIG_FILE" 2>/dev/null | tail -1 | awk '{print $2}' | tr -d '[:space:]' || true
     ;;
   set)
-    KEY="${2:?Usage: toprank-config set <key> <value>}"
-    VALUE="${3:?Usage: toprank-config set <key> <value>}"
+    KEY="${2:?Usage: notfair-config set <key> <value>}"
+    VALUE="${3:?Usage: notfair-config set <key> <value>}"
     mkdir -p "$STATE_DIR"
     if grep -qE "^${KEY}:" "$CONFIG_FILE" 2>/dev/null; then
       _tmpfile="$(mktemp "${CONFIG_FILE}.XXXXXX")"
@@ -33,7 +33,7 @@ case "${1:-}" in
     cat "$CONFIG_FILE" 2>/dev/null || true
     ;;
   *)
-    echo "Usage: toprank-config {get|set|list} [key] [value]"
+    echo "Usage: notfair-config {get|set|list} [key] [value]"
     exit 1
     ;;
 esac

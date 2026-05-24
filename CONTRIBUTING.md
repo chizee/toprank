@@ -1,6 +1,6 @@
-# Contributing to Toprank
+# Contributing to NotFair
 
-Thank you for your interest in contributing to Toprank! We welcome contributions from the community to help make this the best SEO and Google Ads plugin for Claude Code.
+Thank you for your interest in contributing to NotFair! We welcome contributions from the community to help make this the best SEO and Google Ads plugin for Claude Code.
 
 ## Code of Conduct
 
@@ -47,7 +47,7 @@ The repo also ships an OpenClaw-specific surface under `openclaw/`.
 ## Development Workflow
 
 1.  **Fork the repository**.
-2.  **Clone your fork**: `git clone https://github.com/YOUR_USERNAME/toprank.git`
+2.  **Clone your fork**: `git clone https://github.com/YOUR_USERNAME/notfair.git`
 3.  **Create a branch**: `git checkout -b feature/your-feature-name`
 4.  **Make your changes**.
 5.  **Run tests**: We use `pytest` for the main test suite, but `unittest` is also used for script-specific unit tests. Ensure your changes don't break existing functionality.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Register or update a site in the Toprank OpenClaw portfolio."""
+"""Register or update a site in the NotFair OpenClaw portfolio."""
 
 from __future__ import annotations
 

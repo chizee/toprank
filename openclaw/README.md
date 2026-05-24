@@ -1,6 +1,6 @@
-# OpenClaw surface for Toprank
+# OpenClaw surface for NotFair
 
-Toprank + OpenClaw is now a **closed-loop SEO operator**.
+NotFair + OpenClaw is now a **closed-loop SEO operator**.
 
 It does not just run one-off audits. It can now:
 - pull real SEO signals from Google Search Console,
@@ -12,7 +12,7 @@ It does not just run one-off audits. It can now:
 - update learned priors,
 - and keep going.
 
-This directory adds that multi-site adaptive layer for OpenClaw **without replacing the existing Toprank skills**.
+This directory adds that multi-site adaptive layer for OpenClaw **without replacing the existing NotFair skills**.
 
 ## The new power
 
@@ -62,7 +62,7 @@ export TOPRANK_OPENCLAW_HOME=/custom/path
 
 ## Install
 
-Run from the Toprank repo root:
+Run from the NotFair repo root:
 
 ```bash
 ./openclaw/install/install.sh
@@ -80,7 +80,7 @@ Why copy instead of symlink wrapper skills directly? OpenClaw skill discovery in
 Verify:
 
 ```bash
-openclaw skills check | grep -i toprank
+openclaw skills check | grep -i notfair
 python3 -m pytest -q openclaw/tests
 ```
 
@@ -89,15 +89,15 @@ python3 -m pytest -q openclaw/tests
 Use this as the setup prompt for a fresh machine or a new OpenClaw instance. Replace the placeholders before pasting.
 
 ```text
-Set up the Toprank OpenClaw SEO Operator on this machine.
+Set up the NotFair OpenClaw SEO Operator on this machine.
 
 Repo:
-- If the Toprank repo already exists locally, use it; do not reclone.
-- Otherwise clone https://github.com/nowork-studio/toprank and cd into the repo root.
+- If the NotFair repo already exists locally, use it; do not reclone.
+- Otherwise clone https://github.com/nowork-studio/notfair and cd into the repo root.
 
 Install:
 1. Run: ./openclaw/install/install.sh
-2. Verify Toprank skills are discoverable: openclaw skills check | grep -i toprank
+2. Verify NotFair skills are discoverable: openclaw skills check | grep -i notfair
 3. Run tests: python3 -m pytest -q openclaw/tests
 
 Sites:
@@ -120,7 +120,7 @@ Smoke test:
 2. Run one weekly review:
    TOPRANK_OPENCLAW_HOME="$HOME/.toprank/openclaw" python3 openclaw/bin/weekly_review.py "<site_id_1>"
 3. Confirm the review wrote audit.json, action-plan.json, and verification.json under ~/.toprank/openclaw/sites/<site_id>/runs/.
-4. Confirm openclaw cron list shows Toprank OpenClaw Scheduler and one Toprank Weekly Review job per active site.
+4. Confirm openclaw cron list shows NotFair OpenClaw Scheduler and one NotFair Weekly Review job per active site.
 
 Policy:
 - This is an SEO operator loop, not an auto-publisher.
@@ -157,7 +157,7 @@ That creates:
 
 ## Why this matters
 
-Before this layer, Toprank had strong point skills.
+Before this layer, NotFair had strong point skills.
 
 Now it has memory and recurrence:
 - **real signal ingestion** via GSC analysis,
@@ -192,11 +192,11 @@ Use these example payloads and flows as templates:
 
 ## Wrapper skills
 
-- `toprank-site-onboard` — register a site and initialize its work folder
-- `toprank-portfolio-review` — rank all active sites by urgency/opportunity
-- `toprank-weekly-review` — review one site and propose the next best action
-- `toprank-improve-page` — improve one URL on a site
-- `toprank-investigate-drop` — traffic-drop recovery workflow
+- `notfair-site-onboard` — register a site and initialize its work folder
+- `notfair-portfolio-review` — rank all active sites by urgency/opportunity
+- `notfair-weekly-review` — review one site and propose the next best action
+- `notfair-improve-page` — improve one URL on a site
+- `notfair-investigate-drop` — traffic-drop recovery workflow
 
 ## Autonomous loop building blocks
 
@@ -268,8 +268,8 @@ Install it with OpenClaw cron:
 
 The OpenClaw cron installer creates:
 
-- `Toprank OpenClaw Scheduler` — hourly follow-up processor
-- `Toprank Weekly Review — <site>` — one weekly review per active portfolio site
+- `NotFair OpenClaw Scheduler` — hourly follow-up processor
+- `NotFair Weekly Review — <site>` — one weekly review per active portfolio site
 
 It intentionally does not set a model by default. If you want a model override, pass `--model <provider/model>` only after confirming the local OpenClaw model allowlist accepts it.
 
@@ -281,10 +281,10 @@ macOS `launchd` is still available as a lower-level alternative:
 ./openclaw/install/install-launchd.sh
 ```
 
-Or use the system cron example at `openclaw/install/toprank-openclaw.cron.example`.
+Or use the system cron example at `openclaw/install/notfair-openclaw.cron.example`.
 
 This is now the core of a real autonomous operator loop.
 
 ## Design principle
 
-The OpenClaw surface is an **adapter layer**. The existing Toprank skill folders remain canonical. The OpenClaw wrappers add persistent state, portfolio awareness, artifact writing, and policy gates.
+The OpenClaw surface is an **adapter layer**. The existing NotFair skill folders remain canonical. The OpenClaw wrappers add persistent state, portfolio awareness, artifact writing, and policy gates.

@@ -1,5 +1,5 @@
 """
-Eval result persistence for toprank tests.
+Eval result persistence for notfair tests.
 
 Accumulates test results, writes them to ~/.toprank-evals/, prints a summary table.
 """

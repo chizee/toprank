@@ -1,12 +1,12 @@
 # OpenClaw Adaptive Layer (MVP)
 
-Toprank's OpenClaw surface is a thin adaptive layer that sits on top of the existing open-source SEO skills. It does **not** replace `seo/` or `google-ads/`. It adds multi-site state, scheduled review loops, artifact writing, and policy gates so an operator can manage a portfolio of websites from one OpenClaw workspace.
+NotFair's OpenClaw surface is a thin adaptive layer that sits on top of the existing open-source SEO skills. It does **not** replace `seo/` or `google-ads/`. It adds multi-site state, scheduled review loops, artifact writing, and policy gates so an operator can manage a portfolio of websites from one OpenClaw workspace.
 
 ## Product definition
 
 **Goal:** maximize qualified organic growth across a portfolio of websites, subject to explicit safety and approval rules.
 
-**Core idea:** the existing Toprank skills are capability modules; the OpenClaw layer is the operator.
+**Core idea:** the existing NotFair skills are capability modules; the OpenClaw layer is the operator.
 
 ## Operating model
 
@@ -132,11 +132,11 @@ The MVP requires at least:
 
 The MVP ships five OpenClaw-facing wrapper skills:
 
-- `toprank-site-onboard`
-- `toprank-portfolio-review`
-- `toprank-weekly-review`
-- `toprank-improve-page`
-- `toprank-investigate-drop`
+- `notfair-site-onboard`
+- `notfair-portfolio-review`
+- `notfair-weekly-review`
+- `notfair-improve-page`
+- `notfair-investigate-drop`
 
 These wrappers keep the existing `seo/` skills as the source of truth. The wrapper adds:
 

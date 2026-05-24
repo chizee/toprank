@@ -81,7 +81,7 @@ def main(argv: list[str]) -> int:
     if args.analysis_file:
         data = json.loads(Path(args.analysis_file).read_text())
     else:
-        with tempfile.NamedTemporaryFile(prefix="toprank_gsc_", suffix=".json", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(prefix="notfair_gsc_", suffix=".json", delete=False) as tmp:
             output_path = Path(tmp.name)
 
         cmd = [sys.executable, str(ANALYZE_GSC), "--site", gsc_property, "--days", str(days), "--output", str(output_path)]

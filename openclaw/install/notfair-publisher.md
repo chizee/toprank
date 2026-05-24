@@ -1,6 +1,6 @@
 # NotFair Publisher — Webhook Contract
 
-`openclaw/bin/publish_pending.py` POSTs ready blog posts from a Toprank content
+`openclaw/bin/publish_pending.py` POSTs ready blog posts from a NotFair content
 calendar to a NotFair-hosted Next.js webhook. This file is the contract: the
 Next.js handler on `notfair.co` must accept exactly this shape.
 
@@ -58,7 +58,7 @@ There is no HMAC signing in v1. If you need request integrity, add an
   ],
   "structuredData": { "@context": "https://schema.org", "@type": "BlogPosting", "...": "..." },
   "scheduledAt": "2026-05-22",
-  "source": { "tool": "toprank", "skill": "content-planner", "version": "1" }
+  "source": { "tool": "notfair", "skill": "content-planner", "version": "1" }
 }
 ```
 

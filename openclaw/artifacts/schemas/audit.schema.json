@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Toprank OpenClaw Audit",
+  "title": "NotFair OpenClaw Audit",
   "type": "object",
   "properties": {
     "site_id": {

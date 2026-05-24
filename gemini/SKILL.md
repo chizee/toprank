@@ -277,8 +277,8 @@ Present Gemini's response with a clear header:
 
 ### 5b — Cross-model analysis (if Claude already reviewed)
 
-If Claude has already reviewed the same changes (e.g., via `/toprank:seo-analysis`
-or `/toprank:google-ads-audit` earlier in the conversation), produce a cross-model
+If Claude has already reviewed the same changes (e.g., via `/notfair:seo-analysis`
+or `/notfair:google-ads-audit` earlier in the conversation), produce a cross-model
 comparison:
 
 > **Cross-Model Analysis: Claude vs Gemini**
@@ -304,7 +304,7 @@ be flagged to the user for a judgment call.
 
 Based on the results:
 - **Review PASS:** "Gemini approved. Ready to ship."
-- **Review FAIL:** "Gemini flagged blocking issues. Address them, then re-run `/toprank:gemini review`."
+- **Review FAIL:** "Gemini flagged blocking issues. Address them, then re-run `/notfair:gemini review`."
 - **Challenge — HIGH risk:** "Stress test surfaced high-risk scenarios. Consider the mitigations before proceeding."
 - **Challenge — LOW risk:** "Gemini couldn't find major attack vectors. Changes look resilient."
 - **Consult:** "Want me to apply any of Gemini's suggestions?"

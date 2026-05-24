@@ -21,7 +21,7 @@ opportunities for *this* site, and produce a dated calendar the user can publish
 against.
 
 The output is a structured `content-calendar.json` plus a Markdown summary. The
-JSON is consumed by the `toprank-content-calendar` viewer (a local server that
+JSON is consumed by the `notfair-content-calendar` viewer (a local server that
 renders the calendar in the browser).
 
 **Boundary with sibling skills:**
@@ -204,16 +204,16 @@ Print:
 3. The viewer command, with the exact invocation:
 
 ```
-toprank-content-calendar [--port 8323] [--calendar {data_dir}/content-calendar.json]
+notfair-content-calendar [--port 8323] [--calendar {data_dir}/content-calendar.json]
 ```
 
 > Open the calendar in your browser:
 >
 > ```bash
-> ~/.claude/plugins/cache/nowork-studio/toprank/<version>/bin/toprank-content-calendar
+> ~/.claude/plugins/cache/nowork-studio/notfair/<version>/bin/notfair-content-calendar
 > ```
 >
-> (or run it from a clone of the toprank repo: `bin/toprank-content-calendar`.)
+> (or run it from a clone of the notfair repo: `bin/notfair-content-calendar`.)
 > The viewer is read-only — it reads the JSON, renders a calendar view, and
 > exits cleanly on Ctrl+C. Edit the JSON to change scheduling; reload to see
 > updates.

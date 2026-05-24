@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Toprank OpenClaw Business Impact Context",
+  "title": "NotFair OpenClaw Business Impact Context",
   "type": "object",
   "properties": {
     "site_id": { "type": "string" },

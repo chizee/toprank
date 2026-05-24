@@ -1,6 +1,6 @@
 # SEO Best Practices Reference
 
-This is the shared reference for Toprank SEO operators. Use it to keep recommendations grounded in durable SEO principles rather than one-off heuristics.
+This is the shared reference for NotFair SEO operators. Use it to keep recommendations grounded in durable SEO principles rather than one-off heuristics.
 
 ## Primary resources
 

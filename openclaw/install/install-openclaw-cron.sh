@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Install OpenClaw cron wiring for the Toprank OpenClaw SEO Operator.
+Install OpenClaw cron wiring for the NotFair OpenClaw SEO Operator.
 
 Usage:
   ./openclaw/install/install-openclaw-cron.sh [options]
@@ -18,8 +18,8 @@ Options:
   --weekly-time <HH:MM>    Local time for weekly reviews. Default: 06:30.
   --scheduler-every <dur>  Scheduler interval. Default: 1h.
   --sites <csv>            Comma-separated sites. Default: active sites from ~/.toprank/openclaw/portfolio.json.
-  --runtime-home <path>    Toprank runtime home. Default: ~/.toprank/openclaw.
-  --repo-root <path>       Toprank repo root. Default: auto-detected from this script.
+  --runtime-home <path>    NotFair runtime home. Default: ~/.toprank/openclaw.
+  --repo-root <path>       NotFair repo root. Default: auto-detected from this script.
 
 Publisher (opt-in; off by default — see openclaw/install/notfair-publisher.md):
   --enable-publisher       Register a recurring publisher job that POSTs ready
@@ -80,7 +80,7 @@ if ! command -v openclaw >/dev/null 2>&1; then
 fi
 
 if [[ ! -x "$REPO_ROOT/openclaw/bin/run_scheduler.py" ]]; then
-  echo "ERROR: Toprank repo root looks wrong: $REPO_ROOT" >&2
+  echo "ERROR: NotFair repo root looks wrong: $REPO_ROOT" >&2
   exit 1
 fi
 
@@ -137,7 +137,7 @@ add_job_if_missing() {
   openclaw cron add --name "$name" "$@"
 }
 
-scheduler_msg="Run the Toprank OpenClaw scheduler. Execute exactly: TOPRANK_OPENCLAW_HOME=\"$RUNTIME_HOME\" python3 \"$REPO_ROOT/openclaw/bin/run_scheduler.py\". Parse the JSON. If processed, manual_attention, and restored_from_queue are all empty, reply exactly NO_REPLY. If any are non-empty, summarize what changed and include any item_id/site_id that needs attention. If the command fails, report the blocker."
+scheduler_msg="Run the NotFair OpenClaw scheduler. Execute exactly: TOPRANK_OPENCLAW_HOME=\"$RUNTIME_HOME\" python3 \"$REPO_ROOT/openclaw/bin/run_scheduler.py\". Parse the JSON. If processed, manual_attention, and restored_from_queue are all empty, reply exactly NO_REPLY. If any are non-empty, summarize what changed and include any item_id/site_id that needs attention. If the command fails, report the blocker."
 
 scheduler_args=(
   --every "$SCHEDULER_EVERY"
@@ -149,7 +149,7 @@ scheduler_args=(
 [[ -n "$MODEL" ]] && scheduler_args+=(--model "$MODEL")
 scheduler_args+=("${delivery_args[@]}")
 
-add_job_if_missing "Toprank OpenClaw Scheduler" "${scheduler_args[@]}"
+add_job_if_missing "NotFair OpenClaw Scheduler" "${scheduler_args[@]}"
 
 sites=()
 while IFS= read -r site; do
@@ -165,7 +165,7 @@ for i in "${!sites[@]}"; do
   # Cron day-of-week: 1=Monday. Spread sites across weekdays, then wrap.
   dow=$(( (i % 5) + 1 ))
   cron_expr="$minute $hour * * $dow"
-  weekly_msg="Run the automated Toprank weekly SEO review for $site. Execute exactly: TOPRANK_OPENCLAW_HOME=\"$RUNTIME_HOME\" python3 \"$REPO_ROOT/openclaw/bin/weekly_review.py\" \"$site\". Parse the JSON stdout. If it contains user_message, send that user_message to the user as the main visible update. If business_context_request is present, explicitly ask those questions; do not bury them behind artifact paths. Otherwise summarize the top issue, proposed next action, whether it requires approval, and the artifact path. Do not edit websites, CMS, repos, or publish anything. If the command fails, report the blocker."
+  weekly_msg="Run the automated NotFair weekly SEO review for $site. Execute exactly: TOPRANK_OPENCLAW_HOME=\"$RUNTIME_HOME\" python3 \"$REPO_ROOT/openclaw/bin/weekly_review.py\" \"$site\". Parse the JSON stdout. If it contains user_message, send that user_message to the user as the main visible update. If business_context_request is present, explicitly ask those questions; do not bury them behind artifact paths. Otherwise summarize the top issue, proposed next action, whether it requires approval, and the artifact path. Do not edit websites, CMS, repos, or publish anything. If the command fails, report the blocker."
 
   weekly_args=(
     --cron "$cron_expr"
@@ -179,7 +179,7 @@ for i in "${!sites[@]}"; do
   [[ -n "$MODEL" ]] && weekly_args+=(--model "$MODEL")
   weekly_args+=("${delivery_args[@]}")
 
-  add_job_if_missing "Toprank Weekly Review — $site" "${weekly_args[@]}"
+  add_job_if_missing "NotFair Weekly Review — $site" "${weekly_args[@]}"
 done
 
 if [[ "$ENABLE_PUBLISHER" -eq 1 ]]; then
@@ -191,7 +191,7 @@ if [[ "$ENABLE_PUBLISHER" -eq 1 ]]; then
   if [[ -n "$PUBLISHER_CALENDAR" ]]; then
     publisher_cmd+=" --calendar \"$PUBLISHER_CALENDAR\""
   fi
-  publisher_msg="Run the Toprank publisher. Execute exactly: $publisher_cmd. Parse the JSON stdout. If processed is empty, reply exactly NO_REPLY. Otherwise summarize: how many published, how many failed (with reasons), how many retried. If the command exits non-zero, report the blocker. Do not retry the publisher in this turn — the next cron pass picks up retryable failures."
+  publisher_msg="Run the NotFair publisher. Execute exactly: $publisher_cmd. Parse the JSON stdout. If processed is empty, reply exactly NO_REPLY. Otherwise summarize: how many published, how many failed (with reasons), how many retried. If the command exits non-zero, report the blocker. Do not retry the publisher in this turn — the next cron pass picks up retryable failures."
 
   publisher_args=(
     --every "$PUBLISHER_EVERY"
@@ -203,7 +203,7 @@ if [[ "$ENABLE_PUBLISHER" -eq 1 ]]; then
   [[ -n "$MODEL" ]] && publisher_args+=(--model "$MODEL")
   publisher_args+=("${delivery_args[@]}")
 
-  add_job_if_missing "Toprank NotFair Publisher" "${publisher_args[@]}"
+  add_job_if_missing "NotFair NotFair Publisher" "${publisher_args[@]}"
 
   if [[ -z "${NOTFAIR_PUBLISH_TOKEN:-}" ]]; then
     echo
@@ -214,5 +214,5 @@ if [[ "$ENABLE_PUBLISHER" -eq 1 ]]; then
 fi
 
 echo
-echo "Installed/verified Toprank OpenClaw cron jobs:"
-openclaw cron list | grep -i 'Toprank' || true
+echo "Installed/verified NotFair OpenClaw cron jobs:"
+openclaw cron list | grep -i 'NotFair' || true

@@ -1,10 +1,10 @@
 ---
-name: toprank-weekly-review
+name: notfair-weekly-review
 description: Run a weekly SEO review for one registered website, write audit artifacts, and choose the next best safe action.
-metadata: { "openclaw": { "emoji": "📈", "homepage": "https://github.com/nowork-studio/toprank", "requires": { "bins": ["python3"] } } }
+metadata: { "openclaw": { "emoji": "📈", "homepage": "https://github.com/nowork-studio/notfair", "requires": { "bins": ["python3"] } } }
 ---
 
-# Toprank Weekly Review
+# NotFair Weekly Review
 
 1. Read `{baseDir}/../../shared/adapter-rules.md`.
 2. Read `{baseDir}/../../shared/artifact-contract.md`.
@@ -12,7 +12,7 @@ metadata: { "openclaw": { "emoji": "📈", "homepage": "https://github.com/nowor
 4. Read `{baseDir}/../../shared/recommendation-quality.md`.
 5. Read `{baseDir}/../../../seo/shared/seo-best-practices.md` and use its MECE lanes to explain why the top action is the right kind of SEO work.
 6. Resolve the target `site_id`; if no site was specified and multiple sites are active, run portfolio review first or ask the user which site to review.
-7. Read and follow the canonical Toprank skill at `{baseDir}/../../../seo/seo-analysis/SKILL.md`.
+7. Read and follow the canonical NotFair skill at `{baseDir}/../../../seo/seo-analysis/SKILL.md`.
 8. Prefer the automated runner:
    - `python3 {baseDir}/../../bin/weekly_review.py <site_id-or-url>`
    - add `--gsc-property` if the site profile does not already contain one

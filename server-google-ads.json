@@ -5,7 +5,7 @@
   "description": "Google Ads MCP - analyze performance, manage keywords, bids, and campaigns.",
   "websiteUrl": "https://notfair.co",
   "repository": {
-    "url": "https://github.com/nowork-studio/toprank",
+    "url": "https://github.com/nowork-studio/notfair",
     "source": "github"
   },
   "version": "0.4.0",

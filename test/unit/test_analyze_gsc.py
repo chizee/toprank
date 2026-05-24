@@ -803,10 +803,10 @@ class TestClassifyBranded(unittest.TestCase):
         self.assertFalse(gsc.classify_branded('acme pricing', None))
 
     def test_multiple_brand_terms_any_match(self):
-        self.assertTrue(gsc.classify_branded('toprank seo tool', ['acme', 'toprank']))
+        self.assertTrue(gsc.classify_branded('notfair seo tool', ['acme', 'notfair']))
 
     def test_multiple_brand_terms_none_match(self):
-        self.assertFalse(gsc.classify_branded('best content marketing', ['acme', 'toprank']))
+        self.assertFalse(gsc.classify_branded('best content marketing', ['acme', 'notfair']))
 
     def test_partial_word_match(self):
         # "acmecorp" contains "acme" — should match

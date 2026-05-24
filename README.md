@@ -1,14 +1,14 @@
-# Toprank
+# NotFair
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/gVJCRczpps)
 
 **The official Google & Meta Ads + SEO plugin from [NotFair](https://notfair.co). Data-driven decisions, not dashboards.**
 
-Toprank gives your AI agent direct access to Google Search Console, Google Ads, and Meta Ads (Facebook + Instagram). It analyzes your traffic, surfaces what's hurting your rankings, finds wasted ad spend, diagnoses creative fatigue and audience saturation, and tells you exactly what to fix. When you have access to the repo, it goes further: rewriting meta tags, fixing headings, adding structured data, and shipping the changes.
+NotFair gives your AI agent direct access to Google Search Console, Google Ads, and Meta Ads (Facebook + Instagram). It analyzes your traffic, surfaces what's hurting your rankings, finds wasted ad spend, diagnoses creative fatigue and audience saturation, and tells you exactly what to fix. When you have access to the repo, it goes further: rewriting meta tags, fixing headings, adding structured data, and shipping the changes.
 
-### Why NotFair?
+### CLI + web — same engine
 
-Toprank is the CLI side of NotFair — the skills that run inside Claude Code. [notfair.co](https://notfair.co) is the companion web app: sign in once, connect your Google Ads and Meta Ads accounts, and run audits through a browser UI. Both sides share the same engine, so an audit you run from the CLI uses the same tooling as the one on the web.
+The NotFair plugin is the CLI side — the skills that run inside Claude Code (and other AI agent hosts). [notfair.co](https://notfair.co) is the companion web app: sign in once, connect your Google Ads and Meta Ads accounts, and run audits through a browser UI. Both sides share the same engine, so an audit you run from the CLI uses the same tooling as the one on the web.
 
 > *"Am I wasting money on ads right now?"*
 > *"Why did my traffic drop and how do I fix it?"*
@@ -23,7 +23,7 @@ Free, open-source. Install in 30 seconds.
 ### Google Ads
 
 ```
-You:    /toprank:google-ads-audit
+You:    /notfair:google-ads-audit
 
 Claude: Connected to your Google Ads account (MyStore).
 
@@ -45,7 +45,7 @@ Claude: Connected to your Google Ads account (MyStore).
         2. Add 12 negative keywords ($130/mo wasted on irrelevant terms)
         3. Increase bids 15% on 2 high-converting keywords losing IS
 
-        Business context saved — /toprank:google-ads-copy and /toprank:google-ads will use it.
+        Business context saved — /notfair:google-ads-copy and /notfair:google-ads will use it.
 
 You:    Do it all.
 
@@ -59,7 +59,7 @@ You:    Do it all.
 **Weekly review** — ask any time, or set it up as a recurring Coworker task:
 
 ```
-You:    /toprank:google-ads — "review last week's changes"
+You:    /notfair:google-ads — "review last week's changes"
 
 Claude: 12 changes in the last 7 days. 9 matured enough to judge.
 
@@ -82,7 +82,7 @@ Claude: 12 changes in the last 7 days. 9 matured enough to judge.
 ### SEO
 
 ```
-You:    /toprank:seo-analysis
+You:    /notfair:seo-analysis
 
 Claude: Found your site at mystore.com — pulling Search Console data now.
 
@@ -107,21 +107,21 @@ Claude: Found your site at mystore.com — pulling Search Console data now.
 
 ## Install
 
-Toprank is a **Claude Code plugin**. One-time setup, automatic updates.
+NotFair is a **Claude Code plugin**. One-time setup, automatic updates.
 
 ### Claude Code (recommended)
 
 Run these two commands in Claude Code:
 
 ```
-/plugin marketplace add nowork-studio/toprank
+/plugin marketplace add nowork-studio/notfair
 ```
 
 ```
-/plugin install toprank@nowork-studio
+/plugin install notfair@nowork-studio
 ```
 
-That's it. All skills are now available as `/toprank:*` commands.
+That's it. All skills are now available as `/notfair:*` commands.
 
 **Google Ads + Meta Ads (optional):** The first time Claude Code connects to either NotFair MCP server (`NotFair-GoogleAds` or `NotFair-MetaAds`), it opens a browser tab and asks you to sign in to [notfair.co](https://notfair.co) — authorize once per platform and the token is stored in your OS keychain. No API key to copy, no `mcp-remote` bridge to install.
 
@@ -138,24 +138,35 @@ Add the marketplace and enable the plugin in `~/.claude/settings.json`:
     "nowork-studio": {
       "source": {
         "source": "github",
-        "repo": "nowork-studio/toprank"
+        "repo": "nowork-studio/notfair"
       }
     }
   },
   "enabledPlugins": {
-    "toprank@nowork-studio": true
+    "notfair@nowork-studio": true
   }
 }
 ```
 
 </details>
 
+### Upgrading from `toprank@nowork-studio`
+
+The plugin was renamed `toprank` → `notfair` in v0.24.0. If you previously installed it as `toprank@nowork-studio`, uninstall the old entry and install the new one:
+
+```
+/plugin uninstall toprank@nowork-studio
+/plugin marketplace add nowork-studio/notfair
+/plugin install notfair@nowork-studio
+```
+
+Your data is preserved — the runtime state directory (`~/.toprank/`, holding portfolio state, change logs, business-context cache, audit history) is intentionally retained under its original name for this release. See `CHANGELOG.md` for details.
 
 ---
 
 ## 🤖 The Fully-Automated SEO Agent (OpenClaw / Hermes)
 
-Instead of manually running single SEO skills, the future of Toprank is the **Fully-Automated SEO Agent**. 
+Instead of manually running single SEO skills, the future of NotFair is the **Fully-Automated SEO Agent**.
 
 By leveraging the **OpenClaw adaptive layer** under [`openclaw/`](openclaw/), you can instruct OpenClaw or Hermes to automatically set up a persistent SEO agent for your project. This isn't just a set of tools—it's a background worker that configures cron jobs, continually monitors your site, runs SEO audits, and autonomously makes improvements over time.
 
@@ -210,16 +221,16 @@ Start building your agent here:
 |-------|-------------|
 | [`gemini`](gemini/) | Second opinion from Google Gemini. Review (pass/fail gate), challenge (adversarial stress test), or consult (open Q&A). Especially strong on Google Ads and SEO decisions — Gemini has native Google ecosystem knowledge. |
 
-All skills are namespaced: `/toprank:google-ads`, `/toprank:seo-analysis`, `/toprank:gemini`, etc.
+All skills are namespaced: `/notfair:google-ads`, `/notfair:seo-analysis`, `/notfair:gemini`, etc.
 
 ---
 
 ## How It Works
 
-Toprank is a Claude Code plugin. Each skill is a `SKILL.md` file with supporting reference documents, scripts, and eval tests.
+NotFair is a Claude Code plugin. Each skill is a `SKILL.md` file with supporting reference documents, scripts, and eval tests.
 
 ```
-toprank/
+notfair/
 ├── .claude-plugin/
 │   ├── plugin.json              <- plugin metadata (explicit skill paths)
 │   └── marketplace.json         <- registry entry
@@ -245,7 +256,7 @@ toprank/
 │   └── setup-cms/               <- CMS connector
 ├── gemini/                      <- cross-model review via Gemini CLI
 ├── openclaw/                    <- OpenClaw adaptive layer (multi-site wrappers, artifacts, installers)
-├── toprank-upgrade-skill/       <- self-updater
+├── notfair-upgrade-skill/       <- self-updater
 ├── test/                        <- unit + LLM-judge eval tests
 └── VERSION
 ```
@@ -254,7 +265,7 @@ toprank/
 
 ## MCP Servers
 
-The Google Ads and Meta Ads surfaces are available as standalone remote MCP servers — use either from any MCP client (Claude Desktop, Cursor, Inspector, your own agent) without installing the Toprank CLI plugin.
+The Google Ads and Meta Ads surfaces are available as standalone remote MCP servers — use either from any MCP client (Claude Desktop, Cursor, Inspector, your own agent) without installing the NotFair CLI plugin.
 
 ### NotFair-GoogleAds
 
@@ -271,13 +282,13 @@ Exposes ~100 Google Ads tools across reads (performance, search terms, impressio
 
 Exposes a focused set of Meta Marketing API tools: reads (campaign / ad set / ad listings, `getInsights` with breakdowns), writes (`pauseCampaign`, `pauseAdSet`, `pauseAd`, `enableCampaign`, `enableAdSet`, `enableAd`, `updateCampaignBudget`, `updateAdSetBudget`, `renameCampaign`), `suggestImprovement` for server-side heuristic recommendations, and a `runScript` sandbox with `ads.graph(path, params)`, `ads.graphParallel([calls])` (up to 20 Graph API calls in parallel), `ads.insights(...)`, and `ads.batch([requests])` for analytical fan-out.
 
-The Meta server's mutation surface is intentionally narrow — there is no programmatic create-campaign, no audience editing, and no creative upload. The `/meta-ads` skill is explicit about this and routes those operations to Meta Ads Manager.
+The Meta server's mutation surface is intentionally narrow — there is no programmatic create-campaign, no audience editing, and no creative upload. The `/notfair:meta-ads` skill is explicit about this and routes those operations to Meta Ads Manager.
 
 ---
 
 ## Connectors
 
-Toprank skills reference external tools using the `~~category` placeholder pattern. This makes skills tool-agnostic — they work with any MCP server that provides the required capability.
+NotFair skills reference external tools using the `~~category` placeholder pattern. This makes skills tool-agnostic — they work with any MCP server that provides the required capability.
 
 | Category | Placeholder | Default Server | Alternatives |
 |----------|-------------|---------------|--------------|
@@ -292,7 +303,7 @@ Skills use conditional blocks based on available tools. If a connector is not av
 - **Google Ads:** See `google-ads/shared/preamble.md`. The `.mcp.json` registers `https://notfair.co/api/mcp/google_ads` as a native HTTP MCP server; on first connection Claude Code opens a browser for OAuth sign-in to [notfair.co](https://notfair.co) and stores the token in your OS keychain — no environment variable, no bridge subprocess.
 - **Meta Ads:** See `meta-ads/shared/preamble.md`. The `.mcp.json` registers `https://notfair.co/api/mcp/meta_ads` as a native HTTP MCP server; OAuth sign-in is independent from Google Ads (sign in once per platform). Skills resolve the ad account from a `metaAccountId` field in `.notfair.json` (alongside `accountId` for Google Ads — same config file, no double-prompting).
 - **Search Console:** See `seo/shared/preamble.md`. Requires Google Cloud SDK, Search Console API enabled, and OAuth login.
-- **CMS:** Run `/toprank:setup-cms` to configure WordPress, Strapi, Contentful, or Ghost.
+- **CMS:** Run `/notfair:setup-cms` to configure WordPress, Strapi, Contentful, or Ghost.
 
 ---
 
@@ -324,11 +335,11 @@ Questions? Open an issue.
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=nowork-studio%2Ftoprank&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=nowork-studio%2Fnotfair&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=nowork-studio/toprank&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=nowork-studio/toprank&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=nowork-studio/toprank&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=nowork-studio/notfair&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=nowork-studio/notfair&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=nowork-studio/notfair&type=date&legend=top-left" />
  </picture>
 </a>
 

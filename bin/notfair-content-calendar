@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""toprank-content-calendar — local viewer for the NotFair content calendar.
+"""notfair-content-calendar — local viewer for the NotFair content calendar.
 
-Reads {data_dir}/content-calendar.json (produced by the /content-planner skill)
-and serves a read-only HTML view on localhost. Stdlib only — no pip install.
+Reads {data_dir}/content-calendar.json (produced by the /notfair:content-planner
+skill) and serves a read-only HTML view on localhost. Stdlib only — no pip
+install.
 
 Usage:
-  toprank-content-calendar                       # auto-resolve calendar, port 8323
-  toprank-content-calendar --port 9000           # custom port
-  toprank-content-calendar --calendar PATH       # explicit calendar JSON
-  toprank-content-calendar --no-open             # don't auto-open the browser
+  notfair-content-calendar                       # auto-resolve calendar, port 8323
+  notfair-content-calendar --port 9000           # custom port
+  notfair-content-calendar --calendar PATH       # explicit calendar JSON
+  notfair-content-calendar --no-open             # don't auto-open the browser
 
 Stop with Ctrl+C.
 """
@@ -68,8 +69,8 @@ def render_page(cal: dict) -> str:
             <div class="empty">
               <h1>No calendar yet</h1>
               <p>Looked for <code>{html.escape(cal['_path'])}</code> and didn't find it.</p>
-              <p>Run the <code>/content-planner</code> skill in your agent to
-              generate one, then reload this page.</p>
+              <p>Run the <code>/notfair:content-planner</code> skill in your
+              agent to generate one, then reload this page.</p>
             </div>
             """,
         )
@@ -359,7 +360,7 @@ def _port_in_use(port: int, host: str = "127.0.0.1") -> bool:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="toprank-content-calendar")
+    parser = argparse.ArgumentParser(prog="notfair-content-calendar")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--calendar", default=None,
                         help="Path to content-calendar.json (default: ./.notfair/... → ~/.notfair/...)")

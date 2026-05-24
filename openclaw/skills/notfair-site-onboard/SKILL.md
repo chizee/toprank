@@ -1,10 +1,10 @@
 ---
-name: toprank-site-onboard
-description: Register a website in Toprank's OpenClaw adaptive layer and initialize its per-site work folder.
-metadata: { "openclaw": { "emoji": "🧭", "homepage": "https://github.com/nowork-studio/toprank", "requires": { "bins": ["python3"] } } }
+name: notfair-site-onboard
+description: Register a website in NotFair's OpenClaw adaptive layer and initialize its per-site work folder.
+metadata: { "openclaw": { "emoji": "🧭", "homepage": "https://github.com/nowork-studio/notfair", "requires": { "bins": ["python3"] } } }
 ---
 
-# Toprank Site Onboard
+# NotFair Site Onboard
 
 1. Read `{baseDir}/../../shared/adapter-rules.md`.
 2. Read `{baseDir}/../../shared/artifact-contract.md`.
@@ -13,7 +13,7 @@ metadata: { "openclaw": { "emoji": "🧭", "homepage": "https://github.com/nowor
 5. Run:
    - `python3 {baseDir}/../../bin/bootstrap_workspace.py`
    - `python3 {baseDir}/../../bin/onboard_site.py <url> --display-name "..." --brand-terms "A,B" --business-weight 1.0 --cadence weekly --goal-type grow_non_brand_clicks --primary-metric non_brand_clicks_28d`
-6. Read and follow the canonical Toprank skill at `{baseDir}/../../../seo/seo-analysis/SKILL.md` only if you need deeper site understanding during onboarding.
+6. Read and follow the canonical NotFair skill at `{baseDir}/../../../seo/seo-analysis/SKILL.md` only if you need deeper site understanding during onboarding.
 7. Confirm that `site-profile.json`, `goals.json`, and `portfolio.json` were updated.
 
 ## Wrapper job

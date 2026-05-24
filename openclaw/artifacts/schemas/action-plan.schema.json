@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Toprank OpenClaw Action Plan",
+  "title": "NotFair OpenClaw Action Plan",
   "type": "object",
   "properties": {
     "site_id": {

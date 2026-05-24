@@ -1,8 +1,8 @@
-# Toprank — Public AI-Agent Plugin (Claude Code, OpenClaw, Codex, Hermes)
+# NotFair — Public AI-Agent Plugin (Claude Code, OpenClaw, Codex, Hermes)
 
 **This is the public, open-source repository that ships to all customers and the community.**
 
-Toprank is a host-agnostic plugin providing SEO, Google Ads, and Meta Ads skills for AI coding agents. It is distributed via the `nowork-studio` Claude Code marketplace and via direct agent install on OpenClaw, Codex, and Hermes. Every change here is user-facing.
+NotFair is a host-agnostic plugin providing SEO, Google Ads, and Meta Ads skills for AI coding agents. It is distributed via the `nowork-studio` Claude Code marketplace and via direct agent install on OpenClaw, Codex, and Hermes. Every change here is user-facing.
 
 ## Engineering Execution Standard
 
@@ -34,8 +34,8 @@ This code ships to real users. Sycophancy and rubber-stamping cost us credibilit
 
 ## Repository purpose
 
-- Home of the `toprank` plugin — the public artifact customers install.
-- Contains host-agnostic skills under `google-ads/`, `seo/`, `meta-ads/`, `gemini/`, and `toprank-upgrade-skill/`.
+- Home of the `notfair` plugin — the public artifact customers install.
+- Contains host-agnostic skills under `google-ads/`, `seo/`, `meta-ads/`, `gemini/`, and `notfair-upgrade-skill/`.
 - Contains OpenClaw-specific multi-site orchestrators under `openclaw/skills/` that compose the host-agnostic skills above.
 - Registered via `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` (Claude Code) and `AGENTS.md` (every other host).
 - Paired with the NotFair-GoogleAds and NotFair-MetaAds MCP servers (OAuth at notfair.co) for ad-platform writes, and Google Search Console for SEO reads.
@@ -60,7 +60,7 @@ The product is **NotFair**. All user-facing text, documentation, skill descripti
    - `.claude-plugin/marketplace.json` → both `metadata.version` and `plugins[0].version`
    - `VERSION` file at repo root
 5. Update `CHANGELOG.md` with a user-facing note.
-6. Verify locally, then ship via `/ship`. Users pick up the new version through `toprank:toprank-upgrade`.
+6. Verify locally, then ship via `/ship`. Users pick up the new version through `notfair:upgrade`.
 
 ## Versioning
 

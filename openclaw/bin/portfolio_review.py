@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rank active sites in the Toprank OpenClaw portfolio by urgency and upside."""
+"""Rank active sites in the NotFair OpenClaw portfolio by urgency and upside."""
 
 from __future__ import annotations
 

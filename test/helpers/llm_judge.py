@@ -1,5 +1,5 @@
 """
-LLM-as-judge helpers for toprank evals.
+LLM-as-judge helpers for notfair evals.
 
 Uses Gemini (cheapest option). Set GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY.
 

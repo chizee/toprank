@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Toprank OpenClaw State Snapshot",
+  "title": "NotFair OpenClaw State Snapshot",
   "type": "object",
   "properties": {
     "site_id": {

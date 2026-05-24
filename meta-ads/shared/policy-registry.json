@@ -1,6 +1,6 @@
 {
   "$schema": "policy-registry/v1",
-  "description": "Versioned registry of Meta Ads (Facebook + Instagram) policy and behavior assumptions used across toprank meta-ads skills. Each entry tracks a specific assumption, its volatility, verification source, and when it should be re-verified.",
+  "description": "Versioned registry of Meta Ads (Facebook + Instagram) policy and behavior assumptions used across notfair meta-ads skills. Each entry tracks a specific assumption, its volatility, verification source, and when it should be re-verified.",
   "last_full_review": "2026-05-01",
   "entries": [
     {
@@ -22,7 +22,7 @@
       "last_verified": "2026-05-01",
       "source": "Meta Business Help",
       "source_url": "https://www.facebook.com/business/help/235811013522940",
-      "notes": "Meta surfaces both 'clicks (all)' and 'inline_link_clicks'. Toprank skills always use link clicks for CTR/CPC because all-clicks include profile/like/see-more clicks that aren't optimization-relevant.",
+      "notes": "Meta surfaces both 'clicks (all)' and 'inline_link_clicks'. NotFair skills always use link clicks for CTR/CPC because all-clicks include profile/like/see-more clicks that aren't optimization-relevant.",
       "stale_after_days": 365
     },
     {
