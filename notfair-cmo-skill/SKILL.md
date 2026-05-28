@@ -11,6 +11,7 @@ description: >
 allowed-tools:
   - Bash
   - Read
+  - AskUserQuestion
 ---
 
 # /notfair:cmo
@@ -26,6 +27,24 @@ This skill **does not implement the portal** — it only launches it. If you nee
 ## Default port
 
 `3327` unless the user specifies otherwise (`--port`). If 3327 is busy, the portal's CLI auto-probes the next 5 ports. (The dev server uses `3326`; the published portal uses `3327`.)
+
+---
+
+## Step 0: Check for NotFair updates
+
+Run this **before anything else** — the skill's own steps (ports, flags) ship with the plugin, so a stale plugin runs stale instructions.
+
+```bash
+_UPD_BIN=$(ls ~/.claude/plugins/cache/nowork-studio/notfair/*/bin/notfair-update-check 2>/dev/null | head -1)
+[ -n "$_UPD_BIN" ] && _UPD=$("$_UPD_BIN" 2>/dev/null || true) || _UPD=""
+[ -n "$_UPD" ] && echo "$_UPD" || true
+```
+
+If the output contains `UPGRADE_AVAILABLE <old> <new>`: immediately follow the inline upgrade flow in the `/notfair:upgrade` skill (Step 1 onward) to auto-upgrade. After the upgrade completes, **re-read this `/notfair:cmo` skill from the new plugin cache and restart from Step 1** (the upgrade check itself doesn't need to run again) — the refreshed skill may use a different default port.
+
+If the output contains `JUST_UPGRADED <old> <new>`: mention "NotFair upgraded from v{old} to v{new}" briefly, then continue to Step 1.
+
+If neither: continue to Step 1 silently.
 
 ---
 

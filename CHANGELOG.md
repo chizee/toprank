@@ -11,6 +11,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.25.2] — 2026-05-24
+
+### Fixed
+
+- **`/notfair:cmo` now self-updates.** The skill had no update-check preamble (unlike the google-ads / meta-ads / seo skills, which run `notfair-update-check` at Step 0). So a stale plugin ran stale instructions — e.g. probing the old port `3000` while the published CLI had moved to `3327`. Added a **Step 0** that runs `notfair-update-check` and, on `UPGRADE_AVAILABLE`, follows the `/notfair:upgrade` flow, then re-reads the refreshed skill before launching. Added `AskUserQuestion` to the skill's `allowed-tools` for the upgrade handoff.
+
+---
+
 ## [0.25.1] — 2026-05-24
 
 ### Fixed
