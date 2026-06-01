@@ -1,5 +1,33 @@
 # notfair-cmo
 
+## 0.4.0 — 2026-05-31
+
+Redesigned Connections page + curated "Browse connectors" UX. The catalog now ships with a small directory of trusted MCPs you opt into; clicking a tile adds it to the project and starts OAuth in one step. The page itself was rebuilt as an editorial list with a top-right "Add server" menu.
+
+**Connections page redesign.** Cards became list rows inside a single bordered container; sharper typographic hierarchy (eyebrow + large H1 + mono section labels); status communicated via small colored dot + small-caps mono label instead of pill backgrounds; the "Add server" affordance moved to the header.
+
+**Browse connectors.** New dropdown menu on the header splits "Browse connectors" (curated grid of NotFair Google Ads, NotFair Meta Ads, Stripe, PostHog, Supabase, Mixpanel) and "Add custom connector" (paste-a-URL form). Tile click chains `addUserMcpServerAction` → `startMcpConnect` → browser redirect — no second click. Tiles for connectors already connected in the project render non-clickable with a green "connected" lozenge.
+
+**Preset connectors are now removable.** New migration `012` adds `projects.hidden_mcp_preset_keys_json`. Removing a preset (e.g. NotFair Google Ads) hides it from the project's catalog and clears its token + adapter wiring; re-adding from Browse unhides it.
+
+**OAuth fidelity fixes that shook out during dogfooding:**
+- RFC 8414 §3.1 inserted form for AS metadata. Stripe's issuer `https://access.stripe.com/mcp` only resolves via the inserted variant.
+- `client_secret_post` fallback when an AS doesn't advertise `none` as a token-endpoint auth method (Supabase). DCR registers as a confidential client; the callback already forwards `client_secret` at token exchange.
+- `MCP-Protocol-Version: 2025-06-18` on every JSON-RPC call. Some servers (Supabase) 400 without it.
+- Status probe uses spec-mandated `initialize` instead of `tools/list`. Tool count moves to on-demand fetch via the Tools dialog.
+- `localhost` → `127.0.0.1` normalization on the redirect URI. RFC 8252 §7.3.
+- HTTP-error response body is captured + surfaced in the unreachable message instead of just "HTTP 400".
+- AS-metadata candidate-URL probing (RFC 8414 inserted, OIDC inserted, appended fallbacks).
+
+**Idempotent add + URL-based dedup.** `addUserMcpServerAction` now accepts a canonical `key` override (used by Browse so "NotFair Google Ads" hits the preset key `notfair-googleads` instead of slugifying into a different identifier). The action also detects "this same MCP server URL is already in the project" and returns the existing key instead of writing a duplicate.
+
+**Trusted connectors curated.** Vercel and Supabase were each verified end-to-end:
+- Stripe, PostHog, Mixpanel: kept after URL corrections (most live at `/mcp`, not `/`).
+- Supabase: kept after the `client_secret_post` fallback landed.
+- Vercel: omitted. Their DCR endpoint silently returns a single fixed `client_id` and the authorize endpoint rejects every loopback redirect URI — only their first-party integrations work today.
+
+**New components:** `browse-connectors-dialog`, `mcp-icon` (shared brand favicon via Google's faviconV2 service, subdomain-stripped to the registrable domain), `add-mcp-server-card` (now a `AddMcpServerMenu` dropdown trigger; the custom-URL dialog moved inside).
+
 ## 0.3.1 — 2026-05-31
 
 User-configurable MCP catalog. The Connections page is no longer limited to the curated preset list — users can register any OAuth-2.0 MCP server (Stripe, Vercel, Supabase, or their own) by pasting a resource URL. The portal probes RFC 9728 protected-resource discovery + RFC 8414 AS metadata before persisting, so only servers that actually support dynamic client registration get past the form.

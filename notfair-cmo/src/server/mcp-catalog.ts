@@ -18,6 +18,7 @@
  */
 
 import { listUserMcpServers } from "@/server/db/user-mcp-servers";
+import { getHiddenMcpPresetKeys } from "@/server/db/projects";
 
 export type McpSpec = {
   /** Stable catalog identifier (used by the UI + mcp_tokens.server_name). */
@@ -60,7 +61,8 @@ export function getMcpPresets(): McpSpec[] {
  * action prevents at insert time, but we double-check on read too).
  */
 export function getMcpCatalog(project_slug: string): McpSpec[] {
-  const presets = MCP_CATALOG_PRESETS;
+  const hidden = new Set(getHiddenMcpPresetKeys(project_slug));
+  const presets = MCP_CATALOG_PRESETS.filter((p) => !hidden.has(p.key));
   const presetKeys = new Set(presets.map((p) => p.key));
   const userRows = listUserMcpServers(project_slug)
     .filter((row) => !presetKeys.has(row.key))

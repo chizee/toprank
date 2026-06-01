@@ -26,7 +26,7 @@ export interface McpConfig {
 
 export type RpcResult<T> =
   | { ok: true; result: T }
-  | { ok: false; kind: "http_error"; status: number }
+  | { ok: false; kind: "http_error"; status: number; body?: string }
   | { ok: false; kind: "timeout" }
   | { ok: false; kind: "aborted" }
   | { ok: false; kind: "network_error"; message: string }
@@ -109,6 +109,12 @@ export async function mcpRpc<T = unknown>(
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
         Authorization: `Bearer ${token}`,
+        // MCP Streamable-HTTP 2025-06-18 §3.3: clients SHOULD declare
+        // the intended protocol version on every request, and strict
+        // servers (Supabase, etc.) return HTTP 400 when it's absent.
+        // Lenient servers (Stripe, NotFair) ignore it. Safe to send
+        // unconditionally.
+        "MCP-Protocol-Version": "2025-06-18",
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
       signal: controller.signal,
@@ -125,8 +131,19 @@ export async function mcpRpc<T = unknown>(
   }
 
   if (!res.ok) {
+    // Try to capture the body so callers can surface the real upstream
+    // error (e.g. Supabase's "must initialize first" or a missing-scope
+    // message). Best-effort: if the read fails or the body is huge, fall
+    // back to just the status.
+    let errBody: string | undefined;
+    try {
+      const raw = await res.text();
+      errBody = raw.trim() ? raw.slice(0, 500) : undefined;
+    } catch {
+      // ignore
+    }
     cleanup();
-    return { ok: false, kind: "http_error", status: res.status };
+    return { ok: false, kind: "http_error", status: res.status, body: errBody };
   }
 
   let body: string;

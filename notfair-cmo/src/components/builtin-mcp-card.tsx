@@ -3,25 +3,15 @@
 import { useState } from "react";
 import { Workflow, BookOpenText } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { McpToolsDialog } from "@/components/mcp-tools-dialog";
 import type { ToolSummary } from "@/server/mcp-server/tool-summaries";
 
 /**
- * Card for an MCP that ships with notfair-cmo itself — no OAuth, no
- * connect/disconnect, always available to every agent. We distinguish
- * it visually from external OAuth MCPs through:
- *
- *  - icon: `Workflow` (orchestration) instead of `Plug` (external wire)
- *  - badge: "Built-in" emerald chip in place of a connection-state badge
- *  - right-side action: "View tools" only (no Connect button)
- *  - footer line states the tool count + "Self-hosted" instead of a
- *    connection-state detail line
- *
- * Tool list is supplied directly from the server-side describeTool walk
- * so the dialog opens instantly — no RPC roundtrip.
+ * Row for an MCP that ships with notfair-cmo itself — no OAuth, no
+ * connect/disconnect, always available to every agent. Visually
+ * distinguished from external rows by an emerald-tinted icon tile and
+ * a small "BUILT-IN" lozenge in place of a connection-state badge.
  */
 type Props = {
   name: string;
@@ -34,46 +24,49 @@ export function BuiltinMcpCard({ name, description, tools }: Props) {
 
   return (
     <>
-      <Card>
-        <CardContent className="space-y-4 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20">
-                <Workflow className="size-4 text-emerald-700 dark:text-emerald-400" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-medium">{name}</h3>
-                  <Badge
-                    variant="secondary"
-                    className="h-4 gap-1 border-emerald-500/20 bg-emerald-500/10 px-1.5 text-[10px] font-medium tracking-wide text-emerald-700 uppercase dark:text-emerald-400"
-                  >
-                    Built-in
-                  </Badge>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {description}
-                </p>
-                <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                  {tools.length} tool{tools.length === 1 ? "" : "s"} · self-hosted ·
-                  no setup
-                </p>
-              </div>
-            </div>
-            <div className="shrink-0">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setOpen(true)}
-              >
-                <BookOpenText className="size-3.5" />
-                View tools
-              </Button>
-            </div>
+      <article className="flex items-center gap-4 px-5 py-4">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/25">
+          <Workflow className="size-5 text-emerald-700 dark:text-emerald-400" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-medium tracking-tight">
+              {name}
+            </h3>
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">
+              <span
+                className="size-1.5 rounded-full bg-emerald-500"
+                aria-hidden
+              />
+              built-in
+            </span>
           </div>
-        </CardContent>
-      </Card>
+          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+            {description}
+          </p>
+          <p className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground/80">
+            self-hosted
+            <span className="mx-1.5 text-muted-foreground/40">·</span>
+            {tools.length} tool{tools.length === 1 ? "" : "s"}
+            <span className="mx-1.5 text-muted-foreground/40">·</span>
+            no setup
+          </p>
+        </div>
+
+        <div className="shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setOpen(true)}
+          >
+            <BookOpenText className="size-3.5" />
+            Tools
+          </Button>
+        </div>
+      </article>
 
       <McpToolsDialog
         open={open}

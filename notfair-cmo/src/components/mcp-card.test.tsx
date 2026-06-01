@@ -80,27 +80,18 @@ afterEach(() => {
 });
 
 describe("McpCard", () => {
-  it("shows spec metadata (name, description, resource_url)", () => {
+  it("shows spec metadata (name, description, host)", () => {
     render(<McpCard spec={spec} status={{ state: "not_configured" }} />);
     expect(screen.getByText(spec.display_name)).toBeInTheDocument();
     expect(screen.getByText(spec.description)).toBeInTheDocument();
-    expect(screen.getByText(spec.resource_url)).toBeInTheDocument();
+    // The row shows the resource URL's host, not the full URL.
+    expect(screen.getByText("notfair.co")).toBeInTheDocument();
   });
 
-  it("renders a 'connected' badge and tool count when status is connected", () => {
-    render(<McpCard spec={spec} status={connected({ tools_count: 12 })} />);
-    expect(screen.getByText("connected")).toBeInTheDocument();
-    expect(screen.getByText(/12 tools available/)).toBeInTheDocument();
-  });
-
-  it("uses the singular 'tool' wording when tools_count is 1", () => {
-    render(<McpCard spec={spec} status={connected({ tools_count: 1 })} />);
-    expect(screen.getByText(/1 tool available/)).toBeInTheDocument();
-  });
-
-  it("falls back to 'Live.' when tools_count is null", () => {
+  it("renders a 'connected' indicator with the verified time when connected", () => {
     render(<McpCard spec={spec} status={connected({ tools_count: null })} />);
-    expect(screen.getByText(/Live\./)).toBeInTheDocument();
+    expect(screen.getByText("connected")).toBeInTheDocument();
+    expect(screen.getByText(/live · verified/)).toBeInTheDocument();
   });
 
   it("shows a Disconnect button when connected and a Connect button otherwise", () => {
@@ -160,7 +151,7 @@ describe("McpCard", () => {
     );
     expect(screen.getByText(/no token/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/Config exists but has no bearer token/i),
+      screen.getByText(/config saved, awaiting bearer/i),
     ).toBeInTheDocument();
   });
 

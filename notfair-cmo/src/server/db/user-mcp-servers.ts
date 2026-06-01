@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "@/server/db/db";
+import { normalizeResourceUrl } from "@/server/mcp/discovery-url";
 
 /**
  * Project-scoped storage for user-added MCP servers.
@@ -75,6 +76,23 @@ export function findUserMcpServer(
         "SELECT * FROM user_mcp_servers WHERE project_slug = ? AND key = ?",
       )
       .get(project_slug, key) as UserMcpServer | undefined) ?? null
+  );
+}
+
+/**
+ * Find a row by normalized resource URL. Used to detect "this server is
+ * already in the project" even when the key the caller would create
+ * differs from the stored key (legacy slugification mismatches, etc).
+ */
+export function findUserMcpServerByResourceUrl(
+  project_slug: string,
+  resource_url: string,
+): UserMcpServer | null {
+  const target = normalizeResourceUrl(resource_url);
+  return (
+    listUserMcpServers(project_slug).find(
+      (row) => normalizeResourceUrl(row.resource_url) === target,
+    ) ?? null
   );
 }
 

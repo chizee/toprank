@@ -257,3 +257,43 @@ export function deleteProjectRow(slug: string): void {
   }
   db.prepare("DELETE FROM projects WHERE slug = ?").run(slug);
 }
+
+/**
+ * Per-project hide-list for preset MCP catalog entries. See migration
+ * 012 — the column stores a JSON-encoded `string[]` so we can grow it
+ * without schema changes.
+ */
+export function getHiddenMcpPresetKeys(slug: string): string[] {
+  const row = getDb()
+    .prepare(
+      "SELECT hidden_mcp_preset_keys_json AS j FROM projects WHERE slug = ?",
+    )
+    .get(slug) as { j: string } | undefined;
+  if (!row?.j) return [];
+  try {
+    const parsed = JSON.parse(row.j);
+    return Array.isArray(parsed)
+      ? parsed.filter((k): k is string => typeof k === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addHiddenMcpPresetKey(slug: string, key: string): void {
+  const current = getHiddenMcpPresetKeys(slug);
+  if (current.includes(key)) return;
+  const next = [...current, key];
+  getDb()
+    .prepare("UPDATE projects SET hidden_mcp_preset_keys_json = ? WHERE slug = ?")
+    .run(JSON.stringify(next), slug);
+}
+
+export function removeHiddenMcpPresetKey(slug: string, key: string): void {
+  const current = getHiddenMcpPresetKeys(slug);
+  const next = current.filter((k) => k !== key);
+  if (next.length === current.length) return;
+  getDb()
+    .prepare("UPDATE projects SET hidden_mcp_preset_keys_json = ? WHERE slug = ?")
+    .run(JSON.stringify(next), slug);
+}

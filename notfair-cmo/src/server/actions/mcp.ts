@@ -10,6 +10,7 @@ import { disconnectMcp as runDisconnect } from "@/server/mcp/state";
 import {
   insertUserMcpServer,
   findUserMcpServer,
+  findUserMcpServerByResourceUrl,
   deleteUserMcpServer,
 } from "@/server/db/user-mcp-servers";
 import { slugify } from "@/lib/slug";
@@ -53,9 +54,16 @@ export async function startMcpConnect(input: {
   const origin = await originFromIncomingRequest();
   const redirect_uri = `${origin}/api/mcp-oauth/callback`;
 
+  const auth_method = pickClientAuthMethod(
+    resolved.token_endpoint_auth_methods_supported,
+  );
   let dcr: DcrResponse;
   try {
-    dcr = await dynamicRegister(resolved.registration_endpoint, redirect_uri);
+    dcr = await dynamicRegister(
+      resolved.registration_endpoint,
+      redirect_uri,
+      auth_method,
+    );
   } catch (err) {
     return { ok: false, error: `Registration failed: ${humanError(err)}` };
   }
@@ -232,21 +240,35 @@ export type AddUserMcpServerResult =
   | { ok: true; key: string }
   | { ok: false; error: string; kind: AddFailureKind };
 
-type AddFailureKind = ProbeFailureKind | "no_project" | "name_unusable" | "key_in_use";
+type AddFailureKind = ProbeFailureKind | "no_project" | "name_unusable";
+
+const KEY_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
- * Register a user-added MCP server for the active project.
+ * Register an MCP server for the active project — idempotent.
  *
- * Slugs the display name into a stable `key` (also used as
- * `mcp_tokens.server_name` post-connect), probes discovery to confirm the
- * server is OAuth-2.0-with-DCR connectable, and writes a row to
- * `user_mcp_servers`. The user then clicks Connect on the resulting card
- * to drive the existing OAuth flow.
+ *  - If `key` matches a preset (e.g. `notfair-googleads`), the action
+ *    only ensures the key is *unhidden* (clears the per-project
+ *    hide-list). No row is written; the preset entry surfaces again via
+ *    `getMcpCatalog`.
+ *  - If a `user_mcp_servers` row for the key already exists, the action
+ *    is a no-op success — used by Browse-connectors so re-clicking a
+ *    tile after a canceled OAuth simply re-runs `startMcpConnect`
+ *    instead of erroring on "already exists".
+ *  - Otherwise probes RFC 9728 discovery + DCR; on success, inserts a
+ *    new `user_mcp_servers` row.
+ *
+ * `key` accepts a stable preset/connector identifier to bypass
+ * slugification (e.g. Browse passes `notfair-googleads` directly so it
+ * matches the preset key rather than `slugify("NotFair Google Ads")` =
+ * `notfair-google-ads`). When omitted, the display name is slugified.
  */
 export async function addUserMcpServerAction(input: {
   display_name: string;
   description?: string;
   resource_url: string;
+  /** Optional canonical key override (used by Browse connectors). */
+  key?: string;
 }): Promise<AddUserMcpServerResult> {
   const project = await getActiveProject();
   if (!project) {
@@ -256,42 +278,74 @@ export async function addUserMcpServerAction(input: {
       error: "No active project. Pick one before adding an MCP server.",
     };
   }
-  const slug = slugify(input.display_name);
-  if (!slug.ok) {
-    return {
-      ok: false,
-      kind: "name_unusable",
-      error: `Can't derive a key from this name: ${slug.reason}.`,
-    };
+
+  let key: string;
+  if (input.key && KEY_PATTERN.test(input.key)) {
+    key = input.key;
+  } else {
+    const slug = slugify(input.display_name);
+    if (!slug.ok) {
+      return {
+        ok: false,
+        kind: "name_unusable",
+        error: `Can't derive a key from this name: ${slug.reason}.`,
+      };
+    }
+    key = slug.slug;
   }
-  if (isPresetKey(slug.slug) || findUserMcpServer(project.slug, slug.slug)) {
-    return {
-      ok: false,
-      kind: "key_in_use",
-      error: `An MCP server named '${slug.slug}' already exists in this project.`,
-    };
+
+  // Preset re-add: just un-hide. No row to write, no discovery probe.
+  if (isPresetKey(key)) {
+    const { removeHiddenMcpPresetKey } = await import("@/server/db/projects");
+    removeHiddenMcpPresetKey(project.slug, key);
+    revalidatePath("/", "layout");
+    return { ok: true, key };
   }
+
+  // User row already exists for this key — Browse "click again" path.
+  if (findUserMcpServer(project.slug, key)) {
+    return { ok: true, key };
+  }
+
+  // Same MCP server (same URL) is already in this project under a
+  // different key — e.g. NotFair Meta Ads was added pre-canonical-id and
+  // saved as `notfair-meta-ads`, while the tile click would use
+  // `notfair-metaads`. Treat as an idempotent re-pick: return the
+  // existing key so the connect chain reuses it instead of writing a
+  // duplicate row.
+  const existingByUrl = findUserMcpServerByResourceUrl(
+    project.slug,
+    input.resource_url,
+  );
+  if (existingByUrl) {
+    return { ok: true, key: existingByUrl.key };
+  }
+
   const probe = await probeMcpDiscovery({ resource_url: input.resource_url });
   if (!probe.ok) return probe;
   insertUserMcpServer({
     project_slug: project.slug,
-    key: slug.slug,
+    key,
     display_name: input.display_name.trim(),
     description: input.description?.trim() ?? "",
     resource_url: input.resource_url.trim(),
     discovery_url: probe.discovery_url,
   });
   revalidatePath("/", "layout");
-  return { ok: true, key: slug.slug };
+  return { ok: true, key };
 }
 
 /**
- * Remove a user-added MCP server from the active project. Drops the
- * stored bearer (if any), unregisters from every agent's harness config,
- * and deletes the catalog row.
+ * Remove an MCP server from the active project. Works on both presets
+ * and user rows:
  *
- * Presets cannot be removed this way — the action refuses unknown or
- * preset keys.
+ *  - Preset: appends the key to `projects.hidden_mcp_preset_keys_json`
+ *    so `getMcpCatalog` filters it out from now on. Token + adapter
+ *    cleanup runs the same way.
+ *  - User row: deletes the `user_mcp_servers` row.
+ *
+ * Either path also drops the stored bearer and unregisters from every
+ * agent's harness config.
  */
 export async function removeUserMcpServerAction(input: {
   mcp_key: string;
@@ -300,17 +354,19 @@ export async function removeUserMcpServerAction(input: {
   if (!project) {
     return { ok: false, error: "No active project." };
   }
-  if (isPresetKey(input.mcp_key)) {
-    return { ok: false, error: "Preset MCP servers can't be removed." };
-  }
-  const row = findUserMcpServer(project.slug, input.mcp_key);
-  if (!row) {
-    return { ok: false, error: `Unknown MCP key: ${input.mcp_key}.` };
+  const isPreset = isPresetKey(input.mcp_key);
+  if (!isPreset) {
+    const row = findUserMcpServer(project.slug, input.mcp_key);
+    if (!row) {
+      return { ok: false, error: `Unknown MCP key: ${input.mcp_key}.` };
+    }
   }
   try {
     await runDisconnect(project.slug, input.mcp_key);
     const { listProjectAgents } = await import("@/server/agent-meta");
-    const { getProject } = await import("@/server/db/projects");
+    const { getProject, addHiddenMcpPresetKey } = await import(
+      "@/server/db/projects"
+    );
     const { requireAdapter } = await import("@/server/adapters/registry");
     const proj = getProject(project.slug);
     if (proj) {
@@ -324,7 +380,11 @@ export async function removeUserMcpServerAction(input: {
         }
       }
     }
-    deleteUserMcpServer(project.slug, input.mcp_key);
+    if (isPreset) {
+      addHiddenMcpPresetKey(project.slug, input.mcp_key);
+    } else {
+      deleteUserMcpServer(project.slug, input.mcp_key);
+    }
   } catch (err) {
     return { ok: false, error: humanError(err) };
   }
@@ -339,7 +399,16 @@ type ResolvedAuthServer = {
   authorization_endpoint: string;
   token_endpoint: string;
   registration_endpoint: string;
+  /**
+   * The AS's advertised auth methods for the token endpoint. Drives DCR
+   * registration: we prefer the public-PKCE `none` method when the AS
+   * supports it (MCP spec default), and fall back to `client_secret_post`
+   * for servers like Supabase that don't accept public clients.
+   */
+  token_endpoint_auth_methods_supported: string[];
 };
+
+type ClientAuthMethod = "none" | "client_secret_post";
 
 class ProbeError extends Error {
   kind: ProbeFailureKind;
@@ -406,12 +475,31 @@ async function resolveAuthServer(
       "AS metadata is missing registration_endpoint — dynamic client registration is required.",
     );
   }
+  const advertised = (meta as Record<string, unknown>)
+    .token_endpoint_auth_methods_supported;
   return {
     issuer,
     authorization_endpoint: meta.authorization_endpoint,
     token_endpoint: meta.token_endpoint,
     registration_endpoint: meta.registration_endpoint,
+    token_endpoint_auth_methods_supported: Array.isArray(advertised)
+      ? advertised.filter((s): s is string => typeof s === "string")
+      : [],
   };
+}
+
+/**
+ * Pick a token-endpoint auth method that the AS supports AND we know
+ * how to drive at the callback. We prefer `none` (PKCE-only, MCP-spec
+ * default); when the AS doesn't advertise it (Supabase, some OIDC
+ * providers) we fall back to `client_secret_post`. `client_secret_basic`-
+ * only servers aren't supported — the callback's token exchange sends
+ * the secret in the POST body, not the Authorization header.
+ */
+function pickClientAuthMethod(supported: string[]): ClientAuthMethod {
+  if (supported.length === 0) return "none";
+  if (supported.includes("none")) return "none";
+  return "client_secret_post";
 }
 
 /**
@@ -466,17 +554,19 @@ type DcrResponse = {
 async function dynamicRegister(
   registration_endpoint: string,
   redirect_uri: string,
+  auth_method: ClientAuthMethod,
 ): Promise<DcrResponse> {
-  // Register as `none` (public client) so we drive token exchange with
-  // PKCE + no secret per the MCP spec. Servers that don't yet support
-  // public clients will still return a client_secret — we keep it for
-  // back-compat fallback, but the token handler favors PKCE.
+  // PKCE-only `none` is the MCP-spec default for public clients. Some
+  // OAuth servers (Supabase, certain OIDC providers) reject `none` and
+  // require a confidential client; for those we register as
+  // `client_secret_post` — the AS returns a client_secret which the
+  // callback then sends alongside the code at token exchange.
   const body = {
     client_name: "notfair-cmo",
     redirect_uris: [redirect_uri],
     grant_types: ["authorization_code"],
     response_types: ["code"],
-    token_endpoint_auth_method: "none",
+    token_endpoint_auth_method: auth_method,
   };
   const res = await fetch(registration_endpoint, {
     method: "POST",
@@ -512,10 +602,16 @@ async function originFromIncomingRequest(): Promise<string> {
   const h = await headers();
   // Next surfaces forwarded headers when behind a proxy; fall back to host.
   const proto = h.get("x-forwarded-proto") ?? "http";
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  if (!host) {
+  const rawHost = h.get("x-forwarded-host") ?? h.get("host");
+  if (!rawHost) {
     throw new Error("Could not derive origin from request headers");
   }
+  // RFC 8252 §7.3 says native OAuth clients use the loopback IP (127.0.0.1)
+  // rather than the `localhost` hostname; some providers (Vercel) enforce
+  // this and reject `http://localhost` as an "invalid redirect URL".
+  // Normalize so the registered + exchanged redirect URI is loopback-IP
+  // regardless of which form the user typed into the address bar.
+  const host = rawHost.replace(/^localhost(:|$)/, "127.0.0.1$1");
   return `${proto}://${host}`;
 }
 

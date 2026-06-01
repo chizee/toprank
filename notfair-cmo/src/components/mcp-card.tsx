@@ -4,17 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plug,
-  CheckCircle2,
-  AlertTriangle,
   Loader2,
   Unplug,
-  XCircle,
   BookOpenText,
   Trash2,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   startMcpConnect,
@@ -25,15 +20,24 @@ import {
 import type { McpSpec } from "@/server/mcp-catalog";
 import type { McpRuntimeStatus } from "@/server/mcp/state";
 import { McpToolsDialog } from "@/components/mcp-tools-dialog";
+import { McpIcon } from "@/components/mcp-icon";
 
 type Props = {
   spec: McpSpec;
   status: McpRuntimeStatus;
 };
 
+/**
+ * One row in the Connections list. Drops the outer Card border because
+ * the parent `<ol>` provides a single shared container + dividers; this
+ * keeps the visual rhythm of a refined editorial list rather than a
+ * stack of disconnected boxes.
+ */
 export function McpCard({ spec, status }: Props) {
   const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState<"connect" | "disconnect" | "remove" | null>(null);
+  const [busy, setBusy] = useState<"connect" | "disconnect" | "remove" | null>(
+    null,
+  );
   const [toolsOpen, setToolsOpen] = useState(false);
   const router = useRouter();
 
@@ -63,9 +67,6 @@ export function McpCard({ spec, status }: Props) {
         toast.error(result.error);
       } else {
         toast.success(`${spec.display_name} disconnected`);
-        // revalidatePath inside the action invalidates the cached server
-        // render, but the client still needs to re-fetch — router.refresh()
-        // forces the RSC payload to repopulate this card's `status` prop.
         router.refresh();
       }
       setBusy(null);
@@ -88,93 +89,98 @@ export function McpCard({ spec, status }: Props) {
 
   const isBusy = busy !== null || pending;
   const canViewTools = status.state === "connected";
-  const canRemove = spec.source === "user";
+  // Every connector is removable now — presets get hidden per-project
+  // via the hidden_mcp_preset_keys list; user rows get deleted. Either
+  // way the card disappears from the connections list.
+  const canRemove = true;
 
   return (
     <>
-      <Card>
-        <CardContent className="space-y-4 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-              <McpIcon resourceUrl={spec.resource_url} alt={spec.display_name} />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-medium">{spec.display_name}</h3>
-                  <StatusBadge status={status} />
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {spec.description}
-                </p>
-                <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                  {spec.resource_url}
-                </p>
-              </div>
-            </div>
-            <div className="shrink-0">
-              {status.state === "connected" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={isBusy}
-                  onClick={onDisconnect}
-                >
-                  {busy === "disconnect" ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="size-3.5" />
-                  )}
-                  Disconnect
-                </Button>
-              ) : (
-                <Button type="button" size="sm" disabled={isBusy} onClick={onConnect}>
-                  {busy === "connect" ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Plug className="size-3.5" />
-                  )}
-                  {status.state === "stale_token" ? "Reconnect" : "Connect"}
-                </Button>
-              )}
-            </div>
-          </div>
+      <article className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/30">
+        <McpIcon
+          resourceUrl={spec.resource_url}
+          alt={spec.display_name}
+          size="lg"
+        />
 
-          <div className="flex items-center justify-between gap-3">
-            <StatusDetail status={status} />
-            <div className="flex shrink-0 items-center gap-1">
-              {canViewTools && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setToolsOpen(true)}
-                >
-                  <BookOpenText className="size-3.5" />
-                  View tools
-                </Button>
-              )}
-              {canRemove && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                  disabled={isBusy}
-                  onClick={onRemove}
-                >
-                  {busy === "remove" ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-3.5" />
-                  )}
-                  Remove server
-                </Button>
-              )}
-            </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-medium tracking-tight">
+              {spec.display_name}
+            </h3>
+            <StatusDot status={status} />
           </div>
-        </CardContent>
-      </Card>
+          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+            {spec.description}
+          </p>
+          <StatusLine status={status} resourceUrl={spec.resource_url} />
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          {canViewTools && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setToolsOpen(true)}
+            >
+              <BookOpenText className="size-3.5" />
+              Tools
+            </Button>
+          )}
+          {canRemove && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
+              disabled={isBusy}
+              onClick={onRemove}
+              aria-label={`Remove ${spec.display_name}`}
+              title="Remove server"
+            >
+              {busy === "remove" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="size-3.5" />
+              )}
+            </Button>
+          )}
+          {status.state === "connected" ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={isBusy}
+              onClick={onDisconnect}
+            >
+              {busy === "disconnect" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Unplug className="size-3.5" />
+              )}
+              Disconnect
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8"
+              disabled={isBusy}
+              onClick={onConnect}
+            >
+              {busy === "connect" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plug className="size-3.5" />
+              )}
+              {status.state === "stale_token" ? "Reconnect" : "Connect"}
+            </Button>
+          )}
+        </div>
+      </article>
 
       <McpToolsDialog
         open={toolsOpen}
@@ -188,134 +194,74 @@ export function McpCard({ spec, status }: Props) {
 }
 
 /**
- * Renders the MCP server's brand favicon via Google's `faviconV2` service.
- *
- * We strip subdomains down to the registrable domain (`mcp.stripe.com` →
- * `stripe.com`) so the icon reflects the company's brand, not the API
- * subdomain — Google rarely has a real favicon indexed for `mcp.*` or
- * `api.*` hosts. Falls back to a Plug glyph on malformed URLs.
+ * Inline status indicator — a small filled dot next to the name. Color
+ * carries the state, no background pill needed.
  */
-function McpIcon({ resourceUrl, alt }: { resourceUrl: string; alt: string }) {
-  const [errored, setErrored] = useState(false);
-  let host: string | null = null;
-  try {
-    host = new URL(resourceUrl).hostname;
-  } catch {
-    host = null;
-  }
-  const brandHost = host ? brandDomain(host) : null;
-  const showImg = !!brandHost && !errored;
+function StatusDot({ status }: { status: McpRuntimeStatus }) {
+  const map: Record<McpRuntimeStatus["state"], { color: string; label: string }> =
+    {
+      connected: { color: "bg-emerald-500", label: "connected" },
+      stale_token: { color: "bg-amber-500", label: "token expired" },
+      unreachable: { color: "bg-destructive", label: "unreachable" },
+      configured_no_token: { color: "bg-amber-500", label: "no token" },
+      not_configured: { color: "bg-muted-foreground/40", label: "not connected" },
+    };
+  const { color, label } = map[status.state];
   return (
-    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-      {showImg ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${brandHost}&size=32`}
-          alt={alt}
-          width={20}
-          height={20}
-          className="size-5"
-          referrerPolicy="no-referrer"
-          onError={() => setErrored(true)}
-        />
-      ) : (
-        <Plug className="size-4" />
-      )}
-    </div>
+    <span
+      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
+      role="status"
+    >
+      <span className={`size-1.5 rounded-full ${color}`} aria-hidden />
+      {label}
+    </span>
   );
 }
 
 /**
- * Reduce a hostname to a "brand" host for favicon lookup. The Public
- * Suffix List is the only fully correct answer here; the simple last-2-
- * labels heuristic is wrong for some multipart TLDs (`example.co.uk`),
- * but it's right for ~all consumer SaaS the connections page targets.
- * Hosts that are already 2 labels or fewer (`notfair.co`, `localhost`)
- * pass through unchanged.
+ * Bottom metadata line: brand host (mono small) plus connection-state
+ * details (verified Xm ago, error blurb, etc.) separated by a thin dot.
  */
-function brandDomain(host: string): string {
-  const parts = host.split(".").filter(Boolean);
-  if (parts.length <= 2) return host;
-  return parts.slice(-2).join(".");
+function StatusLine({
+  status,
+  resourceUrl,
+}: {
+  status: McpRuntimeStatus;
+  resourceUrl: string;
+}) {
+  const host = (() => {
+    try {
+      return new URL(resourceUrl).host;
+    } catch {
+      return resourceUrl;
+    }
+  })();
+  const detail = describeStatus(status);
+  return (
+    <p className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground/80">
+      <span>{host}</span>
+      {detail ? (
+        <>
+          <span className="mx-1.5 text-muted-foreground/40">·</span>
+          <span>{detail}</span>
+        </>
+      ) : null}
+    </p>
+  );
 }
 
-function StatusBadge({ status }: { status: McpRuntimeStatus }) {
+function describeStatus(status: McpRuntimeStatus): string | null {
   switch (status.state) {
     case "connected":
-      return (
-        <Badge variant="secondary" className="gap-1 text-[10px]">
-          <CheckCircle2 className="size-3 text-emerald-600" />
-          connected
-        </Badge>
-      );
+      return `live · verified ${timeAgo(status.last_checked_at)}`;
     case "stale_token":
-      return (
-        <Badge variant="outline" className="gap-1 text-[10px]">
-          <AlertTriangle className="size-3 text-amber-600" />
-          token expired
-        </Badge>
-      );
+      return `token rejected (HTTP ${status.http_status})`;
     case "unreachable":
-      return (
-        <Badge variant="outline" className="gap-1 text-[10px]">
-          <XCircle className="size-3 text-destructive" />
-          unreachable
-        </Badge>
-      );
+      return status.error;
     case "configured_no_token":
-      return (
-        <Badge variant="outline" className="gap-1 text-[10px]">
-          <AlertTriangle className="size-3 text-amber-600" />
-          no token
-        </Badge>
-      );
+      return "config saved, awaiting bearer";
     case "not_configured":
-      return (
-        <Badge variant="outline" className="text-[10px]">
-          not connected
-        </Badge>
-      );
-  }
-}
-
-function StatusDetail({ status }: { status: McpRuntimeStatus }) {
-  switch (status.state) {
-    case "connected":
-      return (
-        <p className="text-xs text-muted-foreground">
-          {status.tools_count !== null
-            ? `${status.tools_count} tool${status.tools_count === 1 ? "" : "s"} available`
-            : "Live."}
-          {" · Verified "}
-          {timeAgo(status.last_checked_at)}
-        </p>
-      );
-    case "stale_token":
-      return (
-        <p className="text-xs text-muted-foreground">
-          Server rejected the saved token (HTTP {status.http_status}). Reconnect
-          to refresh.
-        </p>
-      );
-    case "unreachable":
-      return (
-        <p className="text-xs text-muted-foreground">
-          Couldn’t reach the MCP server: {status.error}
-        </p>
-      );
-    case "configured_no_token":
-      return (
-        <p className="text-xs text-muted-foreground">
-          Config exists but has no bearer token. Click Connect to fix.
-        </p>
-      );
-    case "not_configured":
-      return (
-        <p className="text-xs text-muted-foreground">
-          One click runs the OAuth flow against the issuer and saves the token
-          locally to this project.
-        </p>
-      );
+      return "one-click OAuth saves the token locally";
   }
 }
 
