@@ -2,11 +2,11 @@ import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
-import { listCronsForProject } from "@/server/openclaw/crons";
+import { listCronsForProject } from "@/server/scheduler/display";
 import {
   annotateOccurrencesWithRunStatus,
   expandSchedule,
-} from "@/server/openclaw/cron-schedule";
+} from "@/server/scheduler/display";
 import {
   CronCalendar,
   type CalendarCron,
@@ -134,7 +134,6 @@ export default async function AgentCronPage({
             <p className="text-sm text-muted-foreground">
               {totalActive} active
               {totalDisabled > 0 ? ` · ${totalDisabled} disabled` : ""}
-              {" · backed by OpenClaw"}
             </p>
           </div>
           <ScheduleCronDialog projectSlug={project.slug} />
@@ -143,7 +142,7 @@ export default async function AgentCronPage({
         {error && (
           <Card>
             <CardContent className="py-6 text-sm">
-              <p className="font-medium text-destructive">Could not reach OpenClaw.</p>
+              <p className="font-medium text-destructive">Could not load crons.</p>
               <p className="mt-1 text-xs text-muted-foreground">{error}</p>
             </CardContent>
           </Card>

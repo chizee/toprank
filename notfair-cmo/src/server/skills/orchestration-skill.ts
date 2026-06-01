@@ -93,74 +93,54 @@ recover instead of asking the user:
 ## Scheduling recurring work
 
 When the user asks for "every day", "every Monday", "every hour", etc.,
-use your \`exec\` tool to actually create the cron — don't just describe
-the schedule. Two equivalent CLI shapes:
+call the \`schedule_recurring_work\` MCP tool. Do NOT shell out — there
+is no \`openclaw cron\` CLI. The SQLite-backed scheduler is the only
+path now and it's exposed only via this tool.
 
-  openclaw cron add \\
-    --name "<project-slug> / <agent-slug> / <cron-name>" \\
-    --description "<one line: what this cron does>" \\
-    --agent <project-slug>-<agent-slug> \\
-    --cron "<5-field cron expr>" \\
-    --tz "America/Los_Angeles" \\
-    --message "RUN: instructions to your future self" \\
-    --no-deliver \\
-    --json
+Inputs:
+- \`project_slug\` — from your runtime identity above.
+- \`agent_id\` — full id (e.g. \`demo1-google-ads-ana\`) of the agent
+  who should receive the scheduled task assignment. Usually yourself.
+- \`name\` — short kebab-case identifier of the WORK (not the schedule).
+  Good: \`daily-bid-opt\`, \`weekly-quality-score\`. Bad: \`9am-cron\`,
+  \`every-monday\`.
+- \`cron_expr\` — standard 5-field cron expression in UTC. Embed the
+  user's desired hour as UTC: 9am Pacific (UTC-7 in summer) is
+  \`0 16 * * *\`; 9am Pacific in winter (UTC-8) is \`0 17 * * *\`.
+- \`message\` — the prompt the schedule will send to the agent on each
+  tick. Write it as instructions to your future self: be specific about
+  what to do and what to report.
 
-  openclaw cron add \\
-    --name "<project-slug> / <agent-slug> / <cron-name>" \\
-    --description "<one line>" \\
-    --agent <project-slug>-<agent-slug> \\
-    --every "1h" \\
-    --message "RUN: instructions" \\
-    --no-deliver \\
-    --json
+After the tool returns, you'll get \`{ id, name, cron_expr, next_run_at }\`.
+Mention the created id in your reply so the user can correlate with the
+Crons tab.
 
-Field rules:
-- \`--name "<project> / <agent> / <cron>"\` — literal \`/\` with spaces is
-  the separator the UI parses for grouping. project = your project_slug.
-  agent = url-slug ("cmo" | "google-ads" | "seo"). cron = kebab-case verb.
-- \`--agent <project>-<agent>\` — no slashes, hyphenated. Example:
-  \`demo1-google-ads\`, \`demo1-cmo\`.
-- \`--cron\` XOR \`--every\` — never both.
-- \`--no-deliver\` and \`--json\` always (unless the user explicitly wants
-  a channel delivery).
-
-Cron-name rules:
-- Lowercase + hyphenated, describes the work, not the schedule.
-- Good: \`daily-bid-opt\`, \`weekly-rank-check\`, \`hourly-metrics\`.
-- Bad: \`9am-cron\`, \`every-monday\`.
-
-After running, parse the JSON output and confirm the created cron id in
-chat.
+Common patterns:
+- Daily morning: \`0 16 * * *\` (9am PT summer)
+- Weekly Monday: \`0 16 * * 1\`
+- Hourly: \`0 * * * *\`
 
 ## Propose recurring crons after approved one-time actions
 
 When the user just approved a one-time action that produces a one-time
 outcome (e.g., pausing wasted-spend keywords), your next response should
-propose a recurring cron to catch the same kind of issue in the future.
-Append this block at the END of your reply so the UI can render an
-inline accept button:
+propose a recurring schedule to catch the same kind of issue in the
+future. Describe the proposed schedule in prose plus the exact tool
+call you would make, then wait for the user's go-ahead:
 
-<propose_cron>
-name: <project>/<agent>/<kebab-case-cron-name>
-agent: <project-slug>-<agent-slug>
-schedule: cron 0 9 * * * America/Los_Angeles
-message: RUN: instructions to your future self on each tick
-description: one-line description for the cron tab
-</propose_cron>
+> "I'd suggest scheduling this weekly — every Monday at 9am Pacific.
+> If you want, I'll set it up:
+>  - name: weekly-wasted-spend-sweep
+>  - cron_expr: 0 16 * * 1
+>  - message: 'Re-run the wasted-spend audit and pause any keyword with
+>    > $50 spend and 0 conversions in the past 7 days. Report counts.'"
 
 Rules:
-- Only propose ONE cron per turn. Quality over quantity.
+- Only propose ONE schedule per turn. Quality over quantity.
 - Only propose AFTER the user has demonstrated trust by approving at
   least one one-time action. Do not propose on a cold chat.
-- Do NOT \`exec\` the \`openclaw cron add\` CLI directly when emitting a
-  proposal — the UI materializes the cron when the user accepts.
-- Only when the user replies "yes" / "do it", THEN call your exec tool
-  to actually create the cron using the schedule above.
-
-\`<propose_cron>\` is the ONLY pseudo-XML block the platform still parses
-client-side (purely for UI rendering, not server state). Every other
-coordination action goes through MCP tools.
+- When the user replies "yes" / "do it", THEN call
+  \`schedule_recurring_work\` with the exact fields above.
 `;
 
 /** Public reader used by writeIdentityFile + tests. Pure for snapshot-style

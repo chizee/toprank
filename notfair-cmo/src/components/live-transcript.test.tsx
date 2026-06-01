@@ -33,7 +33,7 @@ vi.mock("@/components/markdown", () => ({
 }));
 
 import { LiveTranscript } from "./live-transcript";
-import type { TranscriptEvent } from "@/server/openclaw/transcript-tail";
+import type { TranscriptEvent } from "@/server/sessions/transcript-tail";
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 

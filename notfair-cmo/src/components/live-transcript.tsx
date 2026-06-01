@@ -41,7 +41,7 @@ import {
   parseSlashMessage,
   type SlashCommand,
 } from "@/lib/slash-commands";
-import type { TranscriptEvent } from "@/server/openclaw/transcript-tail";
+import type { TranscriptEvent } from "@/server/sessions/transcript-tail";
 import { projectHref } from "@/lib/project-href";
 
 const POLL_INTERVAL_MS = 2_000;
@@ -1279,6 +1279,15 @@ function deriveWorkingView(input: {
     turnStartedAt != null
       ? events.filter((e) => e.ts >= turnStartedAt)
       : events;
+  // Turn-ended signal: the harness emits a `final` event when its run
+  // completes; transcript-tail surfaces it as `{ kind: "lifecycle",
+  // phase: "done" }`. Once we've seen it, the agent has stopped
+  // producing tokens — keep the trajectory chips but stop the spinning
+  // "Wrapping up" pill (which otherwise rolls on indefinitely while the
+  // task waits for the agent's now-missing `submit_task_status` call).
+  const turnEnded = turnEvents.some(
+    (e) => e.kind === "lifecycle" && e.phase === "done",
+  );
   const lastEvent = turnEvents.length > 0 ? turnEvents[turnEvents.length - 1] : null;
   const pendingInFlightTool = pendingTools.find((t) => !t.done) ?? null;
   const inFlightCommittedToolCall: Extract<
@@ -1292,6 +1301,21 @@ function deriveWorkingView(input: {
     return matched ? null : lastEvent;
   })();
   const phases = buildPhases(turnEvents, pendingTools);
+
+  // Highest precedence: the run has ended cleanly. Don't lie to the user
+  // by showing "Wrapping up" with a spinner for what is in fact a
+  // completed turn that's now parked waiting for the agent to either
+  // call submit_task_status (which it forgot) or for the user to
+  // intervene.
+  if (turnEnded && !pendingInFlightTool && !hasPendingAssistant) {
+    return {
+      headline: "Turn ended",
+      subtitle:
+        "Agent stopped without closing the task — open Approvals or send a follow-up.",
+      phases,
+      mood: "ended",
+    };
+  }
 
   if (pendingInFlightTool) {
     return {

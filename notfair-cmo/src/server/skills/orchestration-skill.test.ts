@@ -65,18 +65,25 @@ describe("ORCHESTRATION_SKILL", () => {
     expect(s).toMatch(/can NOT close a task.*pending approval/i);
   });
 
-  it("teaches cron CLI shape including --name '<project> / <agent> / <cron>'", () => {
+  it("teaches the schedule_recurring_work MCP tool, not the dead openclaw CLI", () => {
     const s = getOrchestrationSkill();
-    expect(s).toContain("openclaw cron add");
-    expect(s).toContain("--no-deliver");
-    expect(s).toContain("--json");
-    expect(s).toContain(`"<project-slug> / <agent-slug> / <cron-name>"`);
+    expect(s).toContain("schedule_recurring_work");
+    expect(s).toContain("cron_expr");
+    expect(s).toContain("project_slug");
+    expect(s).toContain("agent_id");
+    // Regression: previous skill told agents to shell out to a CLI that
+    // doesn't exist anymore. That made agents hallucinate cron creation
+    // success without ever persisting a row to scheduled_jobs.
+    expect(s).not.toContain("openclaw cron add");
   });
 
-  it("documents <propose_cron> as the ONE pseudo-XML block still parsed (UI-only)", () => {
+  it("documents propose-then-call flow for recurring schedules after one-time approvals", () => {
     const s = getOrchestrationSkill();
-    expect(s).toContain("<propose_cron>");
-    expect(s).toMatch(/ONLY pseudo-XML block/);
+    expect(s).toMatch(/propose ONE schedule per turn/);
+    // The pseudo-XML <propose_cron> sentinel block was removed when the
+    // dead openclaw CLI was retired; agents now propose in prose and
+    // call schedule_recurring_work on confirmation.
+    expect(s).not.toContain("<propose_cron>");
   });
 
   it("includes a 'Your role:' section selector so role-specific content sits ABOVE", () => {

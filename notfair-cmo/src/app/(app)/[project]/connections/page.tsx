@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getProject } from "@/server/db/projects";
-import { MCP_CATALOG, storedMcpKey } from "@/server/mcp-catalog";
-import { getMcpStatus } from "@/server/mcp-state";
+import { MCP_CATALOG } from "@/server/mcp-catalog";
+import { getMcpStatus } from "@/server/mcp/state";
 import { summarizeBuiltinTools } from "@/server/mcp-server/tool-summaries";
 import { McpCard } from "@/components/mcp-card";
 import { BuiltinMcpCard } from "@/components/builtin-mcp-card";
@@ -25,7 +25,7 @@ export default async function ConnectionsPage({
   // Status probes happen in parallel — each has its own 2s timeout so a
   // flaky upstream doesn't gate the whole page.
   const statuses = await Promise.all(
-    MCP_CATALOG.map((s) => getMcpStatus(storedMcpKey(project.slug, s.key))),
+    MCP_CATALOG.map((s) => getMcpStatus(project.slug, s.key)),
   );
 
   // Built-in MCP: notfair-orchestration ships with the platform and serves

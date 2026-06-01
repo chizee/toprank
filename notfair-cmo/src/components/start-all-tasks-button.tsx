@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { startTransition as scheduleTransition, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
@@ -40,12 +40,18 @@ export function StartAllTasksButton({
       toast.success(
         `Started ${result.data.started} task${result.data.started === 1 ? "" : "s"}.`,
       );
-      router.refresh();
+      // Mark every refresh as a transition so React keeps the visible
+      // tree alive while the new RSC payload streams in — prevents the
+      // sidebar from flickering on each 3-second tick.
+      scheduleTransition(() => router.refresh());
       // Poll for ~2 minutes so the page reflects status flips without the
       // user needing to refresh manually. Long enough for most tasks (3 ×
       // 30-60s each) but bounded so we don't burn cycles forever.
       setPolling(true);
-      const intervalId = setInterval(() => router.refresh(), 3_000);
+      const intervalId = setInterval(
+        () => scheduleTransition(() => router.refresh()),
+        3_000,
+      );
       const timeoutId = setTimeout(() => {
         clearInterval(intervalId);
         setPolling(false);

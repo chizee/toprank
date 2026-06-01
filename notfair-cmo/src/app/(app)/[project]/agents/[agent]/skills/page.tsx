@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
-import { getSkillStatus } from "@/server/openclaw/gateway-rpc";
+import { getSkillStatus } from "@/server/agents/skills";
 import { SkillsList } from "@/components/skills-list";
 
 type Params = { agent: string; project: string };
@@ -35,17 +35,14 @@ export default async function AgentSkillsPage({
         <header>
           <h2 className="text-lg font-semibold tracking-tight">Skills</h2>
           <p className="text-sm text-muted-foreground">
-            Capabilities OpenClaw exposes to {resolved.name}.
-            {report?.agentSkillFilter?.length
-              ? ` Filtered to this agent's allowlist (${report.agentSkillFilter.length}).`
-              : " Workspace-wide; no per-agent filter."}
+            Capabilities available to {resolved.name} from this workspace.
           </p>
         </header>
 
         {error && (
           <Card>
             <CardContent className="space-y-1 py-4 text-sm">
-              <p className="font-medium text-destructive">Could not reach OpenClaw.</p>
+              <p className="font-medium text-destructive">Could not load skills.</p>
               <p className="text-xs text-muted-foreground">{error}</p>
             </CardContent>
           </Card>

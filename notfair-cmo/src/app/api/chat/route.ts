@@ -2,98 +2,54 @@ import { NextResponse } from "next/server";
 import { getActiveProject } from "@/server/active-project";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
-import { streamChatViaGateway } from "@/server/openclaw/gateway-client";
+import { requireAdapter } from "@/server/adapters/registry";
+import { workspaceDirFor } from "@/server/agents/provisioning";
 import {
-  buildPendingSessionKey,
-  findSessionBySessionId,
-} from "@/server/openclaw/sessions";
-import {
-  openShadowWriter,
-  shadowStreamEvent,
-} from "@/server/openclaw/shadow-transcript";
+  getOrCreateSession,
+  appendTranscriptEvent,
+  touchSession,
+} from "@/server/sessions";
 import { claimProposedTask, getTask, updateTask } from "@/server/db/tasks";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/**
- * Lightweight per-request profiler. Records ms-offsets from request start so
- * we can attribute end-to-end latency to a stage (route boot, gateway open,
- * model first-token, etc.). Marks are emitted to stdout and to the client as
- * an SSE `perf` event so they show up in both the dev terminal and the browser
- * console. Toggle off with `NOTFAIR_CHAT_PERF=0`.
- */
-const PERF_ON = process.env.NOTFAIR_CHAT_PERF !== "0";
-
-function makePerf(tag: string) {
-  const start = performance.now();
-  const marks: Array<{ name: string; at: number; delta: number }> = [];
-  let last = start;
-  const mark = (name: string) => {
-    if (!PERF_ON) return;
-    const now = performance.now();
-    const at = now - start;
-    const delta = now - last;
-    last = now;
-    marks.push({ name, at, delta });
-    // eslint-disable-next-line no-console
-    console.log(
-      `[chat-perf ${tag}] +${at.toFixed(1)}ms (Δ${delta.toFixed(1)}ms) ${name}`,
-    );
-  };
-  const summary = () => marks;
-  return { mark, summary };
-}
-
 type ChatPostBody = {
   message: string;
   agent?: string;
-  /**
-   * URL slug of the project this chat belongs to. The page passes it down so
-   * the route doesn't have to rely on the active-project cookie, which can
-   * lag the URL on first paint after a project switch or direct deep-link.
-   */
+  /** URL slug of the project this chat belongs to. */
   project?: string;
-  /** OpenClaw session UUID — used for trajectory file naming. */
-  sessionId?: string;
   /**
-   * OpenClaw's canonical `agent:<agent>:<label>` key for this thread. When the
-   * client knows the right key (e.g., `agent:foo:main` for an existing thread
-   * whose label is not the sessionId), pass it here. Falls back to a
-   * sessionId-derived key for brand-new threads.
+   * Thread label — stable identifier for the chat thread. The route maps
+   * (project, agent, label) → a sessions row; if none exists it's created.
+   * Clients pass the URL thread UUID here (or via `sessionId` for
+   * backward-compat with the live-transcript composer). Defaults to "main"
+   * only when the caller supplies neither field.
    */
+  thread?: string;
+  sessionId?: string;
+  /** Legacy from the OpenClaw composer; ignored, kept for body schema compat. */
   sessionKey?: string;
   /**
    * When set, this turn is a task kickoff: atomically claim the task
-   * (proposed → working) before forwarding to the gateway. The claim is
-   * conditional on status='proposed', so concurrent kickoffs or reloads
-   * mid-run are rejected with 409 instead of double-firing the agent.
-   * Absent for normal user-typed messages.
+   * (proposed → working) before forwarding. Concurrent kickoffs / reloads
+   * mid-run are rejected with 409.
    */
   task_id?: string;
 };
 
 export async function POST(request: Request) {
-  const perf = makePerf("route");
-  perf.mark("route_start");
-
   let body: ChatPostBody;
   try {
     body = (await request.json()) as ChatPostBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  perf.mark("body_parsed");
   if (!body?.message?.trim()) {
     return NextResponse.json({ error: "message is required" }, { status: 400 });
   }
 
-  // Explicit project (from the URL slug the page knows) wins; fall back to
-  // the cookie for backwards compatibility with any non-page caller.
-  const project = body.project
-    ? getProject(body.project)
-    : await getActiveProject();
-  perf.mark("active_project_resolved");
+  const project = body.project ? getProject(body.project) : await getActiveProject();
   if (!project) {
     return NextResponse.json(
       { error: "No active project. Create one first." },
@@ -103,7 +59,6 @@ export async function POST(request: Request) {
 
   const requestedSlug = (body.agent ?? "cmo").trim();
   const resolved = await resolveAgentBySlug(project.slug, requestedSlug);
-  perf.mark("agent_resolved");
   if (!resolved) {
     return NextResponse.json(
       { error: `Unknown agent: '${requestedSlug}'` },
@@ -111,44 +66,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const agentName = resolved.agent_id;
-
-  // Resolve session: explicit body wins. New pages always pass both sessionId
-  // and sessionKey; sessionKey-only callers (legacy or external) get the
-  // canonical key looked up below.
-  const sessionId = body.sessionId?.trim();
-  if (!sessionId) {
-    return NextResponse.json(
-      { error: "sessionId is required (call from a threaded chat URL)." },
-      { status: 400 },
-    );
-  }
-  let sessionKey = body.sessionKey?.trim();
-  if (!sessionKey) {
-    const known = findSessionBySessionId(agentName, sessionId);
-    sessionKey = known?.sessionKey ?? buildPendingSessionKey(agentName, sessionId);
-  }
-  perf.mark("session_resolved");
-
-  // Task-kickoff path: claim the proposed task before streaming so a single
-  // turn can't fire twice (page reload / two tabs / StrictMode double-mount).
-  // claimProposedTask is a conditional UPDATE keyed on status='proposed';
-  // any other state (working/done/failed/cancelled) returns null and we
-  // reject with 409. Callers (LiveTranscript auto-kickoff) treat 409 as a
-  // benign no-op — the task is already running or finished elsewhere.
   const taskId = body.task_id?.trim();
   if (taskId) {
     const existing = getTask(taskId);
     if (!existing) {
-      return NextResponse.json(
-        { error: `Unknown task_id '${taskId}'` },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: `Unknown task_id '${taskId}'` }, { status: 404 });
     }
-    if (existing.agent_id !== agentName) {
+    if (existing.agent_id !== resolved.agent_id) {
       return NextResponse.json(
         {
-          error: `Task ${existing.display_id} belongs to ${existing.agent_id}, not ${agentName}`,
+          error: `Task ${existing.display_id} belongs to ${existing.agent_id}, not ${resolved.agent_id}`,
         },
         { status: 400 },
       );
@@ -156,28 +83,28 @@ export async function POST(request: Request) {
     const claimed = claimProposedTask(existing.id);
     if (!claimed) {
       return NextResponse.json(
-        {
-          error: "task already claimed",
-          status: existing.status,
-          task_id: existing.id,
-        },
+        { error: "task already claimed", status: existing.status, task_id: existing.id },
         { status: 409 },
       );
     }
   }
-  perf.mark("task_claim_resolved");
 
+  const label =
+    body.thread?.trim() || body.sessionId?.trim() || "main";
+  const session = getOrCreateSession({
+    project_slug: project.slug,
+    agent_id: resolved.agent_id,
+    label,
+    harness_adapter: project.harness_adapter,
+    task_id: taskId ?? null,
+  });
+  appendTranscriptEvent(session.id, "user", { text: body.message });
+
+  const adapter = requireAdapter(project.harness_adapter);
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Track whether the SSE client is still connected. Once they navigate
-      // away or close the tab, controller.enqueue throws — we flip this flag
-      // and silently drop further sends. The agent run on OpenClaw keeps
-      // going, the assistantBuffer keeps accumulating, and orchestration
-      // still runs at the end. Persistence (JSONL) happens server-side
-      // regardless, so when the user returns, the transcript-tail endpoint
-      // surfaces the full response on the next poll.
       let clientOpen = true;
       const send = (event: string, data: unknown) => {
         if (!clientOpen) return;
@@ -190,64 +117,45 @@ export async function POST(request: Request) {
         }
       };
 
-      // Deliberately do NOT propagate request.signal to the gateway abort
-      // signal. The user expectation: "if I switch agents or close the tab,
-      // the agent should keep responding; when I switch back, show the
-      // result." Honoring disconnect-as-cancel kills mid-flight agent runs
-      // and breaks that promise. The Stop button is now a future-TODO
-      // (separate POST /api/chat/stop endpoint) — there isn't a way to
-      // explicitly cancel a run today, only the implicit disconnect path
-      // which we no longer treat as cancel.
-      const noAbort = new AbortController(); // never aborted; just satisfies the signal param
+      // Disconnect != cancel: the harness keeps running and persisting events
+      // to the transcript. The user sees them on next attach.
+      const noAbort = new AbortController();
 
-      let firstSseDeltaSent = false;
-      let assistantBuffer = "";
-      // Tee gateway events into the shadow JSONL so the /live SSE bridge
-      // can replay them when the user re-opens the task page (e.g. after a
-      // tab switch). Without this, only runTaskKickoffServerSide-initiated
-      // tasks have a shadow — /api/chat-initiated turns (the onboarding
-      // auto-kickoff, plus user messages mid-task) would leave the
-      // transcript blank on re-attach because the in-flight stream is
-      // already gone and OpenClaw's JSONL hasn't flushed yet.
-      const shadow = await openShadowWriter(agentName, sessionId);
       try {
-        perf.mark("stream_start");
-        // Surface input sizes so each perf trace tells us *why* this turn
-        // was fast/slow — a 24KB system prompt with a 1.8KB kickoff brief
-        // behaves very differently from a 200B reply. Browser console
-        // table includes these alongside the timing marks.
         send("meta", {
           project_slug: project.slug,
-          agent: agentName,
-          session_id: sessionId,
-          session_key: sessionKey,
+          agent: resolved.agent_id,
+          session_id: session.id,
+          harness_adapter: project.harness_adapter,
           message_chars: body.message.length,
           is_kickoff: Boolean(taskId),
         });
-        for await (const evt of streamChatViaGateway({
-          sessionKey,
-          sessionId,
+
+        for await (const evt of adapter.execute({
+          projectSlug: project.slug,
+          agentId: resolved.agent_id,
+          workspaceDir: workspaceDirFor(resolved.agent_id),
           message: body.message,
+          threadId: session.id,
+          harnessSessionId: session.harness_session_id,
           signal: noAbort.signal,
-          perf,
         })) {
-          // Best-effort shadow tee. A shadow write failure must not break
-          // the live stream the user sees.
-          try {
-            await shadowStreamEvent(shadow, evt);
-          } catch (err) {
-            console.error("[api/chat] shadow write failed:", err);
+          if (evt.kind === "session") {
+            // Remember the harness's own session id so the next turn can
+            // pass it back via --resume / `exec resume`. Don't persist as
+            // a transcript event — it's metadata, not chat content.
+            touchSession(session.id, evt.harnessSessionId);
+            continue;
           }
+          try {
+            appendTranscriptEvent(session.id, evt.kind, evt);
+          } catch (err) {
+            console.error("[api/chat] transcript persist failed:", err);
+          }
+
           if (evt.kind === "delta") {
-            if (!firstSseDeltaSent) {
-              firstSseDeltaSent = true;
-              perf.mark("first_sse_delta_sent");
-            }
-            assistantBuffer += evt.text;
             send("text", { chunk: evt.text });
           } else if (evt.kind === "tool") {
-            // tool start/update/result — keyed by toolCallId so the client
-            // can update the matching step row instead of appending a new one.
             send("tool", {
               phase: evt.phase,
               tool_call_id: evt.toolCallId,
@@ -258,60 +166,46 @@ export async function POST(request: Request) {
             send("lifecycle", { phase: evt.phase });
           } else if (evt.kind === "error") {
             send("error", { message: evt.message });
-            // When this turn is a task kickoff (we atomically claimed
-            // proposed → working above), a gateway error means the agent
-            // never actually ran. Without this rollback the task is
-            // stranded in `working` forever — the UI shows a permanent
-            // "Starting" with no events. Mark it failed so the error
-            // surfaces in the task row and the user can decide to retry.
             if (taskId) {
-              console.error(
-                `[api/chat] kickoff gateway error for task ${taskId} (agent=${agentName}): ${evt.message}`,
-              );
-              updateTask(taskId, {
-                status: "failed",
-                error_message: evt.message,
-              });
+              updateTask(taskId, { status: "failed", error_message: evt.message });
             }
           }
-          // "final" implicitly ends the loop after; no separate signal needed.
         }
-        await shadow.close();
-        perf.mark("stream_done");
 
-        // Orchestration side effects (task creation, status updates,
-        // comments, approvals) now happen via the notfair-orchestration MCP
-        // server — the agent calls those tools mid-stream and the handler
-        // mutates DB rows directly. We no longer regex-scan the assistant
-        // reply for pseudo-XML blocks. See agent-templates.ts for the
-        // procedural teaching pattern.
+        touchSession(session.id);
 
-        send("perf", { marks: perf.summary() });
+        // Detect abandoned task kickoffs / follow-ups: the harness turn
+        // ended cleanly but the agent didn't call submit_task_status, so
+        // the task is still in `working` and would otherwise stay
+        // stuck forever. Flip to `blocked` with a clear reason so the
+        // UI can recover and the user can choose what to do.
+        if (taskId) {
+          const current = getTask(taskId);
+          if (current && current.status === "working") {
+            updateTask(taskId, {
+              status: "blocked",
+              error_message:
+                "Agent finished its turn without calling submit_task_status. The task is parked — send a follow-up message or mark it done manually.",
+            });
+            send("error", {
+              message:
+                "Turn ended without submit_task_status. Task moved to blocked.",
+            });
+          }
+        }
+
         send("done", {});
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         send("error", { message });
-        // Same kickoff-stranding fix as the in-stream error branch above:
-        // if we claimed the task at the top of the handler, the gateway
-        // tearing down before any progress means the agent never ran.
-        // Mark it failed so the UI surfaces the error instead of sitting
-        // on "Starting" forever.
         if (taskId) {
-          console.error(
-            `[api/chat] kickoff threw for task ${taskId} (agent=${agentName}): ${message}`,
-          );
           updateTask(taskId, { status: "failed", error_message: message });
         }
       } finally {
-        // Close the shadow if it's still open (error path). Idempotent
-        // close — calling twice when the success path already closed is
-        // a no-op flush.
-        await shadow.close().catch(() => undefined);
         try {
           controller.close();
         } catch {
-          // Controller may already be closed if the client disconnected
-          // mid-stream — silent because the agent run continued + persisted.
+          // already closed
         }
       }
     },

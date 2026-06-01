@@ -17,7 +17,7 @@ import {
   getProjectDeletionSummaryAction,
   deleteProjectAction,
 } from "@/server/actions/projects";
-import type { ProjectDeletionSummary } from "@/server/openclaw/project-delete";
+import type { ProjectDeletionSummary } from "@/server/agents/cascade-delete";
 
 type Props = {
   projectSlug: string;
@@ -105,7 +105,7 @@ export function DangerZone({ projectSlug, projectName }: Props) {
               Delete &ldquo;{projectName}&rdquo;?
             </DialogTitle>
             <DialogDescription>
-              This will permanently delete the items below from OpenClaw and notfair-cmo&apos;s
+              This will permanently delete the items below from notfair-cmo&apos;s
               local store. There is no recovery.
             </DialogDescription>
           </DialogHeader>

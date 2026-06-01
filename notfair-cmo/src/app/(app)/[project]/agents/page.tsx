@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import { getProject } from "@/server/db/projects";
 import { TEMPLATES } from "@/server/agent-templates";
 import { listProjectAgents } from "@/server/agent-meta";
-import { listCronsForProject } from "@/server/openclaw/crons";
+import { listCronsForProject } from "@/server/scheduler/display";
 import { reprovisionAgentsAction } from "@/server/actions/projects";
 import { ReprovisionButton } from "@/components/reprovision-button";
 import { projectHref } from "@/lib/project-href";
@@ -42,8 +42,7 @@ export default async function AgentsPage({
           <p className="text-sm text-muted-foreground">
             Project <span className="font-mono">{project.slug}</span> ·{" "}
             {projectAgents.length} agent
-            {projectAgents.length === 1 ? "" : "s"} · all running on OpenClaw
-            with your configured model + fallback chain
+            {projectAgents.length === 1 ? "" : "s"} · running on {project.harness_adapter === "codex-local" ? "Codex" : "Claude Code"}
           </p>
         </div>
         <ReprovisionButton action={reprovision} />

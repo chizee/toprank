@@ -6,7 +6,7 @@ import { Loader2, Plug, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { startMcpConnect } from "@/server/actions/mcp";
-import type { McpRuntimeStatus } from "@/server/mcp-state";
+import type { McpRuntimeStatus } from "@/server/mcp/state";
 import { projectHref } from "@/lib/project-href";
 
 type Props = {

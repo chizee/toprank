@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { SkillEntry } from "@/server/openclaw/gateway-rpc";
+import type { SkillEntry } from "@/server/agents/skills";
 import { setSkillEnabledAction } from "@/server/actions/skills";
 
 type FilterKey = "all" | "enabled" | "disabled";

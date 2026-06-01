@@ -1,26 +1,18 @@
-import { openclaw, OpenClawError } from "@/server/openclaw/cli";
-
+import { requireAdapter } from "@/server/adapters/registry";
+import { getProject } from "@/server/db/projects";
+import { listProjectAgents } from "@/server/agent-meta";
+import { mcpSpecByKey } from "@/server/mcp-catalog";
+import { findMcpToken } from "@/server/mcp/tokens";
 import { getOrCreateMcpServerSecret } from "./secret";
 
 /**
- * Register notfair-cmo's outbound MCP server with OpenClaw — once, globally.
+ * Register notfair-cmo's outbound MCP server (`notfair-orchestration`) with
+ * the project's harness adapter for a specific agent.
  *
- * The orchestration tools (`create_task`, `submit_task_status`,
- * `request_approval`, etc.) are project-scoped via a required `project_slug`
- * argument on every tool call, so a SINGLE OpenClaw MCP registration is
- * enough for every project + every agent in this install. Wasteful + brittle
- * to write one MCP row per project (every row points at the same URL with
- * the same secret).
- *
- * Behavior:
- *   - `ensureOrchestrationMcpInstalled()` — idempotent. Calls `openclaw mcp show`
- *     first; only writes if the row is missing OR points at a stale URL/secret.
- *     Safe to call from every provisioning step.
- *   - `installOrchestrationMcp()` — unconditional set (used by a future CLI
- *     reinstall command).
- *   - `cleanupLegacyOrchestrationRows(slugs)` — one-time migration helper that
- *     removes the per-project `<slug>-notfair-orchestration` rows we used to
- *     create. Called from provisioning so old installs heal on next provision.
+ * In v0.1.0 we registered once globally with OpenClaw's mcp config. The
+ * harness-adapter model writes MCP wiring into whichever config file the
+ * chosen harness expects (Claude Code's `.mcp.json`, Codex's
+ * `~/.codex/config.toml`), so registration is per-agent now.
  *
  * URL: `NOTFAIR_CMO_MCP_URL` if set, else
  * `http://127.0.0.1:${NOTFAIR_CMO_PORT||3326}/api/mcp/orchestration`.
@@ -36,112 +28,139 @@ function defaultMcpUrl(): string {
   return `http://127.0.0.1:${port}/api/mcp/orchestration`;
 }
 
-function buildConfig(): { url: string; transport: string; headers: Record<string, string> } {
-  return {
-    url: defaultMcpUrl(),
-    transport: "streamable-http",
-    headers: { Authorization: `Bearer ${getOrCreateMcpServerSecret()}` },
-  };
-}
-
 export type InstallResult =
-  | { ok: true; status: "already_installed" | "installed" | "updated"; key: string; url: string }
+  | { ok: true; key: string; url: string }
   | { ok: false; key: string; url: string; error: string };
 
+export async function registerOrchestrationForAgent(
+  project_slug: string,
+  agent_id: string,
+): Promise<InstallResult> {
+  const url = defaultMcpUrl();
+  const project = getProject(project_slug);
+  if (!project) {
+    return { ok: false, key: ORCHESTRATION_MCP_KEY, url, error: `Unknown project ${project_slug}` };
+  }
+  try {
+    const adapter = requireAdapter(project.harness_adapter);
+    await adapter.registerMcp({
+      serverName: ORCHESTRATION_MCP_KEY,
+      agentId: agent_id,
+      projectSlug: project_slug,
+      transport: {
+        type: "http",
+        url,
+        headers: { Authorization: `Bearer ${getOrCreateMcpServerSecret()}` },
+      },
+    });
+    return { ok: true, key: ORCHESTRATION_MCP_KEY, url };
+  } catch (err) {
+    return {
+      ok: false,
+      key: ORCHESTRATION_MCP_KEY,
+      url,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /**
- * Idempotent install. Reads the current row; writes only when missing or
- * stale (URL changed via NOTFAIR_CMO_MCP_URL, secret rotated, etc.).
+ * Register an external catalog MCP server (Google Ads, GSC, etc.) with the
+ * project's harness adapter for a specific agent. Pulls the OAuth bearer
+ * from the `mcp_tokens` table and the resource URL from the catalog spec.
+ *
+ * Called after a successful OAuth callback so the bearer becomes visible
+ * to running agents without the user manually re-provisioning. Idempotent:
+ * the adapter `registerMcp` overwrites the prior entry on rewrite.
+ */
+export async function registerCatalogMcpForAgent(
+  project_slug: string,
+  catalog_key: string,
+  agent_id: string,
+): Promise<InstallResult> {
+  const spec = mcpSpecByKey(catalog_key);
+  if (!spec) {
+    return {
+      ok: false,
+      key: catalog_key,
+      url: "",
+      error: `Unknown catalog key ${catalog_key}`,
+    };
+  }
+  const project = getProject(project_slug);
+  if (!project) {
+    return {
+      ok: false,
+      key: catalog_key,
+      url: spec.resource_url,
+      error: `Unknown project ${project_slug}`,
+    };
+  }
+  const token = findMcpToken(project_slug, catalog_key);
+  if (!token) {
+    return {
+      ok: false,
+      key: catalog_key,
+      url: spec.resource_url,
+      error: `No token stored for ${catalog_key} in project ${project_slug}`,
+    };
+  }
+  try {
+    const adapter = requireAdapter(project.harness_adapter);
+    await adapter.registerMcp({
+      serverName: catalog_key,
+      agentId: agent_id,
+      projectSlug: project_slug,
+      transport: {
+        type: "http",
+        url: spec.resource_url,
+        headers: { Authorization: `Bearer ${token.access_token_enc}` },
+      },
+    });
+    return { ok: true, key: catalog_key, url: spec.resource_url };
+  } catch (err) {
+    return {
+      ok: false,
+      key: catalog_key,
+      url: spec.resource_url,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Convenience: register an external catalog MCP with EVERY agent in the
+ * project. Called from the OAuth callback so a fresh token reaches all
+ * project agents without re-provisioning. Best-effort per agent — one
+ * failed registration doesn't abort the rest.
+ */
+export async function registerCatalogMcpForProject(
+  project_slug: string,
+  catalog_key: string,
+): Promise<InstallResult[]> {
+  const agents = await listProjectAgents(project_slug);
+  const results: InstallResult[] = [];
+  for (const agent of agents) {
+    results.push(
+      await registerCatalogMcpForAgent(project_slug, catalog_key, agent.agent_id),
+    );
+  }
+  return results;
+}
+
+/**
+ * No-op shim. The v0.1.0 cleanup removed leaked per-project rows from
+ * OpenClaw's global mcp config; the new model has no such global registry.
+ */
+export async function cleanupLegacyOrchestrationRows(_slugs: string[]): Promise<void> {
+  // intentionally empty
+}
+
+/**
+ * Legacy global install. Kept as a no-op so older callers (CLI reinstall
+ * command) don't break — orchestration MCP wiring is now per-agent and
+ * happens at provision time via `registerOrchestrationForAgent`.
  */
 export async function ensureOrchestrationMcpInstalled(): Promise<InstallResult> {
-  const desired = buildConfig();
-  const key = ORCHESTRATION_MCP_KEY;
-  const current = await readMcpRow(key);
-  if (current && configMatches(current, desired)) {
-    return { ok: true, status: "already_installed", key, url: desired.url };
-  }
-  try {
-    await openclaw(["mcp", "set", key, JSON.stringify(desired)], { json: false });
-    return {
-      ok: true,
-      status: current ? "updated" : "installed",
-      key,
-      url: desired.url,
-    };
-  } catch (err) {
-    const message =
-      err instanceof OpenClawError
-        ? err.message
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    return { ok: false, key, url: desired.url, error: message };
-  }
-}
-
-/** Unconditional install — overwrites whatever's there. */
-export async function installOrchestrationMcp(): Promise<InstallResult> {
-  const desired = buildConfig();
-  const key = ORCHESTRATION_MCP_KEY;
-  try {
-    await openclaw(["mcp", "set", key, JSON.stringify(desired)], { json: false });
-    return { ok: true, status: "installed", key, url: desired.url };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, key, url: desired.url, error: message };
-  }
-}
-
-/**
- * Remove the legacy per-project `<slug>-notfair-orchestration` rows we wrote
- * before the registration went global. Pass the list of project slugs that
- * may have stale rows. Errors per-slug are swallowed (the row may already be
- * gone). Safe + idempotent — no-op on a fresh install.
- */
-export async function cleanupLegacyOrchestrationRows(
-  slugs: string[],
-): Promise<void> {
-  for (const slug of slugs) {
-    const legacyKey = `${slug}-notfair-orchestration`;
-    try {
-      await openclaw(["mcp", "unset", legacyKey], { json: false });
-    } catch {
-      // Row didn't exist or unset failed; ignore.
-    }
-  }
-}
-
-async function readMcpRow(key: string): Promise<{
-  url?: string;
-  transport?: string;
-  headers?: Record<string, string>;
-} | null> {
-  try {
-    const out = await openclaw(["mcp", "show", key], { json: true });
-    if (!out || typeof out !== "object") return null;
-    return out as {
-      url?: string;
-      transport?: string;
-      headers?: Record<string, string>;
-    };
-  } catch (err) {
-    if (err instanceof OpenClawError) return null;
-    throw err;
-  }
-}
-
-function configMatches(
-  current: { url?: string; transport?: string; headers?: Record<string, string> },
-  desired: { url: string; transport: string; headers: Record<string, string> },
-): boolean {
-  if (current.url !== desired.url) return false;
-  if (current.transport !== desired.transport) return false;
-  const currentAuth =
-    current.headers?.Authorization ?? current.headers?.authorization;
-  if (currentAuth !== desired.headers.Authorization) return false;
-  return true;
-}
-
-/** Read-only URL accessor for CLI/tooling. */
-export function getOrchestrationMcpUrl(): string {
-  return defaultMcpUrl();
+  return { ok: true, key: ORCHESTRATION_MCP_KEY, url: defaultMcpUrl() };
 }

@@ -15,7 +15,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createServer, Socket } from "node:net";
+import { createServer } from "node:net";
 import { Command } from "commander";
 import open from "open";
 
@@ -95,29 +95,30 @@ program
     const node = checkNodeVersion();
     results.push(node);
 
-    let openclaw;
-    if (node.ok) {
-      openclaw = await checkOpenclawInstalled();
-    } else {
-      openclaw = skipped("OpenClaw installed", "node version too old");
-    }
-    results.push(openclaw);
+    // Probe each supported harness adapter. notfair-cmo can run on any of
+    // them, so doctor lists status for all; at least one needs to be ok.
+    const claude = node.ok
+      ? await checkHarnessInstalled("Claude Code", "claude")
+      : skipped("Claude Code installed", "node version too old");
+    results.push(claude);
 
-    let gateway;
-    if (openclaw.ok) {
-      gateway = await checkOpenclawGateway();
-    } else {
-      gateway = skipped("OpenClaw gateway reachable", "openclaw not installed");
-    }
-    results.push(gateway);
+    const codex = node.ok
+      ? await checkHarnessInstalled("Codex", "codex")
+      : skipped("Codex installed", "node version too old");
+    results.push(codex);
 
-    let llm;
-    if (openclaw.ok) {
-      llm = await checkLLMProvider();
+    if (!claude.ok && !codex.ok) {
+      results.push(
+        fail(
+          "Harness available",
+          "neither Claude Code nor Codex is on PATH",
+          "Install at least one: https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview or https://github.com/openai/codex",
+        ),
+      );
     } else {
-      llm = skipped("LLM provider configured", "openclaw not installed");
+      const ready = [claude.ok ? "Claude Code" : null, codex.ok ? "Codex" : null].filter(Boolean);
+      results.push(pass("Harness available", ready.join(", ")));
     }
-    results.push(llm);
 
     const dataDir = checkDataDir(opts.dataDir);
     results.push(dataDir);
@@ -281,150 +282,18 @@ function checkNodeVersion() {
   return pass("Node version", `v${raw}${note}`);
 }
 
-async function checkOpenclawInstalled() {
-  const r = await runCheck("openclaw", ["--version"]);
+async function checkHarnessInstalled(label, binary) {
+  const r = await runCheck(binary, ["--version"]);
   if (!r.ok) {
     return fail(
-      "OpenClaw installed",
+      `${label} installed`,
       "not on PATH",
-      "Install OpenClaw — https://docs.openclaw.ai/install",
+      label === "Claude Code"
+        ? "Install: https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview"
+        : "Install: https://github.com/openai/codex",
     );
   }
-  return pass("OpenClaw installed", r.stdout.trim().split("\n")[0] || "ok");
-}
-
-async function checkOpenclawGateway() {
-  const portR = await runCheck("openclaw", ["config", "get", "gateway.port"]);
-  const port = portR.ok ? Number.parseInt(portR.stdout.trim(), 10) : NaN;
-  const targetPort = Number.isFinite(port) ? port : 18789;
-
-  const health = await runCheck("openclaw", ["health"]);
-  if (health.ok) {
-    return pass("OpenClaw gateway", `reachable on ws://127.0.0.1:${targetPort}`);
-  }
-
-  const wsReachable = await pingLoopback(targetPort);
-  if (wsReachable) {
-    return pass("OpenClaw gateway", `reachable on ws://127.0.0.1:${targetPort}`);
-  }
-  return fail(
-    "OpenClaw gateway",
-    `not reachable on ws://127.0.0.1:${targetPort}`,
-    "Start it with: openclaw gateway",
-  );
-}
-
-function pingLoopback(port) {
-  return new Promise((resolve) => {
-    const socket = new Socket();
-    let done = false;
-    const finish = (ok) => {
-      if (done) return;
-      done = true;
-      try {
-        socket.destroy();
-      } catch {}
-      resolve(ok);
-    };
-    socket.setTimeout(1500);
-    socket.once("connect", () => finish(true));
-    socket.once("timeout", () => finish(false));
-    socket.once("error", () => finish(false));
-    try {
-      socket.connect(port, "127.0.0.1");
-    } catch {
-      finish(false);
-    }
-  });
-}
-
-async function checkLLMProvider() {
-  const modelR = await runCheck("openclaw", ["config", "get", "agents.defaults.model"]);
-  if (!modelR.ok) {
-    return fail(
-      "LLM provider configured",
-      "could not read agents.defaults.model from OpenClaw config",
-      "Configure a default model: openclaw configure --section models",
-    );
-  }
-
-  let chainCfg;
-  try {
-    chainCfg = JSON.parse(modelR.stdout);
-  } catch {
-    return fail(
-      "LLM provider configured",
-      "agents.defaults.model is not valid JSON",
-      "Re-run interactive setup: openclaw configure --section models",
-    );
-  }
-
-  const primary = typeof chainCfg?.primary === "string" ? chainCfg.primary : null;
-  const fallbacks = Array.isArray(chainCfg?.fallbacks)
-    ? chainCfg.fallbacks.filter((m) => typeof m === "string")
-    : [];
-  const chain = [primary, ...fallbacks].filter(Boolean);
-  if (chain.length === 0) {
-    return fail(
-      "LLM provider configured",
-      "no models in agents.defaults.model chain",
-      "Set a primary model: openclaw configure --section models",
-    );
-  }
-
-  const providers = chain.map((m) => m.split("/")[0]).filter(Boolean);
-  const uniqueProviders = Array.from(new Set(providers));
-
-  const providersR = await runCheck("openclaw", ["config", "get", "models.providers"]);
-  let providerCfg = {};
-  if (providersR.ok) {
-    try {
-      providerCfg = JSON.parse(providersR.stdout) ?? {};
-    } catch {
-      providerCfg = {};
-    }
-  }
-
-  const configured = uniqueProviders.filter((p) => {
-    const entry = providerCfg[p];
-    if (entry && typeof entry === "object") {
-      const hasKey =
-        typeof entry.apiKey === "string" && entry.apiKey.length > 0 && !entry.apiKey.startsWith("__");
-      const hasBaseUrl = typeof entry.baseUrl === "string" && entry.baseUrl.length > 0;
-      if (hasKey || hasBaseUrl) return true;
-    }
-    return providerHasEnvKey(p);
-  });
-
-  if (configured.length === 0) {
-    return fail(
-      "LLM provider configured",
-      `none of [${uniqueProviders.join(", ")}] are configured`,
-      `Configure a provider: openclaw configure --section models  (chain: ${chain.join(" → ")})`,
-    );
-  }
-
-  const primaryProvider = providers[0];
-  const primaryReady = configured.includes(primaryProvider);
-  const detail = primaryReady
-    ? `${primaryProvider} (primary: ${primary})`
-    : `${configured[0]} (fallback; primary ${primaryProvider} not configured)`;
-  return pass("LLM provider configured", detail);
-}
-
-function providerHasEnvKey(provider) {
-  const candidates = {
-    openai: ["OPENAI_API_KEY"],
-    anthropic: ["ANTHROPIC_API_KEY"],
-    google: ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"],
-    gemini: ["GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"],
-    deepseek: ["DEEPSEEK_API_KEY"],
-    mistral: ["MISTRAL_API_KEY"],
-    groq: ["GROQ_API_KEY"],
-    xai: ["XAI_API_KEY"],
-  };
-  const vars = candidates[provider] ?? [`${provider.toUpperCase()}_API_KEY`];
-  return vars.some((v) => !!process.env[v]);
+  return pass(`${label} installed`, r.stdout.trim().split("\n")[0] || "ok");
 }
 
 function checkDataDir(dir) {

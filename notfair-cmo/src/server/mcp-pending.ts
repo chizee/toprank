@@ -13,13 +13,7 @@
 export type PendingMcpFlow = {
   /** Catalog identifier (e.g. `notfair-googleads`) — what the UI shows. */
   catalog_key: string;
-  /**
-   * Openclaw mcp config key the callback will `mcp set` against. Project-
-   * scoped (e.g. `notfairco-notfair-googleads`) so different projects don't
-   * stomp each other's tokens.
-   */
-  stored_key: string;
-  /** OpenClaw-side display name; mirrors the catalog spec. */
+  /** Project-scoped display name; mirrors the catalog spec. */
   display_name: string;
   resource_url: string;
   /** OAuth issuer (the protected resource's authorization server). */

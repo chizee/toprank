@@ -598,6 +598,103 @@ async function handleSetProjectBriefTool(input: unknown): Promise<ToolResult> {
   return txt(`PROJECT.md written; synced to project agents.`);
 }
 
+// ── Tool: schedule_recurring_work ─────────────────────────────────────
+
+const scheduleRecurringWorkInput = z.object({
+  project_slug: z
+    .string()
+    .min(1)
+    .describe("Your project_slug from IDENTITY.md."),
+  agent_id: z
+    .string()
+    .min(1)
+    .describe(
+      "Your agent_id (e.g. `demo1-google-ads-ana`). The cron will fire as a task assignment to this agent.",
+    ),
+  name: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9][a-z0-9-]*$/, "must be kebab-case lowercase")
+    .describe(
+      "Short kebab-case identifier for this scheduled job. Should describe the work, not the schedule. Good: `daily-bid-opt`, `weekly-quality-score`. Bad: `9am-cron`.",
+    ),
+  cron_expr: z
+    .string()
+    .min(1)
+    .describe(
+      "Standard 5-field cron expression (minute hour day month day-of-week). Example: `0 9 * * 1` = 9am every Monday. Interpreted as UTC; embed timezone offset in the hour field if needed.",
+    ),
+  message: z
+    .string()
+    .min(1)
+    .describe(
+      "The prompt the scheduled job will send to the agent on each tick. Treat it as instructions to your future self — be specific about what to do and what to report.",
+    ),
+});
+
+async function handleScheduleRecurringWorkTool(
+  input: unknown,
+): Promise<ToolResult> {
+  const parsed = scheduleRecurringWorkInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const { project_slug, agent_id, name, cron_expr, message } = parsed.data;
+
+  // Verify the calling agent belongs to the project they're scoping.
+  const project = await import("@/server/db/projects").then((m) =>
+    m.getProject(project_slug),
+  );
+  if (!project) return { ok: false, error: `Unknown project '${project_slug}'.` };
+  const { listProjectAgents } = await import("@/server/agent-meta");
+  const projectAgents = await listProjectAgents(project_slug);
+  if (!projectAgents.some((a) => a.agent_id === agent_id)) {
+    return {
+      ok: false,
+      error: `Agent '${agent_id}' is not part of project '${project_slug}'.`,
+    };
+  }
+
+  // Validate the cron expression by trying to parse it.
+  try {
+    const { CronExpressionParser } = await import("cron-parser");
+    CronExpressionParser.parse(cron_expr, { tz: "UTC" });
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Invalid cron_expr: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  try {
+    const { createScheduledJob } = await import("@/server/scheduler");
+    const job = createScheduledJob({
+      project_slug,
+      agent_id,
+      name,
+      cron_expr,
+      message,
+      enabled: true,
+    });
+    return txt(
+      JSON.stringify({
+        id: job.id,
+        name: job.name,
+        cron_expr: job.cron_expr,
+        next_run_at: job.next_run_at,
+      }),
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE constraint")) {
+      return {
+        ok: false,
+        error: `A scheduled job named '${name}' already exists for this agent. Pick a different name or list existing jobs first.`,
+      };
+    }
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Registry ───────────────────────────────────────────────────────────
 
 export const TOOLS: ToolDefinition[] = [
@@ -740,6 +837,13 @@ export const TOOLS: ToolDefinition[] = [
       "Write (or rewrite) PROJECT.md — the single source of truth for what this project sells, who it sells to, positioning, voice, and constraints. Synced into every agent's IDENTITY.md so the CMO + specialists share the same context. The CMO calls this once during its first onboarding task and again whenever the user surfaces a material change.",
     inputSchema: setProjectBriefInput,
     handler: handleSetProjectBriefTool,
+  },
+  {
+    name: "schedule_recurring_work",
+    description:
+      "Create a scheduled job that fires a synthetic task assignment to an agent on a cron schedule. Persists to notfair-cmo's SQLite scheduled_jobs table; visible in the Crons tab. Use this when the user asks for 'every day', 'every Monday', 'every hour' work. Replaces the legacy `openclaw cron add` CLI.",
+    inputSchema: scheduleRecurringWorkInput,
+    handler: handleScheduleRecurringWorkTool,
   },
 ];
 

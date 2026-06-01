@@ -314,12 +314,43 @@ describe("listProjectAgents", () => {
 
   it("skips entries with a matching prefix but no meta sidecar", async () => {
     // Create a phantom agent dir without a notfair-meta.json — simulates an
-    // OpenClaw workspace dir without the sidecar (e.g., pre-sidecar agents).
+    // older workspace dir without the sidecar.
     fsState.dirs.add("/data/agents/acme-orphan");
     const r = await listProjectAgents("acme");
     // Should not include acme-orphan; just the onboarding-default templates.
     expect(r.find((e) => e.agent_id === "acme-orphan")).toBeUndefined();
     expect(r).toHaveLength(2);
+  });
+
+  it("does NOT leak agents from a project whose slug starts with this slug + '-'", async () => {
+    // Regression: project "acme" must not list agents that belong to
+    // project "acme-q4". The dir-name prefix `acme-` matches both
+    // `acme-cmo-greg` (this project) AND `acme-q4-cmo-greg` (the other);
+    // the meta sidecar's project_slug field is what disambiguates.
+    await writeAgentMeta(
+      makeMeta({
+        agent_id: "acme-cmo-greg",
+        project_slug: "acme",
+        slug: "cmo-greg",
+        name: "Greg",
+      }),
+    );
+    await writeAgentMeta(
+      makeMeta({
+        agent_id: "acme-q4-cmo-greg",
+        project_slug: "acme-q4",
+        slug: "cmo-greg",
+        name: "Greg",
+      }),
+    );
+
+    const acme = await listProjectAgents("acme");
+    expect(acme.find((e) => e.agent_id === "acme-q4-cmo-greg")).toBeUndefined();
+    expect(acme.find((e) => e.agent_id === "acme-cmo-greg")).toBeDefined();
+
+    const q4 = await listProjectAgents("acme-q4");
+    expect(q4.find((e) => e.agent_id === "acme-cmo-greg")).toBeUndefined();
+    expect(q4.find((e) => e.agent_id === "acme-q4-cmo-greg")).toBeDefined();
   });
 });
 

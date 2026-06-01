@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { consumePending } from "@/server/mcp-pending";
-import { setMcpBearer } from "@/server/mcp-state";
+import { setMcpBearer } from "@/server/mcp/state";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -96,7 +96,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    await setMcpBearer(pending.stored_key, pending.resource_url, access_token);
+    await setMcpBearer(pending.project_slug, pending.catalog_key, access_token);
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     // Scrub bearers + any oat_ token shape before exposing in the URL —
@@ -108,6 +108,30 @@ export async function GET(request: Request) {
       .replace(/oat_[A-Za-z0-9_]+/gi, "oat_[redacted]");
     back.searchParams.set("mcp_error", `Saving MCP config failed: ${scrubbed}`);
     return NextResponse.redirect(back);
+  }
+
+  // Token is stored — now wire it into every agent's harness config so
+  // running agents actually see the MCP tool surface. Without this step
+  // the Connections page reads "Connected" (because the probe finds the
+  // token) but Greg / Ana can't call any of the catalog's tools because
+  // the adapter config file was never updated.
+  try {
+    const { registerCatalogMcpForProject } = await import(
+      "@/server/mcp-server/registration"
+    );
+    const results = await registerCatalogMcpForProject(
+      pending.project_slug,
+      pending.catalog_key,
+    );
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length > 0) {
+      console.warn(
+        `[mcp-oauth] ${failed.length}/${results.length} agents failed to register ${pending.catalog_key}:`,
+        failed.map((f) => (f.ok ? null : f.error)).filter(Boolean),
+      );
+    }
+  } catch (err) {
+    console.error("[mcp-oauth] registerCatalogMcpForProject threw:", err);
   }
 
   // Flash banner uses the catalog name (what the user recognizes), not the

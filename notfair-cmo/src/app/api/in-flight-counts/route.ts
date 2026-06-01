@@ -8,11 +8,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Lightweight liveness probe used by GlobalLivenessPoller to decide
- * whether the sidebar actually needs a refresh. The poller fetches this
- * a few times a minute; only when the response signature differs from
- * the previous one does it call router.refresh(). That stops the
- * sidebar from blinking on every poll cycle when nothing has changed.
+ * Lightweight liveness probe used by LiveCountsProvider to keep sidebar
+ * badge counts fresh client-side. Replaces the previous router.refresh
+ * approach — only the badge text nodes update, the server-rendered
+ * sidebar tree never reconciles, so there's no visual flicker.
  */
 export async function GET() {
   const project = await getActiveProject();

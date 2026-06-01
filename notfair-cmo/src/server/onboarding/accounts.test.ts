@@ -114,7 +114,7 @@ function toolCallResult(payload: unknown): {
 describe("listGoogleAdsAccounts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getMcpConfigMock.mockResolvedValue({
+    getMcpConfigMock.mockReturnValue({
       url: "https://notfair.co/api/mcp/google_ads",
       token: "tok",
     });
@@ -143,7 +143,7 @@ describe("listGoogleAdsAccounts", () => {
   });
 
   it("returns mcp_not_configured when getMcpConfig returns null", async () => {
-    getMcpConfigMock.mockResolvedValueOnce(null);
+    getMcpConfigMock.mockReturnValueOnce(null);
     const r = await listGoogleAdsAccounts("acme");
     expect(r).toMatchObject({ ok: false, kind: "mcp_not_configured" });
     expect(mcpRpcMock).not.toHaveBeenCalled();
@@ -181,7 +181,7 @@ describe("listGoogleAdsAccounts", () => {
 describe("setOnboardingAccountAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getMcpConfigMock.mockResolvedValue({
+    getMcpConfigMock.mockReturnValue({
       url: "https://notfair.co/api/mcp/google_ads",
       token: "tok",
     });

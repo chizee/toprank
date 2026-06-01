@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { startTransition, useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
@@ -20,10 +20,14 @@ import { LiveTranscript } from "@/components/live-transcript";
 import { Markdown } from "@/components/markdown";
 import { RunningDot } from "@/components/running-dot";
 import { StartAllTasksButton } from "@/components/start-all-tasks-button";
-import { cancelTaskAction } from "@/server/actions/tasks";
+import {
+  cancelTaskAction,
+  markTaskDoneAction,
+  resumeBlockedTaskAction,
+} from "@/server/actions/tasks";
 import { cn } from "@/lib/utils";
 import { projectHref } from "@/lib/project-href";
-import type { TranscriptEvent } from "@/server/openclaw/transcript-tail";
+import type { TranscriptEvent } from "@/server/sessions/transcript-tail";
 import type { Approval, Question, Task, TaskStatus } from "@/types";
 
 const TASK_IN_FLIGHT: TaskStatus[] = ["proposed", "approved", "working", "blocked"];
@@ -324,7 +328,10 @@ function SelectedTaskPanel({
   const onPolled = useCallback(
     ({ newEvents }: { newEvents: number; fileSize: number }) => {
       void newEvents;
-      if (isInFlight) router.refresh();
+      // Mark as a transition so React keeps the rendered tree alive while
+      // the new RSC payload streams in — prevents the sidebar (and any
+      // sibling subtree) from flickering on every transcript tick.
+      if (isInFlight) startTransition(() => router.refresh());
       // Never returns true → polling continues for the lifetime of the
       // mounted page.
       return false;
@@ -348,6 +355,17 @@ function SelectedTaskPanel({
   // ("thinking…", "wrapping up…") with an honest paused-state pill.
   // Three distinct reasons: (a) question pending (b) approval pending
   // (c) gated on another task.
+  // Specific blocked sub-state: the agent's turn ended without it calling
+  // submit_task_status, so the task is parked with no upstream blocker,
+  // no question, and no approval. The error_message carries our marker.
+  // Surfaces a dedicated recovery card with Resume / Mark done buttons.
+  const isAbandoned =
+    selected.task.status === "blocked" &&
+    !selected.task.blocked_by_task_id &&
+    openQuestions.length === 0 &&
+    liveApprovals.length === 0 &&
+    (selected.task.error_message?.includes("submit_task_status") ?? false);
+
   let blockedReason: string | undefined;
   if (selected.task.status === "blocked") {
     if (selected.task.blocked_by_task_id) {
@@ -365,13 +383,19 @@ function SelectedTaskPanel({
         liveApprovals.length === 1
           ? "waiting on approval"
           : `waiting on ${liveApprovals.length} approvals`;
+    } else if (isAbandoned) {
+      // Recovery card above the transcript already explains the state and
+      // surfaces the action buttons; suppressing the in-transcript pill
+      // avoids two pieces of UI saying the same thing in slightly
+      // different ways.
+      blockedReason = undefined;
     } else {
       blockedReason = "waiting for the gating condition to resolve";
     }
   }
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {(openQuestions.length > 0 || liveApprovals.length > 0) && (
+      {(openQuestions.length > 0 || liveApprovals.length > 0 || isAbandoned) && (
         <div className="mx-auto w-full max-w-3xl space-y-3 px-6 pt-4">
           {openQuestions.map((q) => (
             <QuestionCard
@@ -383,6 +407,11 @@ function SelectedTaskPanel({
           {liveApprovals.map((a) => (
             <ApprovalCard key={a.id} approval={a} />
           ))}
+          {isAbandoned && (
+            <AbandonedTaskCard
+              taskDisplayId={selected.task.display_id}
+            />
+          )}
         </div>
       )}
       <div className="min-h-0 flex-1">
@@ -597,4 +626,123 @@ function formatRelative(iso: string): string {
   if (hr < 24) return `${hr}h`;
   const day = Math.round(hr / 24);
   return `${day}d`;
+}
+
+/**
+ * Recovery card for the specific blocked sub-state where the agent's
+ * turn ended without it calling submit_task_status. Surfaces three
+ * actions so the user always knows what to do:
+ *
+ *   - Resume: flip the task back to `proposed` and re-fire the kickoff.
+ *     The prior transcript stays intact; the agent picks up where it
+ *     stopped.
+ *   - Mark done: close the task manually (e.g. the agent did the work
+ *     in its last reply but just forgot the closing tool call).
+ *   - Cancel: drop the task entirely.
+ *
+ * Without this card, an abandoned task showed only a generic "Paused"
+ * pill and the user had no obvious way to act on it.
+ */
+function AbandonedTaskCard({ taskDisplayId }: { taskDisplayId: string }) {
+  const router = useRouter();
+  const [resumePending, startResume] = useTransition();
+  const [donePending, startDone] = useTransition();
+  const [cancelPending, startCancel] = useTransition();
+
+  function onResume() {
+    startResume(async () => {
+      const r = await resumeBlockedTaskAction(taskDisplayId);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Resuming — the agent will pick up from where it stopped.");
+      router.refresh();
+    });
+  }
+  function onDone() {
+    startDone(async () => {
+      const r = await markTaskDoneAction(taskDisplayId);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Marked done.");
+      router.refresh();
+    });
+  }
+  function onCancel() {
+    startCancel(async () => {
+      const r = await cancelTaskAction(taskDisplayId);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Cancelled.");
+      router.refresh();
+    });
+  }
+
+  const anyPending = resumePending || donePending || cancelPending;
+
+  return (
+    <div className="rounded-lg border border-amber-500/30 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-950/30">
+      <div className="flex items-start gap-3">
+        <StopCircle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div>
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+              Agent stopped without closing this task
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800/80 dark:text-amber-200/80">
+              The last turn finished cleanly but the agent didn’t call
+              <code className="mx-1 rounded bg-amber-500/15 px-1 py-0.5 font-mono text-[11px]">
+                submit_task_status
+              </code>
+              . Pick how to recover:
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={onResume}
+              disabled={anyPending}
+            >
+              {resumePending ? (
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+              ) : null}
+              Resume
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onDone}
+              disabled={anyPending}
+            >
+              {donePending ? (
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-1.5 size-3.5" />
+              )}
+              Mark done
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onCancel}
+              disabled={anyPending}
+            >
+              {cancelPending ? (
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+              ) : (
+                <XCircle className="mr-1.5 size-3.5" />
+              )}
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

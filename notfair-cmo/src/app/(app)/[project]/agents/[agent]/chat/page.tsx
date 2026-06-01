@@ -4,8 +4,8 @@ import { resolveAgentBySlug } from "@/server/agent-meta";
 import {
   listSessionsForAgent,
   newSessionId,
-} from "@/server/openclaw/sessions";
-import { pickLatestChatSession } from "@/server/openclaw/thread-origins";
+} from "@/server/sessions/view";
+import { pickLatestChatSession } from "@/server/sessions/view";
 import { listTasksByAgent } from "@/server/db/tasks";
 import { projectHref } from "@/lib/project-href";
 
@@ -35,7 +35,7 @@ export default async function ChatIndexPage({
     if (t.thread_id) taskThreadIds.add(t.thread_id);
   }
 
-  const sessions = listSessionsForAgent(resolved.agent_id);
+  const sessions = listSessionsForAgent(project.slug, resolved.agent_id);
   const latestChat = pickLatestChatSession(sessions, taskThreadIds);
   const target = latestChat?.sessionId ?? newSessionId();
   redirect(projectHref(projectSlug, `/agents/${agentSlug}/chat/${target}`));

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import type { Project } from "@/types";
 import { slugify } from "@/lib/slug";
+import { DEFAULT_HARNESS_ADAPTER, isHarnessAdapterId } from "@/server/adapters/registry";
+import type { HarnessAdapterId } from "@/server/adapters/types";
 
 export type CreateProjectInput = {
   display_name: string;
@@ -9,6 +11,8 @@ export type CreateProjectInput = {
   /** Optional onboarding hints. Free-text — CMO decides how to use them. */
   website_url?: string | null;
   codebase_path?: string | null;
+  /** Adapter chosen at onboarding. Defaults to claude-code-local. */
+  harness_adapter?: HarnessAdapterId;
 };
 
 export type CreateProjectResult =
@@ -40,6 +44,10 @@ export function createProject(input: CreateProjectInput): CreateProjectResult {
 
   const website_url = trimOrNull(input.website_url);
   const codebase_path = trimOrNull(input.codebase_path);
+  const harness_adapter: HarnessAdapterId =
+    input.harness_adapter && isHarnessAdapterId(input.harness_adapter)
+      ? input.harness_adapter
+      : DEFAULT_HARNESS_ADAPTER;
 
   const project: Project = {
     id: randomUUID(),
@@ -50,10 +58,11 @@ export function createProject(input: CreateProjectInput): CreateProjectResult {
     google_ads_account_id: null,
     website_url,
     codebase_path,
+    harness_adapter,
   };
 
   db.prepare(
-    "INSERT INTO projects (id, slug, display_name, created_at, archived_at, google_ads_account_id, website_url, codebase_path) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)",
+    "INSERT INTO projects (id, slug, display_name, created_at, archived_at, google_ads_account_id, website_url, codebase_path, harness_adapter) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)",
   ).run(
     project.id,
     project.slug,
@@ -61,9 +70,19 @@ export function createProject(input: CreateProjectInput): CreateProjectResult {
     project.created_at,
     project.website_url,
     project.codebase_path,
+    project.harness_adapter,
   );
 
   return { ok: true, project };
+}
+
+export function setProjectHarnessAdapter(
+  slug: string,
+  adapter: HarnessAdapterId,
+): Project | null {
+  const db = getDb();
+  db.prepare("UPDATE projects SET harness_adapter = ? WHERE slug = ?").run(adapter, slug);
+  return getProject(slug);
 }
 
 function trimOrNull(value: string | null | undefined): string | null {
@@ -134,8 +153,12 @@ export function changeProjectSlug(
     "tasks",
     "approvals",
     "approval_policies",
+    "questions",
     "cost_events",
     "oauth_tokens",
+    "mcp_tokens",
+    "scheduled_jobs",
+    "sessions",
     "agent_actions",
     "sequence_runs",
   ];
@@ -205,13 +228,22 @@ export function unarchiveProject(slug: string): Project | null {
 export function deleteProjectRow(slug: string): void {
   const db = getDb();
   const childTables = [
+    // tasks must come before scheduled_jobs / sessions because both have
+    // optional FK references back to tasks(id) on delete-set-null. Order
+    // within the loop otherwise doesn't matter — we just need every
+    // child row gone before the parent project row.
     "tasks",
-    // approval_comments is cleaned up by FK ON DELETE CASCADE when we drop
-    // the parent approvals rows below.
+    // approval_comments cascades from approvals.
     "approvals",
     "approval_policies",
+    "questions",
     "cost_events",
     "oauth_tokens",
+    "mcp_tokens",
+    // scheduled_job_runs cascades from scheduled_jobs.
+    "scheduled_jobs",
+    // transcript_events cascades from sessions.
+    "sessions",
     "agent_actions",
     "sequence_runs",
   ];

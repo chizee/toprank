@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { disableCronsAction } from "@/server/actions/agents";
-import type { CloneSourceCron } from "@/server/openclaw/clone-agent";
+import type { CloneSourceCron } from "@/server/agents/clone";
 
 type Props = {
   open: boolean;

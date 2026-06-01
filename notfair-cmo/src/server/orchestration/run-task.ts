@@ -1,12 +1,12 @@
-import {
-  buildPendingSessionKey,
-} from "@/server/openclaw/sessions";
-import { streamChatViaGateway } from "@/server/openclaw/gateway-client";
-import {
-  openShadowWriter,
-  shadowStreamEvent,
-} from "@/server/openclaw/shadow-transcript";
 import { claimProposedTask, setTaskThreadIfMissing, updateTask } from "@/server/db/tasks";
+import { getProject } from "@/server/db/projects";
+import { requireAdapter } from "@/server/adapters/registry";
+import { workspaceDirFor } from "@/server/agents/provisioning";
+import {
+  getOrCreateSession,
+  appendTranscriptEvent,
+  touchSession,
+} from "@/server/sessions";
 import type { Task } from "@/types";
 
 import {
@@ -16,16 +16,8 @@ import {
 
 /**
  * Idempotent "claim and kickoff" — atomically flips a proposed task to
- * running and fires the server-side kickoff. No-op when the row is already
- * running, terminal, or missing. Used by `<create_task>` handling and the
- * onboarding audit-task path; both callers operate on freshly-created tasks.
- *
- * The claim is a conditional SQL UPDATE (`WHERE status = 'proposed'`), so
- * even if a stale in-memory `task` snapshot is passed in, the DB cannot
- * regress a terminal row back to running.
- *
- * Returns the post-transition task (running on success, the input task
- * otherwise). The kickoff runs fire-and-forget — callers shouldn't await it.
+ * working and fires the server-side kickoff. No-op when the row is already
+ * running, terminal, or missing.
  */
 export function startTaskIfProposed(task: Task): Task {
   const claimed = claimProposedTask(task.id);
@@ -37,18 +29,12 @@ export function startTaskIfProposed(task: Task): Task {
 }
 
 /**
- * Server-side kickoff for a task. Consumes the full gateway stream (no SSE
- * pipe to a client) and applies orchestration blocks the assignee emits.
- * Used by the "Start all" button on the agent Tasks tab so the agent
- * starts working immediately without the user opening each task's
- * detail page.
- *
- * Returns when the agent has finished its turn AND orchestration blocks
- * have been processed. Errors are logged + the task is marked failed.
+ * Server-side kickoff for a task. Dispatches the kickoff message through the
+ * project's harness adapter and persists every emitted event to
+ * `transcript_events`. The browser tails the same row range over SSE for
+ * live render.
  */
 export async function runTaskKickoffServerSide(task: Task): Promise<void> {
-  // Lazily mint the thread on first kickoff if the task didn't have one
-  // (e.g., user never opened /tasks/[id]). Stable forever after.
   let finalTask = task;
   if (!finalTask.thread_id) {
     const updated = setTaskThreadIfMissing(task.id, generateTaskThreadId());
@@ -58,85 +44,83 @@ export async function runTaskKickoffServerSide(task: Task): Promise<void> {
     }
   }
 
-  const sessionKey = buildPendingSessionKey(finalTask.agent_id, finalTask.thread_id);
+  const project = getProject(finalTask.project_slug);
+  if (!project) {
+    updateTask(finalTask.id, {
+      status: "failed",
+      error_message: `Project '${finalTask.project_slug}' not found.`,
+    });
+    return;
+  }
+  const adapter = requireAdapter(project.harness_adapter);
+
+  const session = getOrCreateSession({
+    project_slug: project.slug,
+    agent_id: finalTask.agent_id,
+    label: finalTask.thread_id,
+    harness_adapter: project.harness_adapter,
+    task_id: finalTask.id,
+  });
+
   const kickoffMessage = buildTaskKickoffMessage(finalTask);
+  appendTranscriptEvent(session.id, "user", { text: kickoffMessage, source: "kickoff" });
 
-  // Tee gateway events to a shadow JSONL the browser can tail. OpenClaw's
-  // codex-app-server backend buffers session.jsonl until session-end and
-  // doesn't emit per-message broadcasts during the turn, so without the
-  // shadow there's no way for the UI to render tokens live for tasks
-  // kicked off server-side. The shadow uses the same OpenClaw-style
-  // schema as session.jsonl so transcript-tail can read both with the
-  // same parser.
-  const shadow = await openShadowWriter(finalTask.agent_id, finalTask.thread_id);
-
-  // We drain the stream so the agent's turn fully runs, but we no longer
-  // post-process the buffer for pseudo-XML blocks — any side effects
-  // (task_status, comments, approvals) happen via the agent calling
-  // notfair-orchestration MCP tools mid-stream.
   console.log(
     `[run-task] kickoff start task=${finalTask.id} agent=${finalTask.agent_id} thread=${finalTask.thread_id}`,
   );
-  // Retry on the post-provisioning race: `openclaw agents add` updates the
-  // config file but the gateway's pinned runtime snapshot needs a moment
-  // before it sees the new agent. Until that catches up, chat.send fails
-  // with INVALID_REQUEST "Agent '<id>' no longer exists in configuration".
-  // 2s/4s/8s backoff covers a ~14s race window we've observed in dev.
-  const RETRY_DELAYS_MS = [2_000, 4_000, 8_000];
-  let lastError: unknown = null;
-  let streamed = false;
-  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-    try {
-      for await (const evt of streamChatViaGateway({
-        sessionKey,
-        sessionId: finalTask.thread_id,
-        message: kickoffMessage,
-      })) {
-        try {
-          await shadowStreamEvent(shadow, evt);
-        } catch (err) {
-          console.error("[run-task] shadow write failed:", err);
-        }
-        if (evt.kind === "error") {
-          throw new Error(evt.message);
-        }
-      }
-      streamed = true;
-      break;
-    } catch (err) {
-      lastError = err;
-      const message = err instanceof Error ? err.message : String(err);
-      if (!isAgentNotInConfigError(message) || attempt >= RETRY_DELAYS_MS.length) {
-        break;
-      }
-      const delay = RETRY_DELAYS_MS[attempt]!;
-      console.warn(
-        `[run-task] gateway snapshot stale for ${finalTask.agent_id}; retrying in ${delay}ms (attempt ${attempt + 1}/${RETRY_DELAYS_MS.length})`,
-      );
-      await new Promise((r) => setTimeout(r, delay));
-    }
-  }
-  if (streamed) {
-    await shadow.close();
-    console.log(`[run-task] kickoff stream done task=${finalTask.id}`);
-    return;
-  }
-  await shadow.close().catch(() => undefined);
-  const message = lastError instanceof Error ? lastError.message : String(lastError);
-  console.error(
-    `[run-task] kickoff failed task=${finalTask.id} agent=${finalTask.agent_id}: ${message}`,
-  );
-  updateTask(finalTask.id, {
-    status: "failed",
-    error_message: message,
-  });
-}
 
-/**
- * Matches the gateway's "Agent '<id>' no longer exists in configuration"
- * INVALID_REQUEST. Surfaced when the gateway hasn't refreshed its agents
- * snapshot yet after a fresh `openclaw agents add`. Idempotently retryable.
- */
-function isAgentNotInConfigError(message: string): boolean {
-  return message.includes("no longer exists in configuration");
+  try {
+    for await (const evt of adapter.execute({
+      projectSlug: project.slug,
+      agentId: finalTask.agent_id,
+      workspaceDir: workspaceDirFor(finalTask.agent_id),
+      message: kickoffMessage,
+      threadId: session.id,
+      harnessSessionId: session.harness_session_id,
+    })) {
+      if (evt.kind === "session") {
+        touchSession(session.id, evt.harnessSessionId);
+        continue;
+      }
+      appendTranscriptEvent(session.id, evt.kind, evt);
+      if (evt.kind === "error") {
+        throw new Error(evt.message);
+      }
+    }
+    touchSession(session.id);
+    console.log(`[run-task] kickoff stream done task=${finalTask.id}`);
+
+    // The harness turn ended cleanly. If the agent didn't call
+    // submit_task_status the task is stuck in `working` and the UI
+    // shows a wrong "Wrapping up" spinner forever. Detect that, flip
+    // the task to `blocked` with a clear reason so the user can decide
+    // whether to retry, take over, or mark done. Best-effort: a stale
+    // read is harmless because the orchestration tool path also writes
+    // the task status, and our update is gated on status === "working".
+    const current = updateTask(finalTask.id, {});
+    if (current && current.status === "working") {
+      console.warn(
+        `[run-task] turn ended but agent did not call submit_task_status (task=${finalTask.id}); marking blocked`,
+      );
+      updateTask(finalTask.id, {
+        status: "blocked",
+        error_message:
+          "Agent finished its turn without calling submit_task_status. The task is parked — send a follow-up message or mark it done manually.",
+      });
+      appendTranscriptEvent(session.id, "error", {
+        kind: "error",
+        message:
+          "Turn ended without submit_task_status. Task moved to blocked — open Approvals or send a follow-up message to resume.",
+      });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[run-task] kickoff failed task=${finalTask.id} agent=${finalTask.agent_id}: ${message}`,
+    );
+    updateTask(finalTask.id, {
+      status: "failed",
+      error_message: message,
+    });
+  }
 }

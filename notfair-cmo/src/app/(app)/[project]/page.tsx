@@ -112,7 +112,7 @@ export default async function ProjectHomePage({
               <div>
                 <CardTitle className="text-base">Your agents</CardTitle>
                 <CardDescription>
-                  Each agent runs in its own OpenClaw workspace. Click to chat.
+                  Each agent runs in its own workspace. Click to chat.
                 </CardDescription>
               </div>
               <Button asChild variant="outline" size="sm">

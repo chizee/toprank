@@ -1,7 +1,6 @@
 "use server";
 
-import { loadCronRuns, type CronRun } from "@/server/openclaw/crons";
-import { tickAtOrBefore } from "@/server/openclaw/cron-schedule";
+import { loadCronRuns, tickAtOrBefore, type CronRun, type CronSchedule } from "@/server/scheduler/display";
 
 export type CronRunWithTick = CronRun & {
   /**
@@ -13,9 +12,7 @@ export type CronRunWithTick = CronRun & {
   owning_occurrence_at_ms?: number;
 };
 
-export type ScheduleInput =
-  | { kind: "cron"; expr: string; tz?: string }
-  | { kind: "every"; everyMs: number; anchorMs?: number };
+export type ScheduleInput = CronSchedule;
 
 export type GetCronRunsResult =
   | { ok: true; runs: CronRunWithTick[] }

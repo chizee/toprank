@@ -6,11 +6,11 @@ import { resolveAgentBySlug } from "@/server/agent-meta";
 import { listApprovalsForTask } from "@/server/db/approvals";
 import { listQuestionsForTask } from "@/server/db/questions";
 import { getTask, listTasksByAgent, setTaskThreadIfMissing } from "@/server/db/tasks";
-import { buildPendingSessionKey, findSessionBySessionId } from "@/server/openclaw/sessions";
+import { buildPendingSessionKey, findSessionBySessionId } from "@/server/sessions/view";
 import {
   readTranscriptTail,
   type TranscriptEvent,
-} from "@/server/openclaw/transcript-tail";
+} from "@/server/sessions/transcript-tail";
 import {
   buildTaskKickoffMessage,
   generateTaskThreadId,
@@ -73,7 +73,7 @@ export default async function AgentTasksPage({ params, searchParams }: Props) {
   // this path is read-only.
   let selected: SelectedBundle | null = null;
   if (selectedTaskId) {
-    selected = await loadSelectedBundle(agentFullId, selectedTaskId);
+    selected = await loadSelectedBundle(project.slug, agentFullId, selectedTaskId);
     // Guard: drop selection if it's not on this agent (cross-agent links etc).
     if (selected && selected.task.agent_id !== agentFullId) selected = null;
   }
@@ -95,6 +95,7 @@ export default async function AgentTasksPage({ params, searchParams }: Props) {
 }
 
 async function loadSelectedBundle(
+  projectSlug: string,
   agentFullId: string,
   taskId: string,
 ): Promise<SelectedBundle | null> {
@@ -112,11 +113,11 @@ async function loadSelectedBundle(
   // Resolve canonical sessionKey for /api/chat composer sends (when task
   // is done and user wants to keep chatting). The pending key is a safe
   // fallback for brand-new threads.
-  const session = findSessionBySessionId(agentFullId, threadId);
+  const session = findSessionBySessionId(projectSlug, agentFullId, threadId);
   const sessionKey =
     session?.sessionKey ?? buildPendingSessionKey(agentFullId, threadId);
 
-  const { events, byteOffset } = readTranscriptTail(agentFullId, threadId, 0);
+  const { events, byteOffset } = readTranscriptTail(projectSlug, agentFullId, threadId, 0);
   const approvals = listApprovalsForTask(task.id);
   const questions = listQuestionsForTask(task.id);
 

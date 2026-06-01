@@ -85,7 +85,10 @@ export type ProjectAgentEntry = {
 
 /**
  * List agents for a project. Source of truth:
- * - notfair-meta.json sidecars under `<DATA_DIR>/agents/<projectSlug>-*`.
+ * - notfair-meta.json sidecars whose `project_slug` field equals the requested
+ *   slug. The sidecar — not the workspace dir name — is authoritative, so
+ *   projects whose slug is a string prefix of another project's slug (e.g.
+ *   "acme" vs "acme-q4") never cross-leak their rosters.
  * - For each TEMPLATE not yet present on disk, fall back to a synthesized
  *   default entry so the user sees the bootstrap agents immediately even
  *   before `ensureProjectAgents` runs.
@@ -120,7 +123,10 @@ export async function listProjectAgents(project_slug: string): Promise<ProjectAg
   }
 
   // 2) Overlay anything we have meta for (template agents written by
-  //    ensureProjectAgents, plus cloned/custom agents).
+  //    ensureProjectAgents, plus cloned/custom agents). Filter by the
+  //    sidecar's `project_slug` field — NOT the dir name prefix — because
+  //    a prefix like "acme-" also matches "acme-q4-cmo-greg" which belongs
+  //    to a different project.
   const agentsRoot = join(notfairDataDir(), "agents");
   let entries: string[] = [];
   try {
@@ -129,11 +135,18 @@ export async function listProjectAgents(project_slug: string): Promise<ProjectAg
     // No agents dir yet — keep templates-only view.
     return Array.from(byRole.values());
   }
+  // Coarse pre-filter: an agent that belongs to this project MUST have
+  // an id starting with `<slug>-`. This cheaply skips clearly-unrelated
+  // dirs without reading their sidecar. Project_slug match below is the
+  // authoritative check.
   const prefix = `${project_slug}-`;
   for (const entry of entries) {
     if (!entry.startsWith(prefix)) continue;
     const meta = readAgentMeta(entry);
     if (!meta) continue;
+    // Hard isolation: only accept agents whose sidecar declares this
+    // project as their owner. Catches the "acme" vs "acme-q4" collision.
+    if (meta.project_slug !== project_slug) continue;
     const template = meta.template_key
       ? TEMPLATES.find((t) => t.key === meta.template_key)
       : undefined;

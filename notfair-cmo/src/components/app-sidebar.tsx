@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -10,7 +9,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
@@ -25,17 +23,13 @@ import {
 } from "lucide-react";
 import { listProjects } from "@/server/db/projects";
 import { getActiveProject } from "@/server/active-project";
-import { actionableApprovalCount } from "@/server/db/approvals";
 import { listProjectAgents } from "@/server/agent-meta";
 import { TEMPLATES } from "@/server/agent-templates";
-import { inFlightCountsByAgent } from "@/server/db/tasks";
 import { projectHref } from "@/lib/project-href";
 import { ProjectSwitcher } from "./project-switcher";
-import { PairedOpenclawPill } from "./paired-openclaw-pill";
 import { AgentNav } from "./agent-nav";
 import { CreateAgentButton } from "./create-agent-button";
-import { GlobalLivenessPoller } from "./global-liveness-poller";
-import { Badge } from "@/components/ui/badge";
+import { ApprovalsLiveBadge } from "./live-badge";
 
 type NavItem = {
   href: string;
@@ -57,24 +51,15 @@ const NAV: NavItem[] = [
 export async function AppSidebar() {
   const projects = listProjects();
   const active = await getActiveProject();
-  // Badge counts anything actionable: pending + revision_requested.
-  const approvalsBadge = active ? actionableApprovalCount(active.slug) : 0;
   const agentEntries = active ? await listProjectAgents(active.slug) : [];
-  const inFlightCounts: Record<string, number> = {};
-  if (active) {
-    for (const [agentId, count] of inFlightCountsByAgent(active.slug)) {
-      inFlightCounts[agentId] = count;
-    }
-  }
-  const anyInFlight = Object.values(inFlightCounts).some((n) => n > 0);
+  // In-flight counts + approvals badge are no longer computed here.
+  // LiveCountsProvider (mounted at layout level) polls
+  // /api/in-flight-counts client-side and pushes fresh numbers through
+  // context. Sidebar's server-rendered structure stays stable so no
+  // reconciliation thrash on every poll — only the badge nodes flip.
 
   return (
     <Sidebar collapsible="icon">
-      {/* Refresh the whole layout (this sidebar + the current route's
-          server components) every 5s while anything is in flight, so
-          badges + task groupings stay current no matter what page the
-          user is on. Self-disables when nothing is live. */}
-      <GlobalLivenessPoller hasInFlight={anyInFlight} />
       <SidebarHeader>
         {/* Project switcher + collapse toggle. Toggle stays visible in
             icon-collapsed mode so the user can always re-expand the rail. */}
@@ -113,7 +98,6 @@ export async function AppSidebar() {
                   description: a.description,
                   template_key: a.template_key,
                 }))}
-                inFlightCounts={inFlightCounts}
               />
             </SidebarGroupContent>
           </SidebarGroup>
@@ -130,11 +114,7 @@ export async function AppSidebar() {
                       <Link href={projectHref(active.slug, item.href)}>
                         <item.icon />
                         <span>{item.label}</span>
-                        {item.badge && approvalsBadge > 0 && (
-                          <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
-                            {approvalsBadge}
-                          </Badge>
-                        )}
+                        {item.badge && <ApprovalsLiveBadge />}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -145,12 +125,6 @@ export async function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter>
-        <SidebarSeparator />
-        <div className="px-2 py-1.5">
-          <PairedOpenclawPill />
-        </div>
-      </SidebarFooter>
     </Sidebar>
   );
 }

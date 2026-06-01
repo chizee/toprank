@@ -94,8 +94,8 @@ export function AgentDangerZone({ agentId, agentDisplayName }: Props) {
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-destructive">Delete this agent</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Removes the agent from OpenClaw along with every thread of chat history and
-              every scheduled cron job that targets it. This cannot be undone.
+              Removes the agent&rsquo;s workspace along with every chat thread and
+              every scheduled job that targets it. This cannot be undone.
             </p>
           </div>
           <Button
@@ -119,7 +119,7 @@ export function AgentDangerZone({ agentId, agentDisplayName }: Props) {
               Delete &ldquo;{agentDisplayName}&rdquo;?
             </DialogTitle>
             <DialogDescription>
-              This permanently removes the items below from OpenClaw and notfair-cmo&apos;s
+              This permanently removes the items below from notfair-cmo&apos;s
               local store.
             </DialogDescription>
           </DialogHeader>
@@ -155,7 +155,7 @@ export function AgentDangerZone({ agentId, agentDisplayName }: Props) {
 
                 {!summary.exists_in_openclaw && (
                   <>
-                    <dt className="text-muted-foreground">OpenClaw</dt>
+                    <dt className="text-muted-foreground">Workspace</dt>
                     <dd className="text-amber-600 dark:text-amber-400">
                       already removed
                     </dd>

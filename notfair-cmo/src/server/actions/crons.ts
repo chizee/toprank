@@ -7,8 +7,8 @@ import {
   enableCron,
   invalidateCronCache,
   removeCron,
-} from "@/server/openclaw/crons";
-import { updateCronMessage } from "@/server/openclaw/gateway-rpc";
+} from "@/server/scheduler/display";
+import { getDb } from "@/server/db/db";
 import { type AgentTemplate } from "@/server/agent-templates";
 import { listProjectAgents } from "@/server/agent-meta";
 import { slugify } from "@/lib/slug";
@@ -52,16 +52,25 @@ export async function scheduleCronAction(input: ScheduleCronInput): Promise<Sche
   const agent_slug = target.slug;
   const agent_full_id = target.agent_id;
 
+  // The native scheduler only models cron expressions; "every N" inputs come
+  // in as `every 5m` strings which we transcribe to a cron expression with
+  // the equivalent step. For brevity (and since the CMO/specialists rarely
+  // emit non-cron schedules), reject `every` here for now — emitters should
+  // pass a real cron expression.
+  if (input.schedule_kind !== "cron") {
+    return {
+      ok: false,
+      error: "Only cron expressions are supported; use a 5-field cron string.",
+    };
+  }
+
   try {
     const result = await createCron({
       project_slug: input.project_slug,
       agent_slug,
       agent_full_id,
       cron_name: nameSlug.slug,
-      schedule:
-        input.schedule_kind === "cron"
-          ? { kind: "cron", expr: scheduleValueTrimmed, tz: input.tz }
-          : { kind: "every", duration: scheduleValueTrimmed },
+      schedule: { kind: "cron", expr: scheduleValueTrimmed, tz: input.tz },
       message: briefTrimmed,
     });
     logAgentAction({
@@ -116,7 +125,9 @@ export async function updateCronPromptAction(
   const trimmed = message.trim();
   if (!trimmed) return { ok: false, error: "Prompt cannot be empty." };
   try {
-    await updateCronMessage(id, trimmed);
+    getDb()
+      .prepare("UPDATE scheduled_jobs SET message = ?, updated_at = ? WHERE id = ?")
+      .run(trimmed, new Date().toISOString(), id);
     invalidateCronCache();
     revalidatePath("/", "layout");
     return { ok: true };

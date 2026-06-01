@@ -34,7 +34,7 @@ vi.mock("sonner", () => ({
 
 import { McpCard } from "./mcp-card";
 import type { McpSpec } from "@/server/mcp-catalog";
-import type { McpRuntimeStatus } from "@/server/mcp-state";
+import type { McpRuntimeStatus } from "@/server/mcp/state";
 
 const spec: McpSpec = {
   key: "notfair-googleads",

@@ -385,4 +385,97 @@ CREATE INDEX IF NOT EXISTS idx_questions_pending ON questions(project_slug, stat
 CREATE INDEX IF NOT EXISTS idx_questions_task ON questions(task_id) WHERE task_id IS NOT NULL;
 `,
   },
+  {
+    name: "010_harness_adapter.sql",
+    sql: `
+-- Migration 010: pivot off OpenClaw to harness adapters.
+--
+-- 1. \`projects.harness_adapter\` — which adapter (claude-code-local |
+--    codex-local) runs this project's agents. Onboarding sets it; per-
+--    project so different teams can pick different tools.
+--
+-- 2. \`mcp_tokens\` — per-project OAuth tokens for MCP servers
+--    (notfair-googleads, etc.). Replaces the OpenClaw config-file storage
+--    so we don't depend on the openclaw binary for token persistence.
+--
+-- 3. \`scheduled_jobs\` — native cron schedule rows. Replaces openclaw
+--    cron CLI. A node-cron loop in the next process ticks these on their
+--    cron_expr and dispatches a synthetic chat turn through the harness.
+--
+-- 4. \`sessions\` + \`transcript_events\` — native chat thread + event log.
+--    Replaces OpenClaw's session-key namespace and JSONL transcript files.
+--    One row per (agent, label) thread; transcript_events stores the
+--    delta/tool/lifecycle events emitted by the adapter so the UI can
+--    replay on re-attach.
+
+ALTER TABLE projects ADD COLUMN harness_adapter TEXT NOT NULL DEFAULT 'claude-code-local';
+
+CREATE TABLE IF NOT EXISTS mcp_tokens (
+  id                TEXT PRIMARY KEY,
+  project_slug      TEXT NOT NULL REFERENCES projects(slug),
+  server_name       TEXT NOT NULL,
+  account_label     TEXT NOT NULL DEFAULT '',
+  access_token_enc  TEXT NOT NULL,
+  refresh_token_enc TEXT,
+  expires_at        TEXT,
+  scope             TEXT,
+  metadata_json     TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL,
+  UNIQUE(project_slug, server_name, account_label)
+);
+CREATE INDEX IF NOT EXISTS idx_mcp_tokens_project ON mcp_tokens(project_slug);
+
+CREATE TABLE IF NOT EXISTS scheduled_jobs (
+  id            TEXT PRIMARY KEY,
+  project_slug  TEXT NOT NULL REFERENCES projects(slug),
+  agent_id      TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  cron_expr     TEXT NOT NULL,
+  message       TEXT NOT NULL,
+  enabled       INTEGER NOT NULL DEFAULT 1,
+  last_run_at   TEXT,
+  next_run_at   TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL,
+  UNIQUE(project_slug, agent_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next ON scheduled_jobs(enabled, next_run_at);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id                  TEXT PRIMARY KEY,
+  project_slug        TEXT NOT NULL REFERENCES projects(slug),
+  agent_id            TEXT NOT NULL,
+  label               TEXT NOT NULL,
+  harness_adapter     TEXT NOT NULL,
+  harness_session_id  TEXT,
+  task_id             TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  UNIQUE(project_slug, agent_id, label)
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(project_slug, agent_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id) WHERE task_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS transcript_events (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  seq           INTEGER NOT NULL,
+  kind          TEXT NOT NULL CHECK (kind IN ('user','delta','tool','lifecycle','final','error')),
+  payload_json  TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_transcript_events_session ON transcript_events(session_id, seq);
+
+CREATE TABLE IF NOT EXISTS scheduled_job_runs (
+  id              TEXT PRIMARY KEY,
+  scheduled_job_id TEXT NOT NULL REFERENCES scheduled_jobs(id) ON DELETE CASCADE,
+  started_at      TEXT NOT NULL,
+  finished_at     TEXT,
+  status          TEXT NOT NULL CHECK (status IN ('running','done','failed')),
+  error_message   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_scheduled_job_runs_job ON scheduled_job_runs(scheduled_job_id, started_at);
+`,
+  },
 ];

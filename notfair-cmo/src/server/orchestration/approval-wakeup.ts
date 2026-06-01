@@ -1,8 +1,11 @@
+import { getProject } from "@/server/db/projects";
+import { requireAdapter } from "@/server/adapters/registry";
+import { workspaceDirFor } from "@/server/agents/provisioning";
 import {
-  buildPendingSessionKey,
-  findSessionBySessionId,
-} from "@/server/openclaw/sessions";
-import { streamChatViaGateway } from "@/server/openclaw/gateway-client";
+  appendTranscriptEvent,
+  getOrCreateSession,
+  touchSession,
+} from "@/server/sessions";
 import { appendComment, listComments } from "@/server/db/approvals";
 import { getTask, setTaskThreadIfMissing, unblockTask } from "@/server/db/tasks";
 import type { Approval } from "@/types";
@@ -57,31 +60,47 @@ export async function wakeTaskOnApprovalResolution(approval: Approval): Promise<
     return;
   }
 
-  const known = findSessionBySessionId(task.agent_id, threadId);
-  const sessionKey =
-    known?.sessionKey ?? buildPendingSessionKey(task.agent_id, threadId);
+  const project = getProject(task.project_slug);
+  if (!project) {
+    console.error(`[approval-wakeup] project '${task.project_slug}' not found`);
+    return;
+  }
+  const adapter = requireAdapter(project.harness_adapter);
+  const session = getOrCreateSession({
+    project_slug: project.slug,
+    agent_id: task.agent_id,
+    label: threadId,
+    harness_adapter: project.harness_adapter,
+    task_id: task.id,
+  });
 
   const message = buildWakeupMessage(approval);
-  // Persist the wake-up payload as a system comment for the inbox thread.
   appendComment({
     approval_id: approval.id,
     author_kind: "system",
     body: `Delivered to ${task.agent_id} on thread ${threadId}.`,
   });
+  appendTranscriptEvent(session.id, "user", { text: message, source: "approval-wakeup" });
 
-  // Drain the gateway stream so the agent's turn fully runs. Side effects
-  // (submit_task_status etc.) happen via MCP tool calls during the turn —
-  // we no longer regex-scan the reply.
   try {
-    for await (const evt of streamChatViaGateway({
-      sessionKey,
-      sessionId: threadId,
+    for await (const evt of adapter.execute({
+      projectSlug: project.slug,
+      agentId: task.agent_id,
+      workspaceDir: workspaceDirFor(task.agent_id),
       message,
+      threadId: session.id,
+      harnessSessionId: session.harness_session_id,
     })) {
+      if (evt.kind === "session") {
+        touchSession(session.id, evt.harnessSessionId);
+        continue;
+      }
+      appendTranscriptEvent(session.id, evt.kind, evt);
       if (evt.kind === "error") throw new Error(evt.message);
     }
+    touchSession(session.id);
   } catch (err) {
-    console.error(`[approval-wakeup] gateway stream failed for task ${task.id}:`, err);
+    console.error(`[approval-wakeup] adapter stream failed for task ${task.id}:`, err);
   }
 }
 

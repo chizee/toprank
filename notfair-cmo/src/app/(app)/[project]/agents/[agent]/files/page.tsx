@@ -1,46 +1,14 @@
-import { promises as fs } from "node:fs";
-import { join } from "node:path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, FileX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { getProject } from "@/server/db/projects";
-import { resolveAgentBySlug, workspaceDirFor } from "@/server/agent-meta";
-import { listAgentFiles, getAgentFile } from "@/server/openclaw/gateway-rpc";
+import { resolveAgentBySlug } from "@/server/agent-meta";
+import { listAgentFiles, getAgentFile } from "@/server/agents/files";
 import { cn } from "@/lib/utils";
 import { projectHref } from "@/lib/project-href";
 
-const PROJECT_FILE_NAME = "PROJECT.md";
-
 type AugmentedFile = Awaited<ReturnType<typeof listAgentFiles>>["files"][number];
-
-/**
- * Augment OpenClaw's hardcoded workspace-file list with PROJECT.md when it
- * exists on disk. PROJECT.md is the canonical project-context file written
- * by the CMO via set_project_brief and synced into every agent's workspace
- * by writeIdentityFile — it lives in the same directory as IDENTITY.md but
- * isn't in OpenClaw's enumeration list, so we have to add it ourselves.
- */
-async function readWorkspaceProjectFile(
-  agentId: string,
-): Promise<AugmentedFile | null> {
-  const workspace = workspaceDirFor(agentId);
-  const path = join(workspace, PROJECT_FILE_NAME);
-  try {
-    const stat = await fs.stat(path);
-    if (!stat.isFile()) return null;
-    return {
-      name: PROJECT_FILE_NAME,
-      path,
-      missing: false,
-      size: stat.size,
-      updatedAtMs: stat.mtimeMs,
-    };
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw err;
-  }
-}
 
 type Params = { agent: string; project: string };
 type Search = { file?: string };
@@ -73,25 +41,17 @@ export default async function AgentFilesPage({
     error = err instanceof Error ? err.message : String(err);
   }
 
-  // Splice PROJECT.md in if it exists on disk. We surface it right after
-  // IDENTITY.md when both are present so the "what this agent knows about
-  // the company" file sits next to the role identity it pairs with.
-  try {
-    const projectEntry = await readWorkspaceProjectFile(agentFullId);
-    if (projectEntry) {
-      const identityIdx = files.findIndex((f) => f.name === "IDENTITY.md");
-      if (identityIdx >= 0) {
-        files = [
-          ...files.slice(0, identityIdx + 1),
-          projectEntry,
-          ...files.slice(identityIdx + 1),
-        ];
-      } else {
-        files = [projectEntry, ...files];
-      }
-    }
-  } catch (err) {
-    console.warn("[files] could not read PROJECT.md:", err);
+  // listAgentFiles already enumerates every workspace file from disk
+  // (including PROJECT.md when present), so no augment splice is needed.
+  // Reorder so PROJECT.md sits right after IDENTITY.md when both exist,
+  // matching the v0.1.0 reading order without duplicating entries.
+  const identityIdx = files.findIndex((f) => f.name === "IDENTITY.md");
+  const projectIdx = files.findIndex((f) => f.name === "PROJECT.md");
+  if (identityIdx >= 0 && projectIdx >= 0 && projectIdx !== identityIdx + 1) {
+    const project = files[projectIdx]!;
+    const without = files.filter((_, i) => i !== projectIdx);
+    const insertAt = without.findIndex((f) => f.name === "IDENTITY.md") + 1;
+    files = [...without.slice(0, insertAt), project, ...without.slice(insertAt)];
   }
 
   // Pick which file to show: explicit search param wins, else first present
@@ -111,19 +71,10 @@ export default async function AgentFilesPage({
     selectedMissing = entry?.missing ?? true;
     if (!selectedMissing) {
       try {
-        if (selectedName === PROJECT_FILE_NAME) {
-          // PROJECT.md isn't in OpenClaw's enumeration; read from disk
-          // directly using the path we resolved during list-augmentation.
-          const content = await fs.readFile(entry!.path, "utf8");
-          selectedContent = content;
-          selectedSize = entry!.size;
-          selectedUpdatedAtMs = entry!.updatedAtMs;
-        } else {
-          const got = await getAgentFile(agentFullId, selectedName);
-          selectedContent = got.file.content;
-          selectedSize = got.file.size;
-          selectedUpdatedAtMs = got.file.updatedAtMs;
-        }
+        const got = await getAgentFile(agentFullId, selectedName);
+        selectedContent = got.file.content;
+        selectedSize = got.file.size;
+        selectedUpdatedAtMs = got.file.updatedAtMs;
       } catch (err) {
         selectedError = err instanceof Error ? err.message : String(err);
       }

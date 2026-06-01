@@ -105,3 +105,76 @@ export async function cancelTaskAction(
   revalidatePath(`/tasks`, "layout");
   return { ok: true };
 }
+
+export type SimpleTaskActionResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Resume a task that the agent abandoned (turn ended without a
+ * submit_task_status call, so we parked it in `blocked`). Flips the
+ * task back to `proposed` and re-fires the kickoff so the agent picks
+ * up where it left off — its prior transcript stays intact.
+ *
+ * Safe to call repeatedly: only succeeds when the task is currently
+ * `blocked` and not gated on an approval / question / upstream task.
+ */
+export async function resumeBlockedTaskAction(
+  idOrDisplayId: string,
+): Promise<SimpleTaskActionResult> {
+  const project = await getActiveProject();
+  if (!project) return { ok: false, error: "No active project." };
+  const task = getTask(idOrDisplayId);
+  if (!task) return { ok: false, error: "Task not found." };
+  if (task.project_slug !== project.slug) {
+    return { ok: false, error: "Task isn't in the active project." };
+  }
+  if (task.status !== "blocked") {
+    return { ok: false, error: `Task isn't blocked (it's ${task.status}).` };
+  }
+  if (task.blocked_by_task_id) {
+    return {
+      ok: false,
+      error: "Task is blocked on an upstream task; resolve that first.",
+    };
+  }
+  // Flip back to `proposed` and re-kickoff via the same path the
+  // initial kickoff used. The kickoff function atomically claims the
+  // task so concurrent clicks are safe.
+  updateTask(task.id, { status: "proposed", error_message: null });
+  const reread = getTask(task.id);
+  if (reread) {
+    const { startTaskIfProposed } = await import("@/server/orchestration/run-task");
+    startTaskIfProposed(reread);
+  }
+  revalidatePath(`/agents`, "layout");
+  revalidatePath(`/tasks`, "layout");
+  return { ok: true };
+}
+
+/**
+ * Manually mark a task as done. For the abandoned-task case where the
+ * agent finished its work but never called submit_task_status — the
+ * user is closing it on the agent's behalf.
+ */
+export async function markTaskDoneAction(
+  idOrDisplayId: string,
+): Promise<SimpleTaskActionResult> {
+  const project = await getActiveProject();
+  if (!project) return { ok: false, error: "No active project." };
+  const task = getTask(idOrDisplayId);
+  if (!task) return { ok: false, error: "Task not found." };
+  if (task.project_slug !== project.slug) {
+    return { ok: false, error: "Task isn't in the active project." };
+  }
+  if (task.status === "done" || task.status === "failed" || task.status === "cancelled") {
+    return { ok: false, error: `Task is already ${task.status}.` };
+  }
+  updateTask(task.id, {
+    status: "done",
+    error_message: null,
+  });
+  revalidatePath(`/agents`, "layout");
+  revalidatePath(`/tasks`, "layout");
+  return { ok: true };
+}

@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getProject } from "@/server/db/projects";
-import { listCronsForProject } from "@/server/openclaw/crons";
+import { listCronsForProject } from "@/server/scheduler/display";
 import {
   annotateOccurrencesWithRunStatus,
   expandSchedule,
-} from "@/server/openclaw/cron-schedule";
+} from "@/server/scheduler/display";
 import { ScheduleCronDialog } from "@/components/schedule-cron-dialog";
 import {
   CronCalendar,
@@ -115,8 +115,7 @@ export default async function CronsPage({
           <h1 className="text-2xl font-semibold tracking-tight">Crons</h1>
           <p className="text-sm text-muted-foreground">
             Project <span className="font-mono">{project.slug}</span> ·{" "}
-            {totalActive} active{totalDisabled > 0 ? ` · ${totalDisabled} disabled` : ""} ·{" "}
-            backed by OpenClaw
+            {totalActive} active{totalDisabled > 0 ? ` · ${totalDisabled} disabled` : ""}
           </p>
         </div>
         <ScheduleCronDialog projectSlug={project.slug} />
@@ -125,7 +124,7 @@ export default async function CronsPage({
       {error && (
         <Card>
           <CardContent className="py-6 text-sm">
-            <p className="font-medium text-destructive">Could not reach OpenClaw.</p>
+            <p className="font-medium text-destructive">Could not load crons.</p>
             <p className="mt-1 text-xs text-muted-foreground">{error}</p>
             <p className="mt-2 text-xs">
               Run <code className="rounded bg-muted px-1.5 py-0.5">notfair-cmo doctor</code> for help.

@@ -1,21 +1,16 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { openclaw } from "@/server/openclaw/cli";
-import { listAllAgents } from "@/server/openclaw/gateway-rpc";
+import { stat } from "node:fs/promises";
 import {
   initProgress,
   updateStep,
   type ProgressStep,
 } from "@/server/onboarding/provisioning-progress";
 import { readAgentMeta, writeAgentMeta } from "@/server/agent-meta";
-import {
-  cleanupLegacyOrchestrationRows,
-  ensureOrchestrationMcpInstalled,
-} from "@/server/mcp-server/registration";
-import { listProjects } from "@/server/db/projects";
+import { provisionAgent, workspaceDirFor as agentWorkspaceDirFor } from "@/server/agents/provisioning";
+import { getProject } from "@/server/db/projects";
 import { getOrchestrationSkill } from "@/server/skills/orchestration-skill";
 import { readProjectBrief } from "@/server/onboarding/project-brief";
+import { DEFAULT_HARNESS_ADAPTER } from "@/server/adapters/registry";
+import { registerOrchestrationForAgent } from "@/server/mcp-server/registration";
 
 /**
  * Role-specific behavior for the CMO. Concise — the procedural how-to
@@ -323,356 +318,187 @@ export async function ensureProjectAgents(
 
   // Publish per-template progress so the onboarding setup screen can
   // render a live "Setting up CMO… / Setting up Google Ads agent…"
-  // checklist instead of a single opaque spinner. The "gateway" row
-  // covers the snapshot-warm-up that happens after the openclaw rows
-  // are written.
-  const progressSteps: ProgressStep[] = [
-    ...templates.map<ProgressStep>((t) => ({
-      key: t.key,
-      label: `Setting up ${t.display_name}${t.key === "cmo" ? "" : " specialist"}`,
-      status: "pending",
-    })),
-    {
-      key: "gateway",
-      label: "Connecting agents to gateway",
-      status: "pending",
-    },
-  ];
+  // checklist instead of a single opaque spinner.
+  const progressSteps: ProgressStep[] = templates.map<ProgressStep>((t) => ({
+    key: t.key,
+    label: `Setting up ${t.display_name}${t.key === "cmo" ? "" : " specialist"}`,
+    status: "pending",
+  }));
   initProgress(project_slug, progressSteps);
+
+  // Adapter for this project (chosen at onboarding). All harness-specific
+  // workspace writes route through it.
+  const project = getProject(project_slug);
+  const harnessAdapter = project?.harness_adapter ?? DEFAULT_HARNESS_ADAPTER;
+
+  // Project brief is shared across every agent in the project; read once.
+  const brief = await readProjectBrief(project_slug).catch(() => null);
+  const skill = getOrchestrationSkill();
 
   for (const template of templates) {
     updateStep(project_slug, template.key, { status: "in_progress" });
-    // Resolve the personal name FIRST. The agent_id encodes it, so this
-    // value drives both the OpenClaw backend name and the URL slug.
     const personalName = names?.[template.key] ?? template.default_name;
     const agentId = agentNameFor(project_slug, template.key, personalName);
-    const workspaceAbs = workspaceDirFor(agentId);
     const already = await agentExists(agentId);
-    if (already) {
-      // Idempotently refresh the IDENTITY.md so prompt edits propagate to
-      // existing agents without forcing the user to delete + recreate.
-      await writeIdentityFile(workspaceAbs, template, project_slug, agentId);
-      // Read any existing meta so we PRESERVE the previously-chosen name
-      // (immutable per the agent model). Only when no sidecar exists yet
-      // do we fall back to the onboarding `names` map / template default.
-      const existing = readAgentMeta(agentId);
-      const finalName = existing?.name ?? personalName;
-      await writeAgentMeta({
-        agent_id: agentId,
-        project_slug,
-        name: finalName,
-        template_key: template.key,
-        created_at: existing?.created_at ?? new Date().toISOString(),
-      });
-      existed.push(agentId);
-      updateStep(project_slug, template.key, { status: "done" });
-      continue;
-    }
+
     try {
-      // We deliberately do NOT pass --model. OpenClaw applies its
-      // agents.defaults.model config (primary + fallbacks chain) when no model
-      // is specified. Overriding only the primary string would strip the user's
-      // configured fallback list and reintroduce single-point-of-failure
-      // behavior on provider cooldowns. The template.model field stays in
-      // metadata for documentation; future versions can wire a multi-model
-      // override once `openclaw agents add` supports it.
-      await openclaw([
-        "agents",
-        "add",
-        agentId,
-        "--non-interactive",
-        "--workspace",
-        workspaceAbs,
-      ]);
-      await writeIdentityFile(workspaceAbs, template, project_slug, agentId);
-      await writeAgentMeta({
-        agent_id: agentId,
+      const identityMd = renderIdentity({
+        template,
         project_slug,
-        name: personalName,
-        template_key: template.key,
-        created_at: new Date().toISOString(),
+        agent_id: agentId,
+        skill,
+        brief,
       });
-      created.push(agentId);
+      await provisionAgent({
+        projectSlug: project_slug,
+        agentId,
+        displayName: personalName,
+        templateKey: template.key,
+        identityMd,
+        skillMd: skill,
+        projectMd: brief ?? undefined,
+        harnessAdapter,
+      });
+      // Wire notfair-orchestration MCP for this agent so create_task /
+      // submit_task_status / request_approval etc. are callable. Best-effort.
+      try {
+        await registerOrchestrationForAgent(project_slug, agentId);
+      } catch (err) {
+        console.warn(
+          `[provision] orchestration MCP registration failed for ${agentId}:`,
+          err,
+        );
+      }
+      // Also wire any external catalog MCPs the project already has tokens
+      // for (e.g. Google Ads was connected before this agent was created).
+      // Without this, a new agent in an established project sees the
+      // orchestration MCP but not the catalog ones the others can see.
+      try {
+        const { listProjectMcpTokens } = await import("@/server/mcp/tokens");
+        const { registerCatalogMcpForAgent } = await import(
+          "@/server/mcp-server/registration"
+        );
+        const tokens = listProjectMcpTokens(project_slug);
+        for (const t of tokens) {
+          await registerCatalogMcpForAgent(project_slug, t.server_name, agentId);
+        }
+      } catch (err) {
+        console.warn(
+          `[provision] catalog MCP registration failed for ${agentId}:`,
+          err,
+        );
+      }
+      if (already) {
+        const existing = readAgentMeta(agentId);
+        const finalName = existing?.name ?? personalName;
+        await writeAgentMeta({
+          agent_id: agentId,
+          project_slug,
+          name: finalName,
+          template_key: template.key,
+          created_at: existing?.created_at ?? new Date().toISOString(),
+        });
+        existed.push(agentId);
+      } else {
+        await writeAgentMeta({
+          agent_id: agentId,
+          project_slug,
+          name: personalName,
+          template_key: template.key,
+          created_at: new Date().toISOString(),
+        });
+        created.push(agentId);
+      }
       updateStep(project_slug, template.key, { status: "done" });
     } catch (err) {
-      // Surface but don't crash the loop; partial provisioning recoverable on retry.
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Failed to create agent ${agentId}:`, err);
+      console.error(`Failed to provision agent ${agentId}:`, err);
       failed.push({ name: agentId, error: message });
-      updateStep(project_slug, template.key, {
-        status: "failed",
-        error: message,
-      });
+      updateStep(project_slug, template.key, { status: "failed", error: message });
     }
   }
 
-  // After provisioning, the openclaw config file has the new agent rows
-  // but the gateway daemon's pinned runtime snapshot lags by a beat —
-  // sending chat.send during that window hits an INVALID_REQUEST
-  // "Agent '<id>' no longer exists in configuration". Wait until the
-  // gateway's agents.list reports every newly-created id so the kickoff
-  // path immediately after this (createProjectForOnboardingAction's
-  // startTaskIfProposed) finds a warm gateway. Best-effort: a timeout
-  // here doesn't block provisioning — runTaskKickoffServerSide also has
-  // retry-on-this-error as a second line of defense.
-  if (created.length > 0) {
-    updateStep(project_slug, "gateway", { status: "in_progress" });
-    await waitForGatewayToSeeAgents(created);
-    updateStep(project_slug, "gateway", { status: "done" });
-  } else {
-    updateStep(project_slug, "gateway", { status: "done" });
-  }
-
-  // Register the orchestration MCP server with OpenClaw — once, globally.
-  // Tools are project-scoped via a required `project_slug` argument on every
-  // call, so a single registration serves every project + every agent in
-  // this install. ensureOrchestrationMcpInstalled checks the existing row
-  // first and is a no-op when already correct.
-  //
-  // Also opportunistically prune the legacy per-project rows we wrote
-  // before going global. Idempotent — does nothing on fresh installs.
-  //
-  // Failure is non-fatal: agents fall back to the legacy text-block protocol
-  // (still parsed server-side in process-blocks.ts).
-  try {
-    const r = await ensureOrchestrationMcpInstalled();
-    if (!r.ok) {
-      console.error(`[provision] orchestration MCP install failed: ${r.error}`);
-    }
-    const allSlugs = listProjects({ includeArchived: true }).map((p) => p.slug);
-    await cleanupLegacyOrchestrationRows(allSlugs);
-  } catch (err) {
-    console.error("[provision] orchestration MCP install threw:", err);
-  }
+  // Adapter-specific MCP registration for the notfair-orchestration server
+  // happens in src/server/mcp-server/registration.ts now (called from the
+  // onboarding/provision routes). Schema-side scaffolding only here.
 
   return { created, existed, failed };
 }
 
 /**
- * Poll the gateway's `agents.list` until every newly-provisioned id shows
- * up (or the timeout expires). Closes the post-`openclaw agents add` race
- * where the runtime config snapshot hasn't caught up to the on-disk
- * config file yet, so chat.send hits "Agent '<id>' no longer exists in
- * configuration".
+ * Render the full IDENTITY.md body for an agent. Pure — caller writes it via
+ * the adapter so the harness sees the file under whichever name it expects
+ * (CLAUDE.md for Claude Code, AGENTS.md for Codex).
  */
-async function waitForGatewayToSeeAgents(
-  expected: string[],
-  opts: { timeoutMs?: number; intervalMs?: number } = {},
-): Promise<void> {
-  const timeoutMs = opts.timeoutMs ?? 15_000;
-  const intervalMs = opts.intervalMs ?? 500;
-  const deadline = Date.now() + timeoutMs;
-  const want = new Set(expected);
-  while (Date.now() < deadline) {
-    try {
-      const list = await listAllAgents();
-      const seen = new Set(list.agents.map((a) => a.id));
-      if ([...want].every((id) => seen.has(id))) return;
-    } catch (err) {
-      // Transient — gateway may be momentarily unreachable during config
-      // rewrites. Fall through to the sleep + retry.
-      console.warn(
-        `[provision] gateway agents.list probe failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  console.warn(
-    `[provision] gateway didn't surface all new agents within ${timeoutMs}ms; kickoffs will rely on the retry-on-stale-snapshot path`,
-  );
-}
+function renderIdentity(input: {
+  template: AgentTemplate;
+  project_slug: string;
+  agent_id: string;
+  skill: string;
+  brief: string | null;
+}): string {
+  const identityBlock = `\n## Your runtime identity\n\nWhen calling notfair-orchestration MCP tools, pass these exact values:\n\n- \`project_slug\`: \`${input.project_slug}\`\n- \`agent_id\`: \`${input.agent_id}\`\n\nDo NOT invent other values. Every orchestration tool call requires both.\n`;
+  const projectContextSection = input.brief
+    ? `\n## Project context\n\nShared across every agent in this project — derived during onboarding\nand kept in sync via the \`set_project_brief\` MCP tool. Treat this as\nthe authoritative description of who the user is and what they sell.\n\n${input.brief.trim()}\n`
+    : "";
+  return `# ${input.template.display_name}
 
-function workspaceDirFor(name: string): string {
-  const dataDir = process.env.NOTFAIR_CMO_DATA_DIR ?? join(homedir(), ".notfair-cmo");
-  return join(dataDir, "agents", name);
-}
-
-async function writeIdentityFile(
-  workspaceAbs: string,
-  template: AgentTemplate,
-  project_slug?: string,
-  agent_id?: string,
-): Promise<void> {
-  try {
-    await mkdir(workspaceAbs, { recursive: true });
-
-    // Per-agent identity block — every MCP tool requires the agent to pass
-    // its own `project_slug` and `agent_id`, so pin both right at the top
-    // of the prompt so the model can fill them into tool calls without
-    // guessing. Stable plain text so it survives model version changes.
-    const identityBlock = project_slug && agent_id
-      ? `\n## Your runtime identity\n\nWhen calling notfair-orchestration MCP tools, pass these exact values:\n\n- \`project_slug\`: \`${project_slug}\`\n- \`agent_id\`: \`${agent_id}\`\n\nDo NOT invent other values. Every orchestration tool call requires both.\n`
-      : "";
-
-    // Shared, role-agnostic procedural knowledge. Paperclip-style: every
-    // agent loads the same skill so MCP tool semantics, state machine,
-    // and cron CLI live in one source of truth. Edits to the skill
-    // propagate on next provision.
-    const skill = getOrchestrationSkill();
-
-    // Write SKILL.md to the workspace too — purely cosmetic (OpenClaw
-    // reads IDENTITY.md as the agent's prompt source) but useful for
-    // humans inspecting an agent's workspace to confirm the skill is
-    // in lockstep across all three agents.
-    await writeFile(join(workspaceAbs, "SKILL.md"), skill, "utf8");
-
-    // Project context: PROJECT.md is the single source of truth for "what
-    // is this company / project". Written by the CMO during the first
-    // onboarding task via `set_project_brief`. We inline it into IDENTITY.md
-    // so every agent in the project (CMO + specialists) shares the same
-    // context, and write a sidecar PROJECT.md copy so humans inspecting
-    // the workspace see what the agent has. The canonical file lives at
-    // ~/.notfair-cmo/projects/<slug>/PROJECT.md.
-    let projectContextSection = "";
-    if (project_slug) {
-      const brief = await readProjectBrief(project_slug);
-      if (brief !== null) {
-        await writeFile(join(workspaceAbs, "PROJECT.md"), brief, "utf8");
-        projectContextSection = `\n## Project context\n\nShared across every agent in this project — derived during onboarding\nand kept in sync via the \`set_project_brief\` MCP tool. Treat this as\nthe authoritative description of who the user is and what they sell.\n\n${brief.trim()}\n`;
-      }
-    }
-
-    // IDENTITY.md = role-specific bits on top, shared skill verbatim
-    // below a separator. The separator makes it obvious which half is
-    // per-agent and which is shared when a human reads the file.
-    const body = `# ${template.display_name}
-
-${template.description}
+${input.template.description}
 ${identityBlock}${projectContextSection}
-${template.system_prompt}
+${input.template.system_prompt}
 
 ---
 
-${skill}`;
-    await writeFile(join(workspaceAbs, "IDENTITY.md"), body, "utf8");
-
-    // OpenClaw seeds every agent workspace with generic AGENTS.md / SOUL.md
-    // / TOOLS.md / USER.md / HEARTBEAT.md boilerplate (~11 KB total) aimed
-    // at general-purpose assistants — workspace memory rituals, camera/SSH
-    // tool notes, user-profile templates. None of it applies to a marketing
-    // CMO/specialist whose identity already lives in IDENTITY.md, and all
-    // of it inflates every model call's system prompt. Overwrite with thin
-    // pointer stubs after `openclaw agents add` runs so the runtime still
-    // finds the files but the injected bytes drop to ~1 KB.
-    await writeMinimalWorkspaceStubs(workspaceAbs);
-  } catch (err) {
-    console.error(`Could not write IDENTITY.md for ${template.key}:`, err);
-  }
-}
-
-const STUB_AGENTS_MD = `# Workspace
-
-This agent's role and operating rules live in IDENTITY.md (loaded
-automatically). The other files in this directory exist only so the
-OpenClaw runtime finds the names it expects — they're intentionally
-empty for prompt-efficiency.
-`;
-
-const STUB_SOUL_MD = `# Personality
-
-Be terse, opinionated, and useful. Skip filler ("Great question!",
-"I'd be happy to help"). Lead with the point — a dollar figure, a
-specific gap, a recommendation. Have a point of view; the user can
-push back if they disagree.
-`;
-
-const STUB_TOOLS_MD = `# Local Notes
-
-Empty by design. Domain tool usage lives in IDENTITY.md; runtime
-infrastructure (cameras, SSH, TTS) does not apply to this agent.
-`;
-
-const STUB_USER_MD = `# About the user
-
-A solo marketer running their own business on the notfair-cmo
-platform. They pay attention to dollar figures and concrete next
-steps. Build context here as you learn it across sessions.
-`;
-
-const STUB_HEARTBEAT_MD = `# Heartbeat
-
-Empty by design — heartbeats are disabled. Cron-driven check-ins
-arrive as normal "(task assignment)" turns instead.
-`;
-
-/**
- * Overwrite the OpenClaw-default workspace files with minimal stubs.
- *
- * Why: `openclaw agents add` seeds each workspace with five generic
- * files aimed at general-purpose assistants (camera/SSH tool notes,
- * memory-discipline lectures, user-profile templates). That's ~11 KB
- * of irrelevant boilerplate injected into every model call. Replacing
- * them with sub-300-char stubs that still satisfy whatever runtime
- * filesystem expectations OpenClaw has cuts the system prompt by
- * roughly that amount.
- *
- * Idempotent: re-running on an existing workspace just rewrites the
- * stubs. We don't delete the files because OpenClaw may probe for them
- * by name during session startup.
- */
-async function writeMinimalWorkspaceStubs(workspaceAbs: string): Promise<void> {
-  await Promise.all([
-    writeFile(join(workspaceAbs, "AGENTS.md"), STUB_AGENTS_MD, "utf8"),
-    writeFile(join(workspaceAbs, "SOUL.md"), STUB_SOUL_MD, "utf8"),
-    writeFile(join(workspaceAbs, "TOOLS.md"), STUB_TOOLS_MD, "utf8"),
-    writeFile(join(workspaceAbs, "USER.md"), STUB_USER_MD, "utf8"),
-    writeFile(join(workspaceAbs, "HEARTBEAT.md"), STUB_HEARTBEAT_MD, "utf8"),
-  ]);
+${input.skill}`;
 }
 
 /**
- * Re-write IDENTITY.md (and the PROJECT.md sidecar) for every agent in a
- * project, picking up the current canonical PROJECT.md. Called by the
- * `set_project_brief` MCP handler after writing the canonical file so
- * specialists get the updated project context without waiting for the
- * next ensureProjectAgents pass.
- *
- * Best-effort per agent: a write failure on one agent is logged but does
- * not abort the others — the new brief is at least canonical on disk, and
- * the next ensureProjectAgents will catch up.
+ * Re-render IDENTITY.md / SKILL.md / PROJECT.md for every agent in a project
+ * via the project's harness adapter. Called by the `set_project_brief` MCP
+ * handler after the canonical PROJECT.md is updated, so specialists pick up
+ * the new context without waiting for the next ensureProjectAgents pass.
  */
 export async function syncProjectBriefToAgents(
   project_slug: string,
 ): Promise<{ synced: string[]; failed: Array<{ name: string; error: string }> }> {
-  // Lazy import to avoid a static cycle: agent-meta -> agent-templates.
   const { listProjectAgents } = await import("./agent-meta");
   const synced: string[] = [];
   const failed: Array<{ name: string; error: string }> = [];
 
+  const project = getProject(project_slug);
+  const harnessAdapter = project?.harness_adapter ?? DEFAULT_HARNESS_ADAPTER;
+  const brief = await readProjectBrief(project_slug).catch(() => null);
+  const skill = getOrchestrationSkill();
   const entries = await listProjectAgents(project_slug);
+
   for (const entry of entries) {
     if (!entry.template_key) {
-      // Custom / cloned agent — we don't know its template, but it still
-      // has an IDENTITY.md we shouldn't overwrite blindly. Just refresh
-      // the sidecar PROJECT.md so a human inspecting sees the new brief.
-      try {
-        const workspaceAbs = workspaceDirFor(entry.agent_id);
-        const { readProjectBrief } = await import("./onboarding/project-brief");
-        const brief = await readProjectBrief(project_slug);
-        if (brief !== null) {
-          await mkdir(workspaceAbs, { recursive: true });
-          await writeFile(join(workspaceAbs, "PROJECT.md"), brief, "utf8");
-          synced.push(entry.agent_id);
-        }
-      } catch (err) {
-        failed.push({
-          name: entry.agent_id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+      synced.push(entry.agent_id);
       continue;
     }
     const template = TEMPLATES.find((t) => t.key === entry.template_key);
     if (!template) {
-      failed.push({
-        name: entry.agent_id,
-        error: `Unknown template '${entry.template_key}'`,
-      });
+      failed.push({ name: entry.agent_id, error: `Unknown template '${entry.template_key}'` });
       continue;
     }
     try {
-      const workspaceAbs = workspaceDirFor(entry.agent_id);
-      await writeIdentityFile(workspaceAbs, template, project_slug, entry.agent_id);
+      const identityMd = renderIdentity({
+        template,
+        project_slug,
+        agent_id: entry.agent_id,
+        skill,
+        brief,
+      });
+      await provisionAgent({
+        projectSlug: project_slug,
+        agentId: entry.agent_id,
+        displayName: entry.name,
+        templateKey: entry.template_key,
+        identityMd,
+        skillMd: skill,
+        projectMd: brief ?? undefined,
+        harnessAdapter,
+      });
       synced.push(entry.agent_id);
     } catch (err) {
       failed.push({
@@ -685,12 +511,15 @@ export async function syncProjectBriefToAgents(
   return { synced, failed };
 }
 
+/**
+ * Check if an agent workspace has been provisioned. Replaces the OpenClaw
+ * `agents list` grep — we now own the workspace dir, so a stat suffices.
+ */
 export async function agentExists(name: string): Promise<boolean> {
   try {
-    // `agents list` doesn't currently take a name filter, so list-all and grep.
-    // V1 acceptable; revisit if list grows large.
-    const out = (await openclaw(["agents", "list"], { json: false })) as string;
-    return out.includes(name);
+    const dir = agentWorkspaceDirFor(name);
+    const s = await stat(dir);
+    return s.isDirectory();
   } catch {
     return false;
   }

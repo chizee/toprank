@@ -4,9 +4,9 @@ import { randomBytes, createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getActiveProject } from "@/server/active-project";
-import { mcpSpecByKey, storedMcpKey } from "@/server/mcp-catalog";
+import { mcpSpecByKey } from "@/server/mcp-catalog";
 import { setPending } from "@/server/mcp-pending";
-import { disconnectMcp as runDisconnect } from "@/server/mcp-state";
+import { disconnectMcp as runDisconnect } from "@/server/mcp/state";
 
 export type StartMcpConnectResult =
   | { ok: true; authorize_url: string }
@@ -35,7 +35,6 @@ export async function startMcpConnect(input: {
   if (!project) {
     return { ok: false, error: "No active project. Pick one before connecting an MCP." };
   }
-  const stored_key = storedMcpKey(project.slug, spec.key);
 
   let resolved: ResolvedAuthServer;
   try {
@@ -63,7 +62,6 @@ export async function startMcpConnect(input: {
 
   setPending(state, {
     catalog_key: spec.key,
-    stored_key,
     display_name: spec.display_name,
     resource_url: spec.resource_url,
     issuer: resolved.issuer,
@@ -96,9 +94,8 @@ export async function disconnectMcpAction(input: {
   if (!project) {
     return { ok: false, error: "No active project to disconnect from." };
   }
-  const stored_key = storedMcpKey(project.slug, input.mcp_key);
   try {
-    await runDisconnect(stored_key);
+    await runDisconnect(project.slug, input.mcp_key);
   } catch (err) {
     return { ok: false, error: humanError(err) };
   }
@@ -125,9 +122,8 @@ export async function listMcpToolsAction(input: {
   if (!project) {
     return { ok: false, error: "No active project." };
   }
-  const stored_key = storedMcpKey(project.slug, input.mcp_key);
   const { getMcpConfig, mcpRpc } = await import("@/server/mcp/rpc");
-  const cfg = await getMcpConfig(stored_key);
+  const cfg = getMcpConfig(project.slug, input.mcp_key);
   if (!cfg) {
     return { ok: false, error: "MCP is not configured for this project." };
   }

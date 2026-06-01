@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getActiveProject } from "@/server/active-project";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
-import { readTranscriptTail } from "@/server/openclaw/transcript-tail";
+import { readTranscriptTail } from "@/server/sessions/transcript-tail";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,6 +46,7 @@ export async function GET(
   const validOffset = Number.isFinite(byteOffset) && byteOffset >= 0 ? byteOffset : 0;
 
   const { events, byteOffset: newOffset, fileSize } = readTranscriptTail(
+    project.slug,
     resolved.agent_id,
     threadId,
     validOffset,

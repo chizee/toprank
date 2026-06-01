@@ -264,6 +264,7 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
                 top-level files. Skim only, not a code review.
               </p>
             </div>
+            <HarnessPicker disabled={isPending} />
             {errorMessage && (
               <p role="alert" className="text-sm text-destructive">
                 {errorMessage}
@@ -277,6 +278,75 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
         </CardContent>
       </Card>
     </>
+  );
+}
+
+// ── Harness picker ─────────────────────────────────────────────────
+//
+// Two recommended adapters: Claude Code (default) and Codex. Persisted on
+// the project row so different projects can use different harnesses. The
+// chosen CLI must be on PATH when chats run — adapter testEnvironment is
+// surfaced via the doctor command for diagnostic feedback.
+
+function HarnessPicker({ disabled }: { disabled: boolean }) {
+  const [value, setValue] = useState<"claude-code-local" | "codex-local">(
+    "claude-code-local",
+  );
+  const options: Array<{
+    id: "claude-code-local" | "codex-local";
+    label: string;
+    description: string;
+  }> = [
+    {
+      id: "claude-code-local",
+      label: "Claude Code",
+      description: "Uses your local `claude` CLI. Recommended.",
+    },
+    {
+      id: "codex-local",
+      label: "Codex",
+      description: "Uses your local `codex` CLI.",
+    },
+  ];
+  return (
+    <div className="rounded-md border border-dashed bg-muted/30 p-3 space-y-3">
+      <div className="space-y-1">
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+          AI agent runtime
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Pick which local CLI runs your agents. You can have different
+          projects on different harnesses.
+        </p>
+      </div>
+      <input type="hidden" name="harness_adapter" value={value} />
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            disabled={disabled}
+            onClick={() => setValue(opt.id)}
+            className={cn(
+              "flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors",
+              value === opt.id
+                ? "border-foreground bg-background"
+                : "border-border bg-background/40 hover:bg-background/80",
+              disabled && "opacity-60",
+            )}
+            aria-pressed={value === opt.id}
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="text-sm font-medium text-foreground">{opt.label}</span>
+              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                Recommended
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">{opt.description}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -5,11 +5,10 @@ import {
   buildPendingSessionKey,
   findSessionBySessionId,
   listSessionsForAgent,
-} from "@/server/openclaw/sessions";
-import { classifySessions } from "@/server/openclaw/thread-origins";
-import { storedMcpKey } from "@/server/mcp-catalog";
-import { getMcpStatus } from "@/server/mcp-state";
-import { readTranscriptTail } from "@/server/openclaw/transcript-tail";
+} from "@/server/sessions/view";
+import { classifySessions } from "@/server/sessions/view";
+import { getMcpStatus } from "@/server/mcp/state";
+import { readTranscriptTail } from "@/server/sessions/transcript-tail";
 import { LiveTranscript } from "@/components/live-transcript";
 import { GoogleAdsMcpBanner } from "@/components/google-ads-mcp-banner";
 import { McpFlashBanner } from "@/components/mcp-flash-banner";
@@ -35,17 +34,15 @@ export default async function AgentChatThreadPage({
   const resolved = await resolveAgentBySlug(project.slug, agentSlug);
   if (!resolved) notFound();
   const agentFullId = resolved.agent_id;
-  const allSessions = listSessionsForAgent(agentFullId);
-  const existing = findSessionBySessionId(agentFullId, threadId);
+  const allSessions = listSessionsForAgent(project.slug, agentFullId);
+  const existing = findSessionBySessionId(project.slug, agentFullId, threadId);
 
-  // Pull the full transcript slice (text, tool calls, tool results) so the
-  // chat page renders the same rich JSONL view the task workspace shows.
-  // The sessionKey comes from OpenClaw's index when the thread already
-  // exists; pending threads get a derived key tied to the URL threadId.
+  // sessionKey is now just the label string (the notfair-cmo `sessions.id`
+  // is opaque to the UI; the label drives URLs + transcript lookups).
   const sessionKey =
     existing?.sessionKey ?? buildPendingSessionKey(agentFullId, threadId);
   const { events: initialEvents, byteOffset: initialByteOffset } =
-    readTranscriptTail(agentFullId, threadId, 0);
+    readTranscriptTail(project.slug, agentFullId, threadId, 0);
 
   // Classify existing sessions by origin (task / cron / chat) so the
   // dropdown can show the task display_id, cron name, or first-message
@@ -82,7 +79,7 @@ export default async function AgentChatThreadPage({
   // Connections page — so a slow upstream can't gate the chat render.
   const googleAdsMcpStatus =
     resolved.template_key === "google_ads"
-      ? await getMcpStatus(storedMcpKey(project.slug, "notfair-googleads"))
+      ? await getMcpStatus(project.slug, "notfair-googleads")
       : null;
 
   // Free-form chat never auto-kickoffs. Task-driven kickoffs happen in the

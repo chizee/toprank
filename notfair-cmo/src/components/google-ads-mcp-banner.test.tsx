@@ -19,7 +19,7 @@ vi.mock("sonner", () => ({
 }));
 
 import { GoogleAdsMcpBanner } from "./google-ads-mcp-banner";
-import type { McpRuntimeStatus } from "@/server/mcp-state";
+import type { McpRuntimeStatus } from "@/server/mcp/state";
 
 const SLUG = "acme";
 

@@ -13,6 +13,7 @@ import type { AgentTemplateKey } from "@/server/agent-templates";
 import { colorForRole } from "@/lib/agent-colors";
 import { cn } from "@/lib/utils";
 import { projectHref } from "@/lib/project-href";
+import { useLiveCounts } from "./live-counts-context";
 
 type AgentNavEntry = {
   /** Stable key for React, e.g. the agent_id. */
@@ -32,9 +33,10 @@ type Props = {
   projectSlug: string;
   agents: AgentNavEntry[];
   /**
-   * agent_id → in-flight task count. Drives the live-dot + count badge on
-   * each row. Stale by up to the server-component refresh interval; that's
-   * fine for an "I have work" hint.
+   * Optional server-side initial map (agent_id → in-flight count) used
+   * for the first paint only. After mount, live values come from
+   * LiveCountsContext so we don't re-render the parent server component
+   * just to flip a number.
    */
   inFlightCounts?: Record<string, number>;
 };
@@ -47,6 +49,11 @@ const TEMPLATE_ICONS: Record<AgentTemplateKey, LucideIcon> = {
 
 export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
   const pathname = usePathname();
+  // Live counts override the server-side initial map so the badge
+  // numbers update without a server re-render. Initial values keep
+  // first paint correct.
+  const live = useLiveCounts();
+  const counts: Record<string, number> = { ...inFlightCounts, ...live.agents };
 
   return (
     <SidebarMenu>
@@ -60,7 +67,7 @@ export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
         const isActive =
           pathname === agentBase || pathname?.startsWith(`${agentBase}/`);
         const Icon = a.template_key ? TEMPLATE_ICONS[a.template_key] ?? Bot : Bot;
-        const liveCount = inFlightCounts[a.key] ?? 0;
+        const liveCount = counts[a.key] ?? 0;
         const rolePalette = a.template_key ? colorForRole(a.template_key) : null;
         return (
           <SidebarMenuItem key={a.key}>

@@ -21,6 +21,12 @@ export type Project = {
    */
   website_url: string | null;
   codebase_path: string | null;
+  /**
+   * Which harness adapter runs this project's agents. Picked at
+   * onboarding. "claude-code-local" is the default and recommended;
+   * "codex-local" runs through OpenAI's Codex CLI instead.
+   */
+  harness_adapter: "claude-code-local" | "codex-local";
 };
 
 export type TaskStatus =

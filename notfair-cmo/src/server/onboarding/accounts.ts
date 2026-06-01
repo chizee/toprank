@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 
 import { getMcpConfig, mcpRpc } from "@/server/mcp/rpc";
-import { storedMcpKey } from "@/server/mcp-catalog";
 import { getProject, setProjectGoogleAdsAccount } from "@/server/db/projects";
 import type { Project } from "@/types";
 
@@ -46,7 +45,7 @@ const LIST_TIMEOUT_MS = 8_000;
 export async function listGoogleAdsAccounts(
   project_slug: string,
 ): Promise<ListAccountsResult> {
-  const cfg = await getMcpConfig(storedMcpKey(project_slug, MCP_CATALOG_KEY));
+  const cfg = getMcpConfig(project_slug, MCP_CATALOG_KEY);
   if (!cfg) {
     return {
       ok: false,

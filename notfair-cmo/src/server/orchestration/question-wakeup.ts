@@ -1,11 +1,12 @@
+import { getProject } from "@/server/db/projects";
+import { requireAdapter } from "@/server/adapters/registry";
+import { workspaceDirFor } from "@/server/agents/provisioning";
 import {
-  buildPendingSessionKey,
-  findSessionBySessionId,
-} from "@/server/openclaw/sessions";
-import { streamChatViaGateway } from "@/server/openclaw/gateway-client";
-import {
-  parseQuestionOptions,
-} from "@/server/db/questions";
+  appendTranscriptEvent,
+  getOrCreateSession,
+  touchSession,
+} from "@/server/sessions";
+import { parseQuestionOptions } from "@/server/db/questions";
 import { getTask, setTaskThreadIfMissing, unblockTask } from "@/server/db/tasks";
 import type { Question } from "@/types";
 
@@ -55,23 +56,43 @@ export async function wakeTaskOnQuestionResolution(question: Question): Promise<
     return;
   }
 
-  const known = findSessionBySessionId(task.agent_id, threadId);
-  const sessionKey =
-    known?.sessionKey ?? buildPendingSessionKey(task.agent_id, threadId);
+  const project = getProject(task.project_slug);
+  if (!project) {
+    console.error(`[question-wakeup] project '${task.project_slug}' not found`);
+    return;
+  }
+  const adapter = requireAdapter(project.harness_adapter);
+  const session = getOrCreateSession({
+    project_slug: project.slug,
+    agent_id: task.agent_id,
+    label: threadId,
+    harness_adapter: project.harness_adapter,
+    task_id: task.id,
+  });
 
   const message = buildAnswerMessage(question);
+  appendTranscriptEvent(session.id, "user", { text: message, source: "question-wakeup" });
 
   try {
-    for await (const evt of streamChatViaGateway({
-      sessionKey,
-      sessionId: threadId,
+    for await (const evt of adapter.execute({
+      projectSlug: project.slug,
+      agentId: task.agent_id,
+      workspaceDir: workspaceDirFor(task.agent_id),
       message,
+      threadId: session.id,
+      harnessSessionId: session.harness_session_id,
     })) {
+      if (evt.kind === "session") {
+        touchSession(session.id, evt.harnessSessionId);
+        continue;
+      }
+      appendTranscriptEvent(session.id, evt.kind, evt);
       if (evt.kind === "error") throw new Error(evt.message);
     }
+    touchSession(session.id);
   } catch (err) {
     console.error(
-      `[question-wakeup] gateway stream failed for task ${task.id}:`,
+      `[question-wakeup] adapter stream failed for task ${task.id}:`,
       err,
     );
   }

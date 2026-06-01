@@ -35,7 +35,7 @@ export type WorkingPhase = {
   state: "done" | "active" | "failed";
 };
 
-export type WorkingMood = "waiting" | "tool" | "writing" | "wrapping";
+export type WorkingMood = "waiting" | "tool" | "writing" | "wrapping" | "ended";
 
 export function WorkingIndicator({
   agentDisplayName,
@@ -371,5 +371,18 @@ const MOOD_PALETTES: Record<WorkingMood, MoodPalette> = {
     chipRing: "ring-amber-500/30",
     accentText: "text-amber-700 dark:text-amber-300",
     beam: "hsl(38 92% 55%)",
+  },
+  ended: {
+    // Muted slate — visually static, no urgency. The aurora bar + dot
+    // heartbeat still animate per shared component, but the cold palette
+    // reads as "done, parked" rather than "actively working".
+    ring: "ring-slate-500/15",
+    dotBg: "bg-slate-500",
+    haloBg: "bg-slate-400/30",
+    chipBg: "bg-slate-500/10",
+    chipText: "text-slate-700 dark:text-slate-300",
+    chipRing: "ring-slate-500/30",
+    accentText: "text-slate-700 dark:text-slate-300",
+    beam: "hsl(215 16% 60%)",
   },
 };

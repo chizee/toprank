@@ -22,15 +22,14 @@ import {
 } from "@/server/agent-templates";
 import { startProvisioning } from "@/server/onboarding/provisioning-state";
 import { listProjectAgents, readAgentMeta } from "@/server/agent-meta";
-import { cascadeDeleteAgent, relocateAgent } from "@/server/actions/agents";
-import { listCronsForProject, disableCron } from "@/server/openclaw/crons";
+import { relocateAgent } from "@/server/actions/agents";
+import { listCronsForProject, disableCron } from "@/server/scheduler/display";
 import { logAgentAction } from "@/server/db/agent-actions";
 import {
+  cascadeDeleteProjectArtifacts,
   getProjectDeletionSummary,
   type ProjectDeletionSummary,
-} from "@/server/openclaw/project-delete";
-import { MCP_CATALOG, storedMcpKey } from "@/server/mcp-catalog";
-import { disconnectMcp } from "@/server/mcp-state";
+} from "@/server/agents/cascade-delete";
 import { clearProvisioning } from "@/server/onboarding/provisioning-state";
 
 export type ActionResult<T = void> =
@@ -97,6 +96,13 @@ export async function createProjectForOnboardingAction(
 
   const website_url = String(formData.get("website_url") ?? "").trim() || null;
   const codebase_path = String(formData.get("codebase_path") ?? "").trim() || null;
+  const harness_raw = String(formData.get("harness_adapter") ?? "").trim();
+  const { isHarnessAdapterId, DEFAULT_HARNESS_ADAPTER } = await import(
+    "@/server/adapters/registry"
+  );
+  const harness_adapter = isHarnessAdapterId(harness_raw)
+    ? harness_raw
+    : DEFAULT_HARNESS_ADAPTER;
 
   // Personal names for the team. Pre-filled with template defaults on the
   // client; we still read off the form rather than baking the defaults
@@ -111,7 +117,12 @@ export async function createProjectForOnboardingAction(
     ...(agent_name_google_ads ? { google_ads: agent_name_google_ads } : {}),
   } as Partial<Record<"cmo" | "google_ads" | "seo", string>>;
 
-  const result = createProject({ display_name, website_url, codebase_path });
+  const result = createProject({
+    display_name,
+    website_url,
+    codebase_path,
+    harness_adapter,
+  });
   if (!result.ok) return { ok: false, error: result.reason };
 
   // Mint the onboarding task SYNCHRONOUSLY — before provisioning kicks
@@ -446,71 +457,38 @@ export async function deleteProjectAction(
   const project = getProject(slug);
   if (!project) return { ok: false, error: `Project '${slug}' not found.` };
 
-  const deletedAgents: string[] = [];
+  const projectAgentEntries = await listProjectAgents(slug);
+  const deletedAgents: string[] = projectAgentEntries.map((a) => a.agent_id);
   const agentsFailed: Array<{ agentId: string; error: string }> = [];
 
-  // 1) Look up project crons once so we can hand each agent its own slice
-  //    (avoids N redundant lookups inside the shared helper).
-  let cronsByAgent = new Map<string, string[]>();
-  try {
-    const cronView = await listCronsForProject(slug);
-    for (const group of cronView.groups) {
-      for (const cron of group.crons) {
-        const arr = cronsByAgent.get(cron.agent_id) ?? [];
-        arr.push(cron.id);
-        cronsByAgent.set(cron.agent_id, arr);
-      }
-    }
-  } catch {
-    // Cron service unavailable; continue — cascadeDeleteAgent will skip cron
-    // cleanup when given an empty list.
-  }
-
-  // 2) Agents — single source of truth lives in cascadeDeleteAgent. Iterates
-  //    every agent the project actually has (templates + cloned/custom).
-  const projectAgentEntries = await listProjectAgents(slug);
+  // Count crons + MCP tokens upfront so the result shape stays informative.
   let cronsDeleted = 0;
-  let cronsFailed = 0;
-  for (const entry of projectAgentEntries) {
-    try {
-      const outcome = await cascadeDeleteAgent({
-        agent_id: entry.agent_id,
-        cronIds: cronsByAgent.get(entry.agent_id) ?? [],
-      });
-      deletedAgents.push(entry.agent_id);
-      cronsDeleted += outcome.crons_removed;
-      cronsFailed += outcome.crons_failed;
-    } catch (err) {
-      agentsFailed.push({
-        agentId: entry.agent_id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+  try {
+    const view = await listCronsForProject(slug);
+    cronsDeleted = view.groups.reduce((acc, g) => acc + g.crons.length, 0);
+  } catch {
+    // best-effort
+  }
+  const { listProjectMcpTokens } = await import("@/server/mcp/tokens");
+  const mcpsRevoked = listProjectMcpTokens(slug).length;
+  const mcpsFailed = 0;
+  const cronsFailed = 0;
+
+  // Single shot — drops every artifact tied to this project: agent workspace
+  // dirs, scheduled_jobs + runs, sessions + transcripts, mcp_tokens. Adapter
+  // MCP entries get unregistered too.
+  try {
+    await cascadeDeleteProjectArtifacts(slug);
+  } catch (err) {
+    console.error("[delete-project] cascade failed:", err);
+    agentsFailed.push({
+      agentId: "(project)",
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
-  // 3) Revoke per-project MCP connections (bearer tokens live in OpenClaw's
-  //    mcp config under `<slug>-<catalog-key>`). Per-MCP best-effort so one
-  //    unreachable MCP doesn't block the rest of the cascade.
-  let mcpsRevoked = 0;
-  let mcpsFailed = 0;
-  for (const spec of MCP_CATALOG) {
-    const key = storedMcpKey(slug, spec.key);
-    try {
-      await disconnectMcp(key);
-      mcpsRevoked++;
-    } catch (err) {
-      // disconnectMcp is already idempotent for "not configured" — anything
-      // hitting this path is a real openclaw-cli failure we want to surface.
-      const message = err instanceof Error ? err.message : String(err);
-      // "not found" / "unknown" responses are swallowed by disconnectMcp;
-      // anything else counts as a failure but doesn't abort delete.
-      console.warn(`[delete-project] failed to revoke MCP ${key}: ${message}`);
-      mcpsFailed++;
-    }
-  }
-
-  // 4) Drop the in-memory provisioning Promise so a re-created project with
-  //    the same slug starts fresh (and we don't leak the old Promise).
+  // Drop the in-memory provisioning Promise so a re-created project with the
+  // same slug starts fresh.
   clearProvisioning(slug);
 
   // 5) Canonical PROJECT.md directory at ~/.notfair-cmo/projects/<slug>/.

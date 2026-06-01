@@ -21,7 +21,7 @@ import {
   listMcpToolsAction,
 } from "@/server/actions/mcp";
 import type { McpSpec } from "@/server/mcp-catalog";
-import type { McpRuntimeStatus } from "@/server/mcp-state";
+import type { McpRuntimeStatus } from "@/server/mcp/state";
 import { McpToolsDialog } from "@/components/mcp-tools-dialog";
 
 type Props = {
@@ -226,8 +226,8 @@ function StatusDetail({ status }: { status: McpRuntimeStatus }) {
     case "not_configured":
       return (
         <p className="text-xs text-muted-foreground">
-          One click runs the OAuth flow against the issuer and saves the token to
-          your local OpenClaw config.
+          One click runs the OAuth flow against the issuer and saves the token
+          locally to this project.
         </p>
       );
   }

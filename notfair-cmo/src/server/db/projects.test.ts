@@ -467,6 +467,34 @@ describe("deleteProjectRow", () => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run("s1", "acme", "acme-cmo", "k", "0", "pending", "now", "now");
+      testDb
+        .prepare(
+          `INSERT INTO questions
+             (id, project_slug, agent_id, prompt, options_json, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run("q1", "acme", "acme-cmo", "ok?", "[]", "pending", "now");
+      testDb
+        .prepare(
+          `INSERT INTO mcp_tokens
+             (id, project_slug, server_name, account_label, access_token_enc, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run("m1", "acme", "notfair-googleads", "", "tok", "now", "now");
+      testDb
+        .prepare(
+          `INSERT INTO scheduled_jobs
+             (id, project_slug, agent_id, name, cron_expr, message, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run("j1", "acme", "acme-google-ads", "daily", "0 9 * * *", "go", 1, "now", "now");
+      testDb
+        .prepare(
+          `INSERT INTO sessions
+             (id, project_slug, agent_id, label, harness_adapter, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run("se1", "acme", "acme-google-ads", "main", "claude-code-local", "now", "now");
 
       // Pre-condition: every child table has a row keyed to acme.
       for (const table of [
@@ -476,6 +504,10 @@ describe("deleteProjectRow", () => {
         "oauth_tokens",
         "agent_actions",
         "sequence_runs",
+        "questions",
+        "mcp_tokens",
+        "scheduled_jobs",
+        "sessions",
       ]) {
         expect(
           testDb.prepare(`SELECT 1 FROM ${table} WHERE project_slug = ?`).get("acme"),
@@ -497,6 +529,10 @@ describe("deleteProjectRow", () => {
         "oauth_tokens",
         "agent_actions",
         "sequence_runs",
+        "questions",
+        "mcp_tokens",
+        "scheduled_jobs",
+        "sessions",
       ]) {
         expect(
           testDb.prepare(`SELECT 1 FROM ${table} WHERE project_slug = ?`).get("acme"),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MCP_CATALOG, mcpSpecByKey, storedMcpKey } from "./mcp-catalog";
+import { MCP_CATALOG, mcpSpecByKey } from "./mcp-catalog";
 
 describe("MCP_CATALOG", () => {
   it("contains at least one spec", () => {
@@ -57,28 +57,3 @@ describe("mcpSpecByKey", () => {
   });
 });
 
-describe("storedMcpKey", () => {
-  it("concatenates project slug + catalog key with a hyphen", () => {
-    expect(storedMcpKey("acme", "notfair-googleads")).toBe(
-      "acme-notfair-googleads",
-    );
-  });
-
-  it("preserves multi-segment project slugs", () => {
-    expect(storedMcpKey("acme-q4", "notfair-googleads")).toBe(
-      "acme-q4-notfair-googleads",
-    );
-  });
-
-  it("works with arbitrary catalog keys (not just ones in the catalog)", () => {
-    expect(storedMcpKey("proj", "arbitrary-thing")).toBe("proj-arbitrary-thing");
-  });
-
-  it("handles empty project slug (no validation here — that's the caller's job)", () => {
-    expect(storedMcpKey("", "notfair-googleads")).toBe("-notfair-googleads");
-  });
-
-  it("handles empty catalog key", () => {
-    expect(storedMcpKey("acme", "")).toBe("acme-");
-  });
-});

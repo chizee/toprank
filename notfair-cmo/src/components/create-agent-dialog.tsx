@@ -24,7 +24,7 @@ import {
 } from "@/server/actions/agents";
 import { slugify } from "@/lib/slug";
 import { projectHref } from "@/lib/project-href";
-import type { CloneAgentResult } from "@/server/openclaw/clone-agent";
+import type { CloneAgentResult } from "@/server/agents/clone";
 import { DisableSourceCronsDialog } from "./disable-source-crons-dialog";
 
 type Mode = "create" | "clone";
@@ -147,7 +147,7 @@ export function CreateAgentDialog({ open, onOpenChange, projectSlug }: Props) {
           <DialogHeader>
             <DialogTitle>New agent</DialogTitle>
             <DialogDescription>
-              Add a fresh agent to this project, or clone one of your existing OpenClaw agents.
+              Add a fresh agent to this project, or clone one of the existing agents.
             </DialogDescription>
           </DialogHeader>
 
