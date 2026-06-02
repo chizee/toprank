@@ -3,13 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 if (typeof Element !== "undefined") {
-  // @ts-expect-error - jsdom shim
+  // jsdom shims — newer @types/jsdom now declares these on Element, so
+  // @ts-expect-error would be flagged unused. The ??= is harmless if the
+  // prototype already has them.
   Element.prototype.hasPointerCapture ??= () => false;
-  // @ts-expect-error - jsdom shim
   Element.prototype.setPointerCapture ??= () => {};
-  // @ts-expect-error - jsdom shim
   Element.prototype.releasePointerCapture ??= () => {};
-  // @ts-expect-error - jsdom shim
   Element.prototype.scrollIntoView ??= () => {};
 }
 
@@ -84,20 +83,22 @@ describe("ScheduleCronDialog", () => {
     expect(select.value).toBe("seo");
   });
 
-  it("starts with 'every 1h' schedule and no timezone input visible", async () => {
+  it("defaults schedule to '0 9 * * *' with timezone visible", async () => {
+    // Crons was simplified in 0.3.0 to a single `cron` kind — there's no
+    // longer an "every"/"cron" mode select and the timezone input is
+    // always visible. Default value matches the placeholder copy.
     render(<ScheduleCronDialog projectSlug="acme" />);
     openDialog();
-    const scheduleInput = (await screen.findByPlaceholderText("1h")) as HTMLInputElement;
-    expect(scheduleInput.value).toBe("1h");
-    expect(screen.queryByPlaceholderText(/Timezone/i)).not.toBeInTheDocument();
+    const scheduleInput = (await screen.findByPlaceholderText("0 9 * * *")) as HTMLInputElement;
+    expect(scheduleInput.value).toBe("0 9 * * *");
+    expect(screen.getByPlaceholderText(/Timezone/i)).toBeInTheDocument();
   });
 
-  it("shows the timezone input when schedule kind switches to 'cron'", async () => {
+  it("defaults timezone to America/Los_Angeles", async () => {
     render(<ScheduleCronDialog projectSlug="acme" />);
     openDialog();
-    const kindSelect = (await screen.findByDisplayValue("Every")) as HTMLSelectElement;
-    fireEvent.change(kindSelect, { target: { value: "cron" } });
-    expect(screen.getByPlaceholderText(/Timezone/i)).toBeInTheDocument();
+    const tzInput = (await screen.findByPlaceholderText(/Timezone/i)) as HTMLInputElement;
+    expect(tzInput.value).toBe("America/Los_Angeles");
   });
 
   it("disables the Schedule button until name and brief are filled", async () => {
@@ -120,7 +121,7 @@ describe("ScheduleCronDialog", () => {
     expect(submit).toBeDisabled();
   });
 
-  it("submits with current 'every' values and toasts success on ok", async () => {
+  it("submits with the default cron schedule and toasts success on ok", async () => {
     scheduleCronAction.mockResolvedValue({ ok: true, cron_id: "c1", cron_name: "acme-google_ads-daily-opt" });
     render(<ScheduleCronDialog projectSlug="acme" />);
     openDialog();
@@ -132,9 +133,9 @@ describe("ScheduleCronDialog", () => {
         project_slug: "acme",
         specialist: "google_ads",
         name: "daily-opt",
-        schedule_kind: "every",
-        schedule_value: "1h",
-        tz: undefined,
+        schedule_kind: "cron",
+        schedule_value: "0 9 * * *",
+        tz: "America/Los_Angeles",
         brief: "do the thing",
       }),
     );
@@ -143,15 +144,15 @@ describe("ScheduleCronDialog", () => {
     );
   });
 
-  it("includes tz only when schedule_kind is 'cron'", async () => {
+  it("submits with an edited schedule value and timezone", async () => {
     scheduleCronAction.mockResolvedValue({ ok: true, cron_id: "c1", cron_name: "x" });
     render(<ScheduleCronDialog projectSlug="acme" />);
     openDialog();
-    const kindSelect = (await screen.findByDisplayValue("Every")) as HTMLSelectElement;
-    fireEvent.change(kindSelect, { target: { value: "cron" } });
-    fireEvent.change(screen.getByLabelText(/Name/i), { target: { value: "cron-job" } });
+    fireEvent.change(await screen.findByLabelText(/Name/i), { target: { value: "cron-job" } });
     fireEvent.change(screen.getByLabelText(/Brief/i), { target: { value: "tick" } });
-    fireEvent.change(screen.getAllByDisplayValue("1h")[0]!, { target: { value: "0 9 * * *" } });
+    fireEvent.change(screen.getByPlaceholderText("0 9 * * *"), {
+      target: { value: "*/15 * * * *" },
+    });
     fireEvent.change(screen.getByPlaceholderText(/Timezone/i), {
       target: { value: "America/New_York" },
     });
@@ -160,7 +161,7 @@ describe("ScheduleCronDialog", () => {
       expect(scheduleCronAction).toHaveBeenCalledWith(
         expect.objectContaining({
           schedule_kind: "cron",
-          schedule_value: "0 9 * * *",
+          schedule_value: "*/15 * * * *",
           tz: "America/New_York",
         }),
       ),
@@ -190,18 +191,18 @@ describe("ScheduleCronDialog", () => {
     );
   });
 
-  it("preset menu items apply their schedule kind, value, and timezone", async () => {
+  it("preset menu items apply their schedule value and timezone", async () => {
     render(<ScheduleCronDialog projectSlug="acme" />);
     openDialog();
     const presetsBtn = await screen.findByRole("button", { name: /presets/i });
     fireEvent.pointerDown(presetsBtn, { button: 0 });
     fireEvent.click(presetsBtn);
-    const preset = await screen.findByText("Daily at 9am (Los Angeles)");
+    // Pick a non-default preset so the assertion catches the actual write
+    // (the default schedule value is already "0 9 * * *", so picking the
+    // identically-named preset would pass trivially).
+    const preset = await screen.findByText("Every 15 minutes");
     fireEvent.click(preset);
-    // schedule kind select should now be "cron" (i.e. show "Cron expr")
-    const kindSelect = screen.getByDisplayValue("Cron expr") as HTMLSelectElement;
-    expect(kindSelect.value).toBe("cron");
-    expect(screen.getByDisplayValue("0 9 * * *")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("*/15 * * * *")).toBeInTheDocument();
     expect(screen.getByDisplayValue("America/Los_Angeles")).toBeInTheDocument();
   });
 });
