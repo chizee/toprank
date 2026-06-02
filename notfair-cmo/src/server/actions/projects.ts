@@ -104,19 +104,6 @@ export async function createProjectForOnboardingAction(
     ? harness_raw
     : DEFAULT_HARNESS_ADAPTER;
 
-  // Personal names for the team. Pre-filled with template defaults on the
-  // client; we still read off the form rather than baking the defaults
-  // here so the user's choice is the single source of truth. Blank
-  // values fall back to template.default_name inside ensureProjectAgents.
-  const agent_name_cmo = String(formData.get("agent_name_cmo") ?? "").trim();
-  const agent_name_google_ads = String(
-    formData.get("agent_name_google_ads") ?? "",
-  ).trim();
-  const agent_names = {
-    ...(agent_name_cmo ? { cmo: agent_name_cmo } : {}),
-    ...(agent_name_google_ads ? { google_ads: agent_name_google_ads } : {}),
-  } as Partial<Record<"cmo" | "google_ads" | "seo", string>>;
-
   const result = createProject({
     display_name,
     website_url,
@@ -132,8 +119,15 @@ export async function createProjectForOnboardingAction(
   // can still find this task by title and set blocked_by_task_id
   // correctly. Kickoff (which needs the OpenClaw agent to exist) is
   // deferred to the provisionPromise.then() below.
-  const { agentNameFor } = await import("@/server/agent-templates");
-  const cmoName = agent_name_cmo || "Greg";
+  //
+  // Agent personal names are no longer user-configurable at onboarding —
+  // we use the template defaults ("Greg" for CMO, "Ana" for Google Ads).
+  // Letting users pick once-and-only-once at onboarding was a footgun
+  // since agent_ids encode the name and are immutable; if we ever add a
+  // proper rename feature (with cascade) it'll live in settings, not
+  // here.
+  const { agentNameFor, templateForKey } = await import("@/server/agent-templates");
+  const cmoName = templateForKey("cmo")?.default_name ?? "Greg";
   const cmoAgentId = agentNameFor(result.project.slug, "cmo", cmoName);
   const { buildProjectOnboardingBrief } = await import(
     "@/server/onboarding/cmo-task-brief"
@@ -156,10 +150,10 @@ export async function createProjectForOnboardingAction(
   });
 
   // Same async-provisioning policy as createProjectAction (D4 + D6).
+  // No `names` override — fall through to each template's default_name.
   const provisionPromise = ensureProjectAgents(
     result.project.slug,
     DEFAULT_ONBOARDING_TEMPLATE_KEYS,
-    agent_names,
   );
   startProvisioning(result.project.slug, provisionPromise);
   // After provisioning resolves, log + kick off the onboarding task.

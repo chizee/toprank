@@ -18,15 +18,9 @@ export interface HarnessDisplay {
   binary: string;
 }
 
+// Insertion order is the display order — Object.values preserves it.
+// Codex first + recommended; Claude Code second, available but not promoted.
 export const HARNESS_DISPLAY: Record<HarnessAdapterId, HarnessDisplay> = {
-  "claude-code-local": {
-    id: "claude-code-local",
-    label: "Claude Code",
-    description: "Run agents through Anthropic's Claude Code CLI. Uses your existing claude login.",
-    recommended: true,
-    installUrl: "https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview",
-    binary: "claude",
-  },
   "codex-local": {
     id: "codex-local",
     label: "Codex",
@@ -34,6 +28,14 @@ export const HARNESS_DISPLAY: Record<HarnessAdapterId, HarnessDisplay> = {
     recommended: true,
     installUrl: "https://github.com/openai/codex",
     binary: "codex",
+  },
+  "claude-code-local": {
+    id: "claude-code-local",
+    label: "Claude Code",
+    description: "Run agents through Anthropic's Claude Code CLI. Uses your existing claude login.",
+    recommended: false,
+    installUrl: "https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview",
+    binary: "claude",
   },
 };
 

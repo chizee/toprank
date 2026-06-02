@@ -185,53 +185,6 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
               />
             </div>
 
-            <div className="rounded-md border border-dashed bg-muted/30 p-3 space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Your team
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Name your CMO and Google Ads specialist. Pick something
-                  memorable — these stay fixed for the life of the project.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="agent_name_cmo"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    CMO
-                  </Label>
-                  <Input
-                    id="agent_name_cmo"
-                    name="agent_name_cmo"
-                    defaultValue="Greg"
-                    placeholder="Greg"
-                    maxLength={32}
-                    disabled={isPending}
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="agent_name_google_ads"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    Google Ads
-                  </Label>
-                  <Input
-                    id="agent_name_google_ads"
-                    name="agent_name_google_ads"
-                    defaultValue="Ana"
-                    placeholder="Ana"
-                    maxLength={32}
-                    disabled={isPending}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
             <div className="space-y-2">
               <Label htmlFor="website_url">
                 Website URL{" "}
@@ -283,29 +236,32 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
 
 // ── Harness picker ─────────────────────────────────────────────────
 //
-// Two recommended adapters: Claude Code (default) and Codex. Persisted on
+// Two adapters: Codex (recommended default) and Claude Code. Persisted on
 // the project row so different projects can use different harnesses. The
 // chosen CLI must be on PATH when chats run — adapter testEnvironment is
 // surfaced via the doctor command for diagnostic feedback.
 
 function HarnessPicker({ disabled }: { disabled: boolean }) {
   const [value, setValue] = useState<"claude-code-local" | "codex-local">(
-    "claude-code-local",
+    "codex-local",
   );
   const options: Array<{
     id: "claude-code-local" | "codex-local";
     label: string;
     description: string;
+    recommended: boolean;
   }> = [
-    {
-      id: "claude-code-local",
-      label: "Claude Code",
-      description: "Uses your local `claude` CLI. Recommended.",
-    },
     {
       id: "codex-local",
       label: "Codex",
-      description: "Uses your local `codex` CLI.",
+      description: "Uses your local `codex` CLI. Recommended.",
+      recommended: true,
+    },
+    {
+      id: "claude-code-local",
+      label: "Claude Code",
+      description: "Uses your local `claude` CLI.",
+      recommended: false,
     },
   ];
   return (
@@ -338,9 +294,11 @@ function HarnessPicker({ disabled }: { disabled: boolean }) {
           >
             <div className="flex w-full items-center justify-between">
               <span className="text-sm font-medium text-foreground">{opt.label}</span>
-              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                Recommended
-              </span>
+              {opt.recommended && (
+                <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                  Recommended
+                </span>
+              )}
             </div>
             <span className="text-xs text-muted-foreground">{opt.description}</span>
           </button>

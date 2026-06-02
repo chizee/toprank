@@ -23,8 +23,8 @@ export type Project = {
   codebase_path: string | null;
   /**
    * Which harness adapter runs this project's agents. Picked at
-   * onboarding. "claude-code-local" is the default and recommended;
-   * "codex-local" runs through OpenAI's Codex CLI instead.
+   * onboarding. "codex-local" is the recommended default; "claude-code-local"
+   * runs through Anthropic's Claude Code CLI instead.
    */
   harness_adapter: "claude-code-local" | "codex-local";
 };
