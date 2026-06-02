@@ -1,5 +1,18 @@
 # notfair-cmo
 
+## 0.4.2 — 2026-06-01
+
+**TTL cache on MCP probe results.** Every server render of `/connections` (and the chat thread page's notfair-googleads banner) used to fan out one `initialize` JSON-RPC call per connector to verify liveness. With six connectors that was six round-trips on every page load — fine for one user dogfooding, rude to upstreams as usage grows.
+
+New `mcp/probe-cache.ts` wraps `getMcpStatus` with an in-process TTL cache keyed by `(project_slug, catalog_key)`. State-aware TTLs:
+- `connected` → 60 s (access tokens live for hours; staleness within a minute is invisible)
+- `unreachable` → 10 s (recover quickly when the provider comes back)
+- `stale_token` / `not_configured` / `configured_no_token` → no cache (user-actionable states where instant feedback matters)
+
+Invalidated explicitly in `setMcpBearer` (after fresh OAuth callback) and `disconnectMcp` so reconnects show updated state on the very next render rather than waiting out the TTL. Pinned to `globalThis` so Next.js HMR doesn't drop the cache on every code edit.
+
+Tradeoff: the status badge can be up to 60 s out of date if you revoke an OAuth grant from the provider's dashboard. Acceptable for a local single-user tool.
+
 ## 0.4.1 — 2026-06-01
 
 **Silent OAuth refresh for MCP connections.** The Connections page stopped flapping to "token expired" every hour for providers with short-lived access tokens (Stripe, Mixpanel, Supabase, PostHog). The MCP OAuth callback used to discard the `refresh_token`, `expires_in`, and `scope` fields from the token-endpoint response and store only the access token — so when the upstream rotated it (~1h for most providers), the only recovery path was a manual "Reconnect" click.

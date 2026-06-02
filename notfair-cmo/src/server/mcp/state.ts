@@ -1,6 +1,11 @@
 import { findMcpToken, upsertMcpToken, deleteMcpToken } from "./tokens";
 import { mcpSpecByKey } from "@/server/mcp-catalog";
 import { mcpRpcAutoRefresh } from "./rpc";
+import {
+  getCachedProbe,
+  invalidateProbe,
+  setCachedProbe,
+} from "./probe-cache";
 
 /**
  * Status surface for the Connections page + dashboard banners.
@@ -41,7 +46,17 @@ export async function getMcpStatus(
   if (!spec) return { state: "not_configured" };
   const token = findMcpToken(project_slug, catalog_key);
   if (!token) return { state: "not_configured" };
-  return probe(project_slug, catalog_key, spec.resource_url);
+
+  // Cache short-circuit: only `connected` (60s) and `unreachable` (10s)
+  // results live in the cache. `stale_token` is deliberately uncached so
+  // a reconnect surfaces fresh state on the very next render. See
+  // probe-cache.ts for the rationale.
+  const cached = getCachedProbe(project_slug, catalog_key);
+  if (cached) return cached;
+
+  const fresh = await probe(project_slug, catalog_key, spec.resource_url);
+  setCachedProbe(project_slug, catalog_key, fresh);
+  return fresh;
 }
 
 async function probe(
@@ -118,6 +133,7 @@ async function probe(
 export async function disconnectMcp(project_slug: string, catalog_key: string): Promise<void> {
   const token = findMcpToken(project_slug, catalog_key);
   if (token) deleteMcpToken(token.id);
+  invalidateProbe(project_slug, catalog_key);
 }
 
 export async function setMcpBearer(
@@ -144,4 +160,7 @@ export async function setMcpBearer(
     client_id: options.client_id,
     client_secret: options.client_secret,
   });
+  // Drop any cached probe result so the badge reflects the new credentials
+  // on the very next render instead of waiting out the TTL.
+  invalidateProbe(project_slug, catalog_key);
 }

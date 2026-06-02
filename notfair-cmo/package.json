@@ -1,6 +1,6 @@
 {
   "name": "notfair-cmo",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Open-source AI marketing CMO portal. Run locally; orchestrates marketing agents (Google Ads, SEO, and more) on top of Claude Code, Codex, or other local AI coding agents.",
   "license": "MIT",
   "bin": {
