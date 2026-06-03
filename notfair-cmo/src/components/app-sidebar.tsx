@@ -28,7 +28,6 @@ import { TEMPLATES } from "@/server/agent-templates";
 import { projectHref } from "@/lib/project-href";
 import { ProjectSwitcher } from "./project-switcher";
 import { AgentNav } from "./agent-nav";
-import { CreateAgentButton } from "./create-agent-button";
 import { ApprovalsLiveBadge } from "./live-badge";
 
 type NavItem = {
@@ -81,10 +80,7 @@ export async function AppSidebar() {
       <SidebarContent>
         {active && (
           <SidebarGroup>
-            <SidebarGroupLabel className="flex items-center justify-between">
-              <span>Agents</span>
-              <CreateAgentButton projectSlug={active.slug} />
-            </SidebarGroupLabel>
+            <SidebarGroupLabel>Agents</SidebarGroupLabel>
             <SidebarGroupContent>
               <AgentNav
                 projectSlug={active.slug}
