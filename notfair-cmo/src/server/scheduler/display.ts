@@ -81,10 +81,17 @@ function formatRelativeMs(ms: number | undefined): string {
   return delta > 0 ? `in ${days}d` : `${days}d ago`;
 }
 
+function normalizeRunStatus(s: string | undefined): string | undefined {
+  if (!s) return undefined;
+  if (s === "done") return "ok";
+  if (s === "failed") return "error";
+  return s;
+}
+
 function jobToDisplay(job: ScheduledJob, project_slug: string): DisplayCron {
   // Most recent run gives us the last_status / last_error fields the UI surfaces.
   const recent = listJobRuns(job.id, 1)[0];
-  const lastStatus = recent?.status === "done" ? "ok" : recent?.status;
+  const lastStatus = normalizeRunStatus(recent?.status);
   const lastError = recent?.error_message ?? undefined;
   const lastRunMs = isoMs(job.last_run_at) ?? (recent ? Date.parse(recent.started_at) : undefined);
   const nextRunMs = isoMs(job.next_run_at);
@@ -153,8 +160,8 @@ export function loadCronRuns(cron_id: string, limit = 100): CronRun[] {
     return {
       run_at_ms: startedMs,
       finished_at_ms: finishedMs,
-      status: r.status === "done" ? "ok" : r.status,
-      summary: "",
+      status: normalizeRunStatus(r.status) ?? r.status,
+      summary: r.summary ?? "",
       error: r.error_message ?? undefined,
       duration_ms: Number.isFinite(finishedMs - startedMs) ? finishedMs - startedMs : undefined,
     };

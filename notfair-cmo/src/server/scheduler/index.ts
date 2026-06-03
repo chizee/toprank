@@ -141,13 +141,14 @@ export interface ScheduledJobRun {
   finished_at: string | null;
   status: "running" | "done" | "failed";
   error_message: string | null;
+  summary: string | null;
 }
 
 export function startJobRun(scheduled_job_id: string): string {
   const id = randomUUID();
   getDb()
     .prepare(
-      "INSERT INTO scheduled_job_runs (id, scheduled_job_id, started_at, finished_at, status, error_message) VALUES (?, ?, ?, NULL, 'running', NULL)",
+      "INSERT INTO scheduled_job_runs (id, scheduled_job_id, started_at, finished_at, status, error_message, summary) VALUES (?, ?, ?, NULL, 'running', NULL, NULL)",
     )
     .run(id, scheduled_job_id, new Date().toISOString());
   return id;
@@ -157,12 +158,13 @@ export function finishJobRun(
   run_id: string,
   status: "done" | "failed",
   error_message: string | null = null,
+  summary: string | null = null,
 ): void {
   getDb()
     .prepare(
-      "UPDATE scheduled_job_runs SET finished_at = ?, status = ?, error_message = ? WHERE id = ?",
+      "UPDATE scheduled_job_runs SET finished_at = ?, status = ?, error_message = ?, summary = ? WHERE id = ?",
     )
-    .run(new Date().toISOString(), status, error_message, run_id);
+    .run(new Date().toISOString(), status, error_message, summary, run_id);
 }
 
 export function listJobRuns(scheduled_job_id: string, limit = 50): ScheduledJobRun[] {

@@ -47,8 +47,8 @@ async function runTickSafe(): Promise<void> {
     markJobRun(job.id);
     const runId = startJobRun(job.id);
     try {
-      await dispatchJob(job);
-      finishJobRun(runId, "done");
+      const summary = await dispatchJob(job);
+      finishJobRun(runId, "done", null, summary);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[scheduler] job ${job.id} failed:`, err);
@@ -62,7 +62,7 @@ function workspaceDirFor(agentId: string): string {
   return join(dataDir, "agents", agentId);
 }
 
-async function dispatchJob(job: ScheduledJob): Promise<void> {
+async function dispatchJob(job: ScheduledJob): Promise<string | null> {
   const project = getProject(job.project_slug);
   if (!project) {
     throw new Error(`project not found: ${job.project_slug}`);
@@ -75,6 +75,13 @@ async function dispatchJob(job: ScheduledJob): Promise<void> {
     harness_adapter: project.harness_adapter,
   });
   appendTranscriptEvent(session.id, "user", { text: job.message, source: "cron" });
+
+  // Prefer the adapter's explicit `final` event for the summary; fall back to
+  // concatenated `delta` chunks if the adapter only streams text. Truncate so
+  // we never bloat the DB with a multi-MB run row.
+  let finalText: string | null = null;
+  let deltaBuffer = "";
+  const MAX_SUMMARY = 4000;
 
   for await (const evt of adapter.execute({
     projectSlug: project.slug,
@@ -89,9 +96,17 @@ async function dispatchJob(job: ScheduledJob): Promise<void> {
       continue;
     }
     appendTranscriptEvent(session.id, evt.kind, evt);
-    if (evt.kind === "error") {
+    if (evt.kind === "final") {
+      finalText = evt.text;
+    } else if (evt.kind === "delta" && deltaBuffer.length < MAX_SUMMARY) {
+      deltaBuffer += evt.text;
+    } else if (evt.kind === "error") {
       throw new Error(evt.message);
     }
   }
   touchSession(session.id);
+
+  const raw = (finalText ?? deltaBuffer).trim();
+  if (!raw) return null;
+  return raw.length > MAX_SUMMARY ? `${raw.slice(0, MAX_SUMMARY)}…` : raw;
 }

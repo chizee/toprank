@@ -1,5 +1,15 @@
 # notfair-cmo
 
+## 0.4.4 — 2026-06-03
+
+**Cron jobs actually run now.** The Crons calendar was rendering future occurrences from the cron expression and creating `scheduled_jobs` rows, but the tick loop that actually dispatches due jobs was never starting. `ensureSchedulerRunning()` was defined in `src/server/scheduler/tick.ts` and imported from nowhere — no layout, no instrumentation, no CLI. Net effect: clicking a past occurrence on the calendar showed no status badge and the Result section had nothing to render, because `scheduled_job_runs` stayed empty forever.
+
+New `src/instrumentation.ts` registers a `nodejs`-runtime hook that calls `ensureSchedulerRunning()` once per server boot. Verified live: a test cron inserted at 16:45 UTC fired ~25s later, Codex returned a short reply, the green-check badge appeared on the calendar chip, and the detail dialog rendered the captured summary with duration (7.6s).
+
+**Run summaries are captured and shown.** `loadCronRuns()` used to hardcode `summary: ""` even though the Result section in the detail dialog rendered from that field — so every completed run, no matter what the adapter produced, displayed "Run finished with no summary." `dispatchJob` now accumulates the adapter's final-text event (or concatenated delta chunks, capped at 4000 chars) and `finishJobRun` persists it to a new `summary` column on `scheduled_job_runs` (migration 014). The calendar's detail dialog now shows what the agent actually said.
+
+**Failed-run badge fix.** The calendar's status glyph maps "ok" → green check and "error" → red badge, but `loadCronRuns` was returning `"failed"` for failed runs — they rendered as a neutral gray dot. `normalizeRunStatus` now maps `done → ok` and `failed → error` at the read boundary so the destructive badge fires correctly. Same helper applies to `jobToDisplay`'s `last_status` so the per-cron summary row matches.
+
 ## 0.4.3 — 2026-06-02
 
 **Humanized tool-call rendering in the chat transcript.** The chat used to show every shell call as the raw command — long `/bin/zsh -lc "rg --files ..."` lines splatted right under the assistant's reasoning, with both the tool group's `name` and `label` rendering the same incantation. Visually noisy and didn't tell the user anything they couldn't infer from the prose above it.
