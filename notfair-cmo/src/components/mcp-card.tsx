@@ -44,7 +44,13 @@ export function McpCard({ spec, status }: Props) {
   async function onConnect() {
     setBusy("connect");
     try {
-      const result = await startMcpConnect({ mcp_key: spec.key });
+      // Carry the current connections-page URL through OAuth so the
+      // callback lands the user back here. Without it, the callback
+      // falls through to `/`, which bounces to the active project's
+      // home — making it look like the connect flow "redirected to a
+      // different project" when really it just lost the return target.
+      const return_to = window.location.pathname + window.location.search;
+      const result = await startMcpConnect({ mcp_key: spec.key, return_to });
       if (!result.ok) {
         toast.error(result.error);
         setBusy(null);

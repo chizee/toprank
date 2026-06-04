@@ -116,7 +116,15 @@ function ConnectorTile({
       // Chain straight into OAuth so the user only clicks once. The
       // upcoming full-page redirect is the visible feedback — we
       // intentionally don't toast a separate "added" success.
-      const connectResult = await startMcpConnect({ mcp_key: addResult.key });
+      //
+      // Pass `return_to` so the OAuth callback lands the user back on
+      // the connections page they started from. Without it the callback
+      // falls back to `/`, which bounces to the active project's home.
+      const return_to = window.location.pathname + window.location.search;
+      const connectResult = await startMcpConnect({
+        mcp_key: addResult.key,
+        return_to,
+      });
       if (!connectResult.ok) {
         toast.error(
           `Added ${connector.display_name}, but couldn't start OAuth: ${connectResult.error}`,

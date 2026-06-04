@@ -164,7 +164,10 @@ describe("McpCard", () => {
     render(<McpCard spec={spec} status={{ state: "not_configured" }} />);
     fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
     await waitFor(() =>
-      expect(startMcpConnect).toHaveBeenCalledWith({ mcp_key: spec.key }),
+      expect(startMcpConnect).toHaveBeenCalledWith({
+        mcp_key: spec.key,
+        return_to: "/",
+      }),
     );
     await waitFor(() =>
       expect(loc.href).toBe("https://issuer.example/oauth?state=abc"),
