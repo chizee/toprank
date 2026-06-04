@@ -2,14 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Bot,
-  Briefcase,
-  Megaphone,
-  MessageCircle,
-  Search,
-  type LucideIcon,
-} from "lucide-react";
+import { Bot } from "lucide-react";
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -19,6 +12,7 @@ import type { AgentTemplateKey } from "@/server/agent-templates";
 import { colorForRole } from "@/lib/agent-colors";
 import { cn } from "@/lib/utils";
 import { projectHref } from "@/lib/project-href";
+import { AgentAvatar } from "./agent-avatar";
 import { useLiveCounts } from "./live-counts-context";
 
 type AgentNavEntry = {
@@ -47,13 +41,6 @@ type Props = {
   inFlightCounts?: Record<string, number>;
 };
 
-const TEMPLATE_ICONS: Record<AgentTemplateKey, LucideIcon> = {
-  cmo: Briefcase,
-  google_ads: Megaphone,
-  meta_ads: MessageCircle,
-  seo: Search,
-};
-
 export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
   const pathname = usePathname();
   const live = useLiveCounts();
@@ -68,14 +55,17 @@ export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
         const agentBase = `/${projectSlug}/agents/${a.slug}`;
         const isActive =
           pathname === agentBase || pathname?.startsWith(`${agentBase}/`);
-        const Icon = a.template_key ? TEMPLATE_ICONS[a.template_key] ?? Bot : Bot;
         const liveCount = counts[a.key] ?? 0;
         const rolePalette = a.template_key ? colorForRole(a.template_key) : null;
         return (
           <SidebarMenuItem key={a.key}>
             <SidebarMenuButton asChild isActive={isActive}>
               <Link href={href}>
-                <Icon />
+                {a.template_key ? (
+                  <AgentAvatar role={a.template_key} size={20} />
+                ) : (
+                  <Bot />
+                )}
                 <span className="truncate">{a.name}</span>
                 {a.role_label && rolePalette && (
                   <span
@@ -93,10 +83,7 @@ export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
                     role="status"
                     aria-label={`${liveCount} running`}
                   >
-                    <span
-                      aria-hidden
-                      className="ns-dot ns-dot-live"
-                    />
+                    <span aria-hidden className="ns-dot ns-dot-live" />
                     <span className="text-[10px] font-semibold tabular-nums text-[hsl(var(--notfair-accent))]">
                       {liveCount}
                     </span>

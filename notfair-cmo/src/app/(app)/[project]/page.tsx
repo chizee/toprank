@@ -1,26 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  Bot,
-  Briefcase,
-  Megaphone,
-  MessageCircle,
-  MessageSquare,
-  Search,
-  type LucideIcon,
-} from "lucide-react";
+import { Bot, MessageSquare } from "lucide-react";
 import { getProject } from "@/server/db/projects";
-import { costToday } from "@/server/db/cost";
 import { listPendingApprovals } from "@/server/db/approvals";
 import { listTasks } from "@/server/db/tasks";
 import { listAgentActions } from "@/server/db/agent-actions";
-import { TEMPLATES, type AgentTemplateKey } from "@/server/agent-templates";
+import { TEMPLATES } from "@/server/agent-templates";
 import { listProjectAgents } from "@/server/agent-meta";
+import { colorForRole } from "@/lib/agent-colors";
+import { cn } from "@/lib/utils";
 import { projectHref } from "@/lib/project-href";
-
-function formatUsd(n: number) {
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-}
+import { AgentAvatar } from "@/components/agent-avatar";
 
 function timeAgo(iso: string) {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -29,13 +19,6 @@ function timeAgo(iso: string) {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
 }
-
-const ROLE_ICON: Record<AgentTemplateKey, LucideIcon> = {
-  cmo: Briefcase,
-  google_ads: Megaphone,
-  meta_ads: MessageCircle,
-  seo: Search,
-};
 
 export default async function ProjectHomePage({
   params,
@@ -46,7 +29,6 @@ export default async function ProjectHomePage({
   const project = getProject(slug);
   if (!project || project.archived_at) notFound();
 
-  const cost = costToday(project.slug);
   const pending = listPendingApprovals(project.slug);
   const tasks = listTasks(project.slug);
   const recent = listAgentActions(project.slug, 8);
@@ -77,15 +59,9 @@ export default async function ProjectHomePage({
         </div>
       </header>
 
-      {/* KPI strip — four quiet metric tiles. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiTile
-          label="Spend today"
-          value={formatUsd(cost.total_usd)}
-          hint={`LLM ${formatUsd(cost.by_source.llm)} · Ads ${formatUsd(
-            cost.by_source.google_ads + cost.by_source.gsc,
-          )}`}
-        />
+      {/* KPI strip. Spend tracking lives elsewhere now; the home tiles
+          surface only the counters the user has a direct action on. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiTile
           label="Active tasks"
           value={String(running)}
@@ -121,23 +97,34 @@ export default async function ProjectHomePage({
               const role = agent.template_key
                 ? TEMPLATES.find((t) => t.key === agent.template_key)
                 : undefined;
-              const Icon = agent.template_key
-                ? ROLE_ICON[agent.template_key] ?? Bot
-                : Bot;
+              const rolePalette = agent.template_key
+                ? colorForRole(agent.template_key)
+                : null;
               return (
                 <li key={agent.agent_id}>
                   <Link
                     href={projectHref(slug, `/agents/${agent.slug}/chat`)}
                     className="ns-row-button"
                   >
-                    <span className="ns-glyph" aria-hidden>
-                      <Icon className="size-[18px] text-[hsl(var(--notfair-ink-2))]" />
-                    </span>
+                    {agent.template_key ? (
+                      <AgentAvatar role={agent.template_key} size={40} />
+                    ) : (
+                      <span className="ns-glyph" aria-hidden>
+                        <Bot className="size-[18px] text-[hsl(var(--notfair-ink-2))]" />
+                      </span>
+                    )}
                     <span className="ns-row-body">
                       <span className="ns-row-title-row">
                         <span className="ns-row-title">{agent.name}</span>
                         {role && (
-                          <span className="ns-tag">{role.display_name}</span>
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-[5px] border px-1.5 py-[2px] text-[10.5px] font-medium uppercase tracking-wide leading-none",
+                              rolePalette?.chip ?? "ns-tag",
+                            )}
+                          >
+                            {role.display_name}
+                          </span>
                         )}
                       </span>
                       <span className="ns-row-desc block">

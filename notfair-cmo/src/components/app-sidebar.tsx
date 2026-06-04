@@ -27,10 +27,12 @@ import { listProjects } from "@/server/db/projects";
 import { getActiveProject } from "@/server/active-project";
 import { listProjectAgents } from "@/server/agent-meta";
 import { TEMPLATES } from "@/server/agent-templates";
+import { readHarnessUsage } from "@/server/harness-usage";
 import { projectHref } from "@/lib/project-href";
 import { ProjectSwitcher } from "./project-switcher";
 import { AgentNav } from "./agent-nav";
 import { ApprovalsLiveBadge } from "./live-badge";
+import { HarnessFooter } from "./harness-footer";
 
 type NavItem = {
   href: string;
@@ -53,6 +55,13 @@ export async function AppSidebar() {
   const projects = listProjects();
   const active = await getActiveProject();
   const agentEntries = active ? await listProjectAgents(active.slug) : [];
+  // Best-effort fetch of harness usage. For Codex this hits the
+  // chatgpt.com wham/usage endpoint (cached 60s in-process); for
+  // Claude Code it just reads the local stats-cache. Either failure
+  // mode collapses to a quieter chip.
+  const harnessUsage = active
+    ? await readHarnessUsage(active.harness_adapter)
+    : null;
 
   return (
     <Sidebar collapsible="icon">
@@ -121,14 +130,12 @@ export async function AppSidebar() {
         )}
       </SidebarContent>
 
-      {active && (
+      {active && harnessUsage && (
         <SidebarFooter className="border-t border-border/60 px-3 py-2 group-data-[collapsible=icon]:hidden">
-          <p className="text-[11px] leading-tight text-muted-foreground">
-            Local agents · running on{" "}
-            <span className="font-medium text-foreground">
-              {active.harness_adapter === "codex-local" ? "Codex" : "Claude Code"}
-            </span>
-          </p>
+          <HarnessFooter
+            adapter={active.harness_adapter}
+            usage={harnessUsage}
+          />
         </SidebarFooter>
       )}
     </Sidebar>

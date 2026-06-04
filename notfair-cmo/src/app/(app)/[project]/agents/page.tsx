@@ -1,30 +1,14 @@
 import Link from "next/link";
-import {
-  Bot,
-  Briefcase,
-  Check,
-  Clock,
-  Megaphone,
-  MessageCircle,
-  MessageSquare,
-  Search,
-  type LucideIcon,
-} from "lucide-react";
+import { Bot, Check, Clock, MessageSquare } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getProject } from "@/server/db/projects";
-import { TEMPLATES, type AgentTemplateKey } from "@/server/agent-templates";
+import { TEMPLATES } from "@/server/agent-templates";
 import { listProjectAgents } from "@/server/agent-meta";
 import { listCronsForProject } from "@/server/scheduler/display";
 import { reprovisionAgentsAction } from "@/server/actions/projects";
 import { ReprovisionButton } from "@/components/reprovision-button";
+import { AgentAvatar } from "@/components/agent-avatar";
 import { projectHref } from "@/lib/project-href";
-
-const ROLE_ICON: Record<AgentTemplateKey, LucideIcon> = {
-  cmo: Briefcase,
-  google_ads: Megaphone,
-  meta_ads: MessageCircle,
-  seo: Search,
-};
 
 export default async function AgentsPage({
   params,
@@ -67,16 +51,17 @@ export default async function AgentsPage({
           const role = agent.template_key
             ? TEMPLATES.find((t) => t.key === agent.template_key)
             : undefined;
-          const Icon = agent.template_key
-            ? ROLE_ICON[agent.template_key] ?? Bot
-            : Bot;
           const crons = cronByAgent.get(agent.agent_id) ?? 0;
           return (
             <div key={agent.agent_id} className="ns-card">
               <div className="flex items-start gap-4 p-[18px]">
-                <span className="ns-glyph" aria-hidden>
-                  <Icon className="size-[18px] text-[hsl(var(--notfair-ink-2))]" />
-                </span>
+                {agent.template_key ? (
+                  <AgentAvatar role={agent.template_key} size={44} />
+                ) : (
+                  <span className="ns-glyph" aria-hidden>
+                    <Bot className="size-[18px] text-[hsl(var(--notfair-ink-2))]" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <h2 className="m-0 text-[15.5px] font-semibold tracking-tight text-[hsl(var(--notfair-ink))]">
