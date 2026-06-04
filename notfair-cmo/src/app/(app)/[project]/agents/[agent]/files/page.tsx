@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, FileX } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
 import { listAgentFiles, getAgentFile } from "@/server/agents/files";
@@ -41,21 +40,15 @@ export default async function AgentFilesPage({
     error = err instanceof Error ? err.message : String(err);
   }
 
-  // listAgentFiles already enumerates every workspace file from disk
-  // (including PROJECT.md when present), so no augment splice is needed.
-  // Reorder so PROJECT.md sits right after IDENTITY.md when both exist,
-  // matching the v0.1.0 reading order without duplicating entries.
   const identityIdx = files.findIndex((f) => f.name === "IDENTITY.md");
   const projectIdx = files.findIndex((f) => f.name === "PROJECT.md");
   if (identityIdx >= 0 && projectIdx >= 0 && projectIdx !== identityIdx + 1) {
-    const project = files[projectIdx]!;
+    const projectFile = files[projectIdx]!;
     const without = files.filter((_, i) => i !== projectIdx);
     const insertAt = without.findIndex((f) => f.name === "IDENTITY.md") + 1;
-    files = [...without.slice(0, insertAt), project, ...without.slice(insertAt)];
+    files = [...without.slice(0, insertAt), projectFile, ...without.slice(insertAt)];
   }
 
-  // Pick which file to show: explicit search param wins, else first present
-  // file, else first overall (which may be missing).
   const selectedName =
     (requestedFile && files.find((f) => f.name === requestedFile)?.name) ||
     files.find((f) => !f.missing)?.name ||
@@ -82,25 +75,25 @@ export default async function AgentFilesPage({
   }
 
   return (
-    <div className="grid h-full grid-cols-[260px_minmax(0,1fr)] divide-x">
+    <div className="grid h-full grid-cols-[260px_minmax(0,1fr)] divide-x divide-border bg-background">
       {/* Left rail — file list */}
-      <aside className="flex min-h-0 flex-col">
-        <div className="border-b px-4 py-2">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+      <aside className="flex min-h-0 flex-col bg-[hsl(0_0%_99%)]">
+        <div className="border-b border-border/60 px-4 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--notfair-ink-4))]">
             Workspace files
           </div>
           {workspace && (
-            <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
+            <div className="mt-1 truncate font-mono text-[10px] text-[hsl(var(--notfair-ink-4))]">
               {workspace}
             </div>
           )}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto py-2">
           {error && (
             <div className="px-4 py-3 text-xs text-destructive">{error}</div>
           )}
           {!error && files.length === 0 && (
-            <div className="px-4 py-3 text-xs text-muted-foreground">
+            <div className="px-4 py-3 text-xs text-[hsl(var(--notfair-ink-4))]">
               No files yet.
             </div>
           )}
@@ -114,26 +107,23 @@ export default async function AgentFilesPage({
                   `/agents/${agentSlug}/files?file=${encodeURIComponent(f.name)}`,
                 )}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 text-sm transition-colors",
+                  "mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors",
                   isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-accent/50",
-                  f.missing && "text-muted-foreground/70",
+                    ? "bg-[hsl(var(--notfair-accent-soft))] text-[hsl(var(--notfair-accent))]"
+                    : "text-[hsl(var(--notfair-ink-3))] hover:bg-[hsl(var(--notfair-surface-2))] hover:text-[hsl(var(--notfair-ink))]",
+                  f.missing && !isActive && "opacity-60",
                 )}
               >
                 {f.missing ? (
-                  <FileX className="size-3.5 shrink-0 opacity-60" />
+                  <FileX className="size-3.5 shrink-0 opacity-70" />
                 ) : (
                   <FileText className="size-3.5 shrink-0" />
                 )}
-                <span className="truncate font-mono text-[13px]">{f.name}</span>
+                <span className="truncate font-mono">{f.name}</span>
                 {f.missing && (
-                  <Badge
-                    variant="outline"
-                    className="ml-auto h-4 px-1 text-[9px] uppercase tracking-wide"
-                  >
+                  <span className="ml-auto rounded-[4px] bg-[hsl(var(--notfair-surface-2))] px-1 py-px text-[9px] font-medium uppercase tracking-wide text-[hsl(var(--notfair-ink-4))]">
                     empty
-                  </Badge>
+                  </span>
                 )}
               </Link>
             );
@@ -142,18 +132,19 @@ export default async function AgentFilesPage({
       </aside>
 
       {/* Right pane — file viewer */}
-      <section className="flex min-h-0 flex-col">
+      <section className="flex min-h-0 flex-col bg-background">
         {!selectedName ? (
-          <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center p-6 text-sm text-[hsl(var(--notfair-ink-4))]">
             Select a file to view its contents.
           </div>
         ) : selectedMissing ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-            <FileX className="size-6 text-muted-foreground/60" />
-            <div className="text-sm text-muted-foreground">
-              <span className="font-mono">{selectedName}</span> does not exist yet for this agent.
+            <FileX className="size-7 text-[hsl(var(--notfair-ink-4))] opacity-60" />
+            <div className="text-[14px] font-medium text-[hsl(var(--notfair-ink-2))]">
+              <span className="font-mono">{selectedName}</span> doesn&rsquo;t exist
+              yet.
             </div>
-            <div className="text-xs text-muted-foreground/80">
+            <div className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
               The agent may create it during onboarding or when first invoked.
             </div>
           </div>
@@ -161,10 +152,12 @@ export default async function AgentFilesPage({
           <div className="p-6 text-sm text-destructive">{selectedError}</div>
         ) : (
           <>
-            <header className="flex items-center justify-between border-b px-6 py-3">
+            <header className="flex items-center justify-between border-b border-border/60 px-6 py-3">
               <div className="min-w-0">
-                <div className="truncate font-mono text-sm">{selectedName}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                <div className="truncate font-mono text-[13.5px] text-[hsl(var(--notfair-ink))]">
+                  {selectedName}
+                </div>
+                <div className="mt-0.5 text-[11px] text-[hsl(var(--notfair-ink-4))]">
                   {selectedSize !== undefined && `${formatBytes(selectedSize)}`}
                   {selectedSize !== undefined && selectedUpdatedAtMs && " · "}
                   {selectedUpdatedAtMs &&
@@ -173,7 +166,7 @@ export default async function AgentFilesPage({
               </div>
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <pre className="whitespace-pre-wrap break-words p-6 font-mono text-[13px] leading-relaxed">
+              <pre className="whitespace-pre-wrap break-words p-6 font-mono text-[13px] leading-relaxed text-[hsl(var(--notfair-ink-2))]">
                 {selectedContent}
               </pre>
             </div>

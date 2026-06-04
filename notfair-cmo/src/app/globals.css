@@ -252,20 +252,23 @@
     font-size: 12px; font-weight: 500; letter-spacing: -0.005em;
   }
 
-  /* Grouped list — single rounded container, hairline dividers. */
+  /* Grouped list — single rounded container, hairline dividers.
+     Dividers live on the container's direct children, not on the tile
+     itself, so wrappers like `<li>` don't break the :last-child rule. */
   .ns-list {
     @apply flex flex-col bg-card rounded-[14px] overflow-hidden;
     margin-top: 20px;
     box-shadow: var(--notfair-shadow);
   }
+  .ns-list > * + * {
+    border-top: 1px solid hsl(var(--border));
+  }
   .ns-tile {
     @apply flex items-center gap-3 bg-card border-0 cursor-pointer transition-colors;
     padding: 12px 16px;
-    border-bottom: 0.5px solid hsl(var(--border));
     text-align: left;
     width: 100%;
   }
-  .ns-tile:last-child { border-bottom: 0; }
   .ns-tile:hover { background: #FAFAFC; }
   .ns-tile:disabled { cursor: not-allowed; opacity: 0.6; }
   .ns-tile-glyph {
@@ -420,5 +423,367 @@
     font-size: 12px; letter-spacing: -0.005em; font-weight: 400;
     padding-left: 12px;
     border-left: 0.5px solid hsl(var(--notfair-border-strong));
+  }
+
+  /* ── App-shell tokens (every authenticated page) ─────────────────
+     The onboarding `.ns-page` is intentionally compact (720px). The
+     app shell wants more breathing room — Apple settings + product
+     pages are wide but never edge-to-edge. */
+
+  /* Page wrappers. The narrow variant matches Settings / Approvals;
+     the wide one is the default for product surfaces (Home, Tasks,
+     Crons, Activity, Connections, Agents). */
+  .ns-app {
+    margin-inline: auto; width: 100%;
+    padding: 32px 28px 96px;
+  }
+  .ns-app-narrow {
+    margin-inline: auto; width: 100%;
+    padding: 32px 28px 96px;
+    max-width: 720px;
+  }
+  .ns-app-wide {
+    margin-inline: auto; width: 100%;
+    padding: 32px 28px 96px;
+    max-width: 1100px;
+  }
+
+  /* Page header — left-aligned title + meta, right-aligned actions.
+     Apple's settings-page convention: large h1, quiet meta line, no
+     decorative chrome. Action lives in the right slot. */
+  .ns-page-head {
+    @apply flex items-start justify-between gap-6;
+    margin-bottom: 28px;
+  }
+  .ns-page-head-stack { @apply min-w-0; }
+  .ns-page-title {
+    @apply text-foreground m-0;
+    font-size: 28px; line-height: 1.15; font-weight: 600;
+    letter-spacing: -0.026em;
+  }
+  .ns-page-sub {
+    color: hsl(var(--notfair-ink-4));
+    font-size: 13.5px; line-height: 1.45; letter-spacing: -0.006em;
+    margin: 6px 0 0;
+  }
+  .ns-page-sub b { color: hsl(var(--notfair-ink-2)); font-weight: 500; }
+  .ns-page-actions { @apply flex shrink-0 items-center gap-2; }
+
+  /* Section heading inside a page (above a grouped list). Apple
+     uses small, semibold caps for these, not mono uppercase. */
+  .ns-h2 {
+    @apply flex items-baseline justify-between gap-3 m-0;
+    font-size: 13px; font-weight: 600; letter-spacing: -0.012em;
+    color: hsl(var(--notfair-ink-2));
+    margin-top: 32px; margin-bottom: 10px;
+  }
+  .ns-h2 .ns-h2-meta {
+    color: hsl(var(--notfair-ink-4));
+    font-size: 12px; font-weight: 400; letter-spacing: -0.005em;
+  }
+
+  /* Apple-grouped list (app-scope variant of .ns-list — same shape,
+     no auto top-margin so it can sit directly under a section head).
+     Dividers are drawn between direct children rather than as a
+     row-level :last-child rule — `<article class="ns-row">` is often
+     wrapped in `<li>`, so :last-child on the article matches every
+     row and would suppress the divider on all of them. The
+     `> * + *` border-top is structural and works regardless of the
+     wrapping element. */
+  .ns-group {
+    @apply flex flex-col bg-card rounded-[14px] overflow-hidden;
+    box-shadow: var(--notfair-shadow);
+  }
+  .ns-group > * + * {
+    border-top: 1px solid hsl(var(--border));
+  }
+  .ns-row {
+    @apply flex items-center gap-3 bg-card;
+    padding: 14px 18px;
+    text-align: left;
+  }
+  .ns-row-button {
+    @apply flex items-center gap-3 w-full cursor-pointer transition-colors;
+    padding: 14px 18px;
+    text-align: left;
+    border: 0;
+    background: transparent;
+  }
+  .ns-row-button:hover { background: #FAFAFC; }
+  .ns-row-button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+  /* Glyph tile next to a row's title — 38px iOS-app-icon shape. */
+  .ns-glyph {
+    @apply grid place-items-center flex-shrink-0 font-semibold uppercase;
+    width: 38px; height: 38px; border-radius: 9px;
+    background: hsl(var(--notfair-surface-2));
+    color: hsl(var(--notfair-ink-2));
+    font-size: 14.5px; letter-spacing: -0.018em;
+  }
+  .ns-glyph-sm {
+    @apply grid place-items-center flex-shrink-0 font-semibold uppercase;
+    width: 30px; height: 30px; border-radius: 7px;
+    background: hsl(var(--notfair-surface-2));
+    color: hsl(var(--notfair-ink-2));
+    font-size: 12.5px; letter-spacing: -0.018em;
+  }
+  .ns-glyph-accent {
+    background: hsl(var(--notfair-accent-soft));
+    color: hsl(var(--notfair-accent));
+  }
+
+  /* Row body — title + description stacked. */
+  .ns-row-body { @apply min-w-0 flex-1; }
+  .ns-row-title {
+    @apply text-foreground m-0;
+    font-size: 14.5px; font-weight: 500; letter-spacing: -0.012em;
+    line-height: 1.3;
+  }
+  .ns-row-desc {
+    color: hsl(var(--notfair-ink-4));
+    font-size: 12.5px; line-height: 1.4; letter-spacing: -0.003em;
+    margin: 2px 0 0;
+  }
+  .ns-row-title-row {
+    @apply flex flex-wrap items-baseline gap-x-2 gap-y-1;
+  }
+
+  /* Right-side meta / action column. */
+  .ns-row-meta {
+    @apply flex shrink-0 items-center;
+    gap: 10px;
+    color: hsl(var(--notfair-ink-4));
+    font-size: 12.5px; font-weight: 500; letter-spacing: -0.005em;
+  }
+  .ns-row-meta .chev {
+    font-size: 18px; font-weight: 300; line-height: 1;
+    color: hsl(var(--notfair-ink-4));
+  }
+
+  /* Quiet metadata pill (used to label IDs, slugs, role names without
+     stealing focus). Soft surface, no border. Apple's "tag" look. */
+  .ns-tag {
+    @apply inline-flex items-center;
+    background: hsl(var(--notfair-surface-2));
+    color: hsl(var(--notfair-ink-3));
+    font-size: 11.5px; font-weight: 500; letter-spacing: -0.002em;
+    line-height: 1; padding: 4px 9px; border-radius: 6px;
+  }
+  .ns-tag-mono {
+    @apply inline-flex items-center font-mono;
+    background: hsl(var(--notfair-surface-2));
+    color: hsl(var(--notfair-ink-3));
+    font-size: 11px; font-weight: 500; letter-spacing: 0;
+    line-height: 1; padding: 4px 9px; border-radius: 6px;
+  }
+  .ns-tag-accent {
+    background: hsl(var(--notfair-accent-soft));
+    color: hsl(var(--notfair-accent));
+  }
+  .ns-tag-amber {
+    background: hsl(38 92% 95%);
+    color: hsl(28 76% 38%);
+  }
+  .ns-tag-red {
+    background: hsl(0 92% 96%);
+    color: hsl(0 72% 42%);
+  }
+
+  /* Status dot — small filled circle in semantic color. Pair with a
+     short label for inline status lines. */
+  .ns-dot {
+    display: inline-block; flex-shrink: 0;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: hsl(var(--notfair-ink-4));
+  }
+  .ns-dot-on    { background: hsl(var(--notfair-accent)); }
+  .ns-dot-warn  { background: hsl(38 92% 50%); }
+  .ns-dot-err   { background: hsl(0 72% 51%); }
+  .ns-dot-mute  { background: hsl(var(--notfair-border-strong)); }
+
+  /* Pulsing live dot — for "running" / "live" indicators. */
+  .ns-dot-live {
+    background: hsl(var(--notfair-accent));
+    box-shadow: 0 0 0 0 hsl(var(--notfair-accent) / 0.45);
+    animation: ns-pulse 1.8s ease-out infinite;
+  }
+  @keyframes ns-pulse {
+    0%   { box-shadow: 0 0 0 0 hsl(var(--notfair-accent) / 0.45); }
+    70%  { box-shadow: 0 0 0 6px hsl(var(--notfair-accent) / 0); }
+    100% { box-shadow: 0 0 0 0 hsl(var(--notfair-accent) / 0); }
+  }
+
+  /* Tabs — Apple "underline only" pattern. Quiet, lightweight; the
+     active tab gets a thin accent rule and ink-1 text. */
+  .ns-tabs {
+    @apply flex items-center gap-1;
+    border-bottom: 0.5px solid hsl(var(--border));
+  }
+  .ns-tab {
+    @apply relative inline-flex items-center gap-1.5 cursor-pointer;
+    padding: 9px 14px;
+    color: hsl(var(--notfair-ink-4));
+    font-size: 13px; font-weight: 500; letter-spacing: -0.006em;
+    background: transparent; border: 0;
+    transition: color 0.15s ease;
+  }
+  .ns-tab:hover { color: hsl(var(--notfair-ink-2)); }
+  .ns-tab[data-active="true"],
+  .ns-tab[aria-selected="true"] {
+    color: hsl(var(--notfair-ink));
+  }
+  .ns-tab[data-active="true"]::after,
+  .ns-tab[aria-selected="true"]::after {
+    content: ""; position: absolute; left: 10px; right: 10px;
+    bottom: -0.5px; height: 1.5px; border-radius: 1px;
+    background: hsl(var(--notfair-ink));
+  }
+  /* Accent variant for the in-task surface: chat/transcript/etc. */
+  .ns-tab.is-accent[data-active="true"]::after,
+  .ns-tab.is-accent[aria-selected="true"]::after {
+    background: hsl(var(--notfair-accent));
+  }
+
+  /* KPI card — small surface with quiet label + large metric. */
+  .ns-kpi {
+    @apply block bg-card rounded-[14px] transition-colors;
+    padding: 16px 18px;
+    box-shadow: var(--notfair-shadow-sm);
+  }
+  a.ns-kpi:hover, button.ns-kpi:hover { background: #FAFAFC; }
+  .ns-kpi-label {
+    color: hsl(var(--notfair-ink-4));
+    font-size: 12px; font-weight: 500; letter-spacing: -0.005em;
+    margin: 0 0 6px;
+  }
+  .ns-kpi-value {
+    @apply text-foreground m-0 tabular-nums;
+    font-size: 26px; font-weight: 600; letter-spacing: -0.024em;
+    line-height: 1.1;
+  }
+  .ns-kpi-hint {
+    color: hsl(var(--notfair-ink-4));
+    font-size: 11.5px; line-height: 1.4; letter-spacing: -0.003em;
+    margin: 6px 0 0;
+  }
+
+  /* Empty state — for sections that need a no-results placeholder. */
+  .ns-empty {
+    @apply flex flex-col items-center justify-center text-center bg-card rounded-[14px];
+    padding: 48px 24px;
+    box-shadow: var(--notfair-shadow-sm);
+  }
+  .ns-empty-title {
+    @apply text-foreground m-0;
+    font-size: 15.5px; font-weight: 600; letter-spacing: -0.012em;
+  }
+  .ns-empty-sub {
+    color: hsl(var(--notfair-ink-4));
+    font-size: 13px; line-height: 1.5; letter-spacing: -0.005em;
+    margin: 6px 0 0; max-width: 380px;
+  }
+  .ns-empty .ns-empty-action { margin-top: 16px; }
+
+  /* Card — plain surface with shadow, used when grouped-list isn't
+     the right shape (e.g. forms, detail panes). */
+  .ns-card {
+    @apply bg-card rounded-[14px] overflow-hidden;
+    box-shadow: var(--notfair-shadow);
+  }
+  .ns-card-body { padding: 18px 22px; }
+
+  /* Inline action link — accent color, no chrome. Common in row metas. */
+  .ns-link {
+    color: hsl(var(--notfair-accent));
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .ns-link:hover { text-decoration: underline; }
+
+  /* Secondary pill button — neutral surface, used alongside primary CTA. */
+  .ns-btn-secondary {
+    background: hsl(var(--notfair-surface-2));
+    color: hsl(var(--notfair-ink-2));
+  }
+  .ns-btn-secondary:hover { background: hsl(240 6% 90%); }
+
+  /* Outline pill — for low-emphasis actions next to a primary CTA. */
+  .ns-btn-outline {
+    background: hsl(var(--card));
+    color: hsl(var(--notfair-ink-2));
+    box-shadow: inset 0 0 0 0.5px hsl(var(--border));
+  }
+  .ns-btn-outline:hover { background: hsl(var(--notfair-surface-2)); }
+
+  /* Destructive pill — used in danger-zone buttons. */
+  .ns-btn-danger {
+    background: hsl(0 72% 51%); color: #fff;
+  }
+  .ns-btn-danger:hover { filter: brightness(0.94); }
+  .ns-btn-danger:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  /* ── Sidebar (Apple-flavored override of shadcn sidebar) ─────────
+     The sidebar primitive's defaults are too dense and lean cool-grey.
+     These overrides give it Apple Settings rail feel: roomy padding,
+     softer ink, accent-tinted active row, fine hairlines. */
+  [data-sidebar="sidebar"] {
+    background: hsl(0 0% 99%);
+    border-color: hsl(var(--border));
+  }
+  [data-sidebar="header"] {
+    padding: 10px 8px;
+    border-bottom: 0.5px solid hsl(var(--border));
+  }
+  [data-sidebar="group-label"] {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    color: hsl(var(--notfair-ink-4));
+    text-transform: none;
+    padding-inline: 12px;
+    margin-top: 4px;
+  }
+  [data-sidebar="menu-button"] {
+    color: hsl(var(--notfair-ink-3));
+    font-weight: 500; font-size: 13px; letter-spacing: -0.008em;
+    border-radius: 8px; height: 32px;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+  [data-sidebar="menu-button"]:hover {
+    background: hsl(var(--notfair-surface-2));
+    color: hsl(var(--notfair-ink));
+  }
+  [data-sidebar="menu-button"][data-active="true"] {
+    background: hsl(var(--notfair-accent-soft));
+    color: hsl(var(--notfair-accent));
+  }
+  [data-sidebar="menu-button"][data-active="true"] svg {
+    color: hsl(var(--notfair-accent));
+  }
+  [data-sidebar="menu-button"] svg {
+    color: hsl(var(--notfair-ink-4));
+  }
+
+  /* App topbar — for in-app surfaces (separate from the wizard topbar). */
+  .ns-app-topbar {
+    @apply sticky top-0 z-30 flex items-center;
+    height: 44px;
+    background: rgba(245,245,247,0.78);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 0.5px solid hsl(var(--border));
+    padding: 0 16px;
+    gap: 8px;
+  }
+  .ns-app-topbar-title {
+    color: hsl(var(--notfair-ink));
+    font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  .ns-app-topbar-sub {
+    color: hsl(var(--notfair-ink-4));
+    font-size: 12px; letter-spacing: -0.005em;
+  }
+  .ns-app-topbar-divider {
+    width: 0.5px; height: 18px;
+    background: hsl(var(--notfair-border-strong));
+    margin: 0 4px;
   }
 }

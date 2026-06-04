@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Workflow, BookOpenText } from "lucide-react";
+import { Workflow } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { McpToolsDialog } from "@/components/mcp-tools-dialog";
 import type { ToolSummary } from "@/server/mcp-server/tool-summaries";
 
 /**
  * Row for an MCP that ships with notfair-cmo itself — no OAuth, no
- * connect/disconnect, always available to every agent. Visually
- * distinguished from external rows by an emerald-tinted icon tile and
- * a small "BUILT-IN" lozenge in place of a connection-state badge.
+ * connect/disconnect. Settings-row shaped to match McpCard. We drop
+ * the "Built-in" pill because the section heading and the metadata
+ * line ("self-hosted · 21 tools · no setup") already convey it; one
+ * label is enough.
  */
 type Props = {
   name: string;
@@ -24,47 +24,31 @@ export function BuiltinMcpCard({ name, description, tools }: Props) {
 
   return (
     <>
-      <article className="flex items-center gap-4 px-5 py-4">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/25">
-          <Workflow className="size-5 text-emerald-700 dark:text-emerald-400" />
-        </div>
+      <article className="ns-row">
+        <span className="ns-glyph ns-glyph-accent" aria-hidden>
+          <Workflow className="size-[18px]" />
+        </span>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-medium tracking-tight">
-              {name}
-            </h3>
-            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">
-              <span
-                className="size-1.5 rounded-full bg-emerald-500"
-                aria-hidden
-              />
-              built-in
-            </span>
-          </div>
-          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-            {description}
-          </p>
-          <p className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground/80">
+        <div className="ns-row-body">
+          <h3 className="ns-row-title">{name}</h3>
+          <p className="ns-row-desc line-clamp-1">{description}</p>
+          <p className="mt-1 truncate font-mono text-[10.5px] text-[hsl(var(--notfair-ink-4))]">
             self-hosted
-            <span className="mx-1.5 text-muted-foreground/40">·</span>
+            <span className="mx-1.5 opacity-50">·</span>
             {tools.length} tool{tools.length === 1 ? "" : "s"}
-            <span className="mx-1.5 text-muted-foreground/40">·</span>
+            <span className="mx-1.5 opacity-50">·</span>
             no setup
           </p>
         </div>
 
-        <div className="shrink-0">
-          <Button
+        <div className="ns-row-meta">
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            className="h-8"
+            className="ns-btn ns-btn-outline ns-btn-sm"
             onClick={() => setOpen(true)}
           >
-            <BookOpenText className="size-3.5" />
-            Tools
-          </Button>
+            View tools
+          </button>
         </div>
       </article>
 

@@ -40,7 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <a href="#main-content" className="sr-only focus:not-sr-only">
               Skip to content
             </a>
-            <main id="main-content" className="relative flex-1 p-6">
+            <main id="main-content" className="relative flex-1">
               {children}
             </main>
           </SidebarInset>

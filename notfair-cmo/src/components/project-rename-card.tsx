@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Pencil } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slug";
@@ -64,67 +63,81 @@ export function ProjectRenameCard({
     !pending && !slugError && trimmed.length > 0 && (nameChanged || slugChanged);
 
   return (
-    <div className="space-y-3 rounded-lg border bg-card p-4">
-      <div className="flex items-start gap-3">
-        <Pencil className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold">Rename this workspace</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Changing the slug renames every agent in the workspace, rewrites all
-            cron names, moves workspace dirs, relocates session JSONL files,
-            and repoints DB rows.
+    <div className="ns-card">
+      <div className="space-y-3 p-[18px]">
+        <div>
+          <h3 className="text-[14.5px] font-semibold tracking-tight text-[hsl(var(--notfair-ink))]">
+            Rename this workspace
+          </h3>
+          <p className="mt-1 text-[12.5px] leading-snug text-[hsl(var(--notfair-ink-4))]">
+            Changing the slug renames every agent, rewrites cron names, moves
+            workspace dirs, and relocates session JSONL files.
           </p>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="project-rename-name" className="text-xs">
-          Display name
-        </Label>
-        <input
-          id="project-rename-name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          disabled={pending}
-          className={cn(
-            "h-9 w-full rounded-md border bg-background px-3 font-mono text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-            slugError && "border-destructive focus-visible:ring-destructive",
-            pending && "opacity-50",
-          )}
-          aria-invalid={!!slugError}
-        />
-        {slugError ? (
-          <p className="text-[11px] text-destructive">Invalid name: {slugError}</p>
-        ) : slugChanged ? (
-          <p className="text-[11px] text-muted-foreground">
-            Slug changes from{" "}
-            <code className="rounded bg-muted px-1 font-mono">{currentSlug}</code>{" "}
-            to{" "}
-            <code className="rounded bg-muted px-1 font-mono">{derivedSlug}</code>
-            . Every agent will be cloned into the new workspace and the old one
-            removed.
-          </p>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            Same slug — only the display name changes.
-          </p>
-        )}
-      </div>
-
-      <div className="flex justify-end">
-        <Button type="button" size="sm" onClick={save} disabled={!canSave}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-              {slugChanged ? "Renaming…" : "Saving…"}
-            </>
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="project-rename-name"
+            className="text-[12px] font-medium text-[hsl(var(--notfair-ink-3))]"
+          >
+            Display name
+          </Label>
+          <input
+            id="project-rename-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={pending}
+            className={cn(
+              "h-9 w-full rounded-lg border bg-background px-3 text-[13.5px] tracking-tight shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--notfair-accent-border))]",
+              slugError && "border-destructive focus-visible:ring-destructive",
+              pending && "opacity-50",
+            )}
+            aria-invalid={!!slugError}
+          />
+          {slugError ? (
+            <p className="text-[11.5px] text-destructive">
+              Invalid name: {slugError}
+            </p>
           ) : slugChanged ? (
-            "Rename workspace"
+            <p className="text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
+              Slug changes from{" "}
+              <code className="rounded bg-[hsl(var(--notfair-surface-2))] px-1.5 py-px font-mono text-[11px]">
+                {currentSlug}
+              </code>{" "}
+              to{" "}
+              <code className="rounded bg-[hsl(var(--notfair-accent-soft))] px-1.5 py-px font-mono text-[11px] text-[hsl(var(--notfair-accent))]">
+                {derivedSlug}
+              </code>
+              . Every agent will be cloned to the new workspace and the old one
+              removed.
+            </p>
           ) : (
-            "Save name"
+            <p className="text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
+              Same slug — only the display name changes.
+            </p>
           )}
-        </Button>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <button
+            type="button"
+            onClick={save}
+            disabled={!canSave}
+            className="ns-btn ns-btn-primary ns-btn-sm"
+          >
+            {pending ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                {slugChanged ? "Renaming…" : "Saving…"}
+              </>
+            ) : slugChanged ? (
+              "Rename workspace"
+            ) : (
+              "Save name"
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

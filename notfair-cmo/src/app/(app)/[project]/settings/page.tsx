@@ -13,22 +13,56 @@ export default async function SettingsPage({
   if (!project || project.archived_at) notFound();
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Workspace <span className="font-mono">{project.slug}</span>
-        </p>
+    <div className="ns-app-narrow">
+      <header className="ns-page-head">
+        <div className="ns-page-head-stack">
+          <h1 className="ns-page-title">Settings</h1>
+          <p className="ns-page-sub">
+            Manage <b>{project.display_name}</b> — name, slug, and the danger
+            zone.
+          </p>
+        </div>
       </header>
 
-      <ProjectRenameCard
-        currentSlug={project.slug}
-        currentDisplayName={project.display_name}
-      />
+      <section>
+        <h2 className="ns-h2">
+          <span>General</span>
+        </h2>
+        <ProjectRenameCard
+          currentSlug={project.slug}
+          currentDisplayName={project.display_name}
+        />
+      </section>
 
-      <section className="space-y-2 pt-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Danger zone
+      <section>
+        <h2 className="ns-h2">
+          <span>Workspace details</span>
+        </h2>
+        <div className="ns-card">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 p-[18px]">
+            <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+              Display name
+            </dt>
+            <dd className="text-[13px] font-medium text-[hsl(var(--notfair-ink-2))]">
+              {project.display_name}
+            </dd>
+            <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">URL slug</dt>
+            <dd>
+              <span className="ns-tag-mono">{project.slug}</span>
+            </dd>
+            <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+              AI agent runtime
+            </dt>
+            <dd className="text-[13px] text-[hsl(var(--notfair-ink-2))]">
+              {project.harness_adapter === "codex-local" ? "Codex" : "Claude Code"}
+            </dd>
+          </dl>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="ns-h2">
+          <span>Danger zone</span>
         </h2>
         <DangerZone projectSlug={project.slug} projectName={project.display_name} />
       </section>

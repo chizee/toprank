@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -11,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { SidebarBrand } from "@/components/sidebar-brand";
 import {
   Home,
   CheckCircle2,
@@ -43,7 +45,7 @@ const NAV: NavItem[] = [
   { href: "/tasks", label: "Tasks", icon: ListChecks },
   { href: "/crons", label: "Crons", icon: Clock },
   { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/connections", label: "MCP Connections", icon: Plug },
+  { href: "/connections", label: "Connections", icon: Plug },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -51,18 +53,16 @@ export async function AppSidebar() {
   const projects = listProjects();
   const active = await getActiveProject();
   const agentEntries = active ? await listProjectAgents(active.slug) : [];
-  // In-flight counts + approvals badge are no longer computed here.
-  // LiveCountsProvider (mounted at layout level) polls
-  // /api/in-flight-counts client-side and pushes fresh numbers through
-  // context. Sidebar's server-rendered structure stays stable so no
-  // reconciliation thrash on every poll — only the badge nodes flip.
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        {/* Project switcher + collapse toggle. Toggle stays visible in
-            icon-collapsed mode so the user can always re-expand the rail. */}
+        {/* Brand mark + project switcher. The mark doubles as the expand
+            toggle when collapsed (SidebarBrand handles both modes);
+            SidebarTrigger only renders in the expanded state so the icon
+            rail isn't doubled up. */}
         <div className="flex items-center gap-1">
+          <SidebarBrand homeHref={active ? projectHref(active.slug, "") : "/"} />
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
             <SidebarMenu>
               <SidebarMenuItem>
@@ -73,14 +73,14 @@ export async function AppSidebar() {
               </SidebarMenuItem>
             </SidebarMenu>
           </div>
-          <SidebarTrigger className="shrink-0" />
+          <SidebarTrigger className="shrink-0 group-data-[collapsible=icon]:hidden" />
         </div>
       </SidebarHeader>
 
       <SidebarContent>
         {active && (
           <SidebarGroup>
-            <SidebarGroupLabel>Agents</SidebarGroupLabel>
+            <SidebarGroupLabel>Team</SidebarGroupLabel>
             <SidebarGroupContent>
               <AgentNav
                 projectSlug={active.slug}
@@ -121,6 +121,16 @@ export async function AppSidebar() {
         )}
       </SidebarContent>
 
+      {active && (
+        <SidebarFooter className="border-t border-border/60 px-3 py-2 group-data-[collapsible=icon]:hidden">
+          <p className="text-[11px] leading-tight text-muted-foreground">
+            Local agents · running on{" "}
+            <span className="font-medium text-foreground">
+              {active.harness_adapter === "codex-local" ? "Codex" : "Claude Code"}
+            </span>
+          </p>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }

@@ -64,7 +64,9 @@ export function DangerZone({ projectSlug, projectName }: Props) {
             `${d.agents.length} agents, ${d.crons} crons removed.`,
         );
       } else {
-        toast.success(`Deleted ${projectName}. ${d.agents.length} agents, ${d.crons} crons removed.`);
+        toast.success(
+          `Deleted ${projectName}. ${d.agents.length} agents, ${d.crons} crons removed.`,
+        );
       }
       setOpen(false);
       router.push("/");
@@ -74,31 +76,42 @@ export function DangerZone({ projectSlug, projectName }: Props) {
 
   return (
     <>
-      <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+      <div
+        className="ns-card"
+        style={{
+          boxShadow:
+            "inset 0 0 0 0.5px hsl(0 72% 51% / 0.25), 0 1px 2px rgba(0,0,0,.04)",
+        }}
+      >
+        <div className="flex items-start gap-4 p-[18px]">
+          <span
+            aria-hidden
+            className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-[hsl(0_92%_96%)] text-[hsl(0_72%_42%)]"
+          >
+            <AlertTriangle className="size-4" />
+          </span>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-destructive">Delete this workspace</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Removes all agents created for this workspace, every scheduled cron job, and
-              every thread of chat history. This cannot be undone.
+            <h3 className="text-[14.5px] font-semibold tracking-tight text-[hsl(0_72%_42%)]">
+              Delete this workspace
+            </h3>
+            <p className="mt-1 text-[12.5px] leading-snug text-[hsl(var(--notfair-ink-4))]">
+              Removes all agents, every scheduled cron job, and every thread of
+              chat history. This cannot be undone.
             </p>
           </div>
-          <Button
+          <button
             type="button"
-            variant="destructive"
-            size="sm"
             onClick={() => setOpen(true)}
-            className="shrink-0"
+            className="ns-btn ns-btn-danger ns-btn-sm shrink-0"
           >
-            <Trash2 className="mr-1.5 size-3.5" />
+            <Trash2 className="size-3.5" />
             Delete workspace
-          </Button>
+          </button>
         </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <AlertTriangle className="size-4 text-destructive" />
@@ -116,12 +129,12 @@ export function DangerZone({ projectSlug, projectName }: Props) {
               Counting what will be removed…
             </div>
           ) : summaryError ? (
-            <div className="rounded border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
               Could not load deletion summary: {summaryError}
             </div>
           ) : summary ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-4 divide-x rounded-lg border bg-card">
+              <div className="grid grid-cols-4 divide-x rounded-xl border border-border bg-card">
                 <Stat label="Agents" value={summary.totals.agents} />
                 <Stat label="Threads" value={summary.totals.threads} />
                 <Stat label="Crons" value={summary.totals.crons} />
@@ -132,7 +145,10 @@ export function DangerZone({ projectSlug, projectName }: Props) {
                   {summary.agents
                     .filter((a) => a.exists)
                     .map((a) => (
-                      <li key={a.agentId} className="flex items-center justify-between gap-2">
+                      <li
+                        key={a.agentId}
+                        className="flex items-center justify-between gap-2"
+                      >
                         <span>
                           {a.display_name}{" "}
                           <span className="font-mono text-[10px] text-muted-foreground">
@@ -185,9 +201,13 @@ export function DangerZone({ projectSlug, projectName }: Props) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="px-3 py-2 text-center">
-      <div className="text-lg font-semibold tabular-nums">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className="px-3 py-2.5 text-center">
+      <div className="text-[18px] font-semibold tabular-nums tracking-tight">
+        {value}
+      </div>
+      <div className="mt-0.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
     </div>
   );
 }

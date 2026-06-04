@@ -2,7 +2,6 @@
 
 import { useTransition } from "react";
 import { RotateCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 type ReprovisionResult =
@@ -34,9 +33,14 @@ export function ReprovisionButton({ action }: Props) {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={go} disabled={pending}>
-      <RotateCw className={`mr-1.5 size-4 ${pending ? "animate-spin" : ""}`} />
-      {pending ? "Provisioning..." : "Reprovision agents"}
-    </Button>
+    <button
+      type="button"
+      onClick={go}
+      disabled={pending}
+      className="ns-btn ns-btn-outline ns-btn-sm"
+    >
+      <RotateCw className={`size-3.5 ${pending ? "animate-spin" : ""}`} />
+      {pending ? "Provisioning…" : "Reprovision agents"}
+    </button>
   );
 }

@@ -73,14 +73,10 @@ export function AddMcpServerMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           {trigger ?? (
-            <Button
-              type="button"
-              size="sm"
-              className="h-9 gap-1.5 rounded-full px-4 shadow-sm"
-            >
+            <button type="button" className="ns-btn ns-btn-primary">
               <Plus className="size-3.5" />
               Add server
-            </Button>
+            </button>
           )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align={align} className="w-60">

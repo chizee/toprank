@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Loader2, Plug, AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { startMcpConnect } from "@/server/actions/mcp";
 import type { McpRuntimeStatus } from "@/server/mcp/state";
@@ -55,11 +54,11 @@ export function GoogleAdsMcpBanner({ status, projectSlug }: Props) {
 
   return (
     <div
-      className="border-b bg-amber-50 px-6 py-3 dark:bg-amber-950/30"
+      className="border-b border-border/60 bg-[hsl(38_92%_97%)] px-6 py-3"
       role="status"
     >
       <div className="mx-auto flex w-full max-w-3xl items-start gap-3">
-        <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200">
+        <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-[8px] bg-[hsl(38_92%_92%)] text-[hsl(28_76%_38%)]">
           {isStale || isUnreachable ? (
             <AlertTriangle className="size-4" />
           ) : (
@@ -67,25 +66,24 @@ export function GoogleAdsMcpBanner({ status, projectSlug }: Props) {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-amber-900 dark:text-amber-100">
+          <div className="text-[13.5px] font-semibold tracking-tight text-[hsl(28_76%_28%)]">
             {headline}
           </div>
-          <p className="mt-0.5 text-xs text-amber-900/80 dark:text-amber-100/80">
+          <p className="mt-0.5 text-[12px] text-[hsl(28_55%_36%)]">
             {detail}{" "}
             <Link
               href={projectHref(projectSlug, "/connections")}
-              className="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-50"
+              className="underline underline-offset-2 hover:text-[hsl(28_76%_22%)]"
             >
               Manage connections
             </Link>
           </p>
         </div>
-        <Button
+        <button
           type="button"
-          size="sm"
           onClick={onConnect}
           disabled={busy}
-          className="shrink-0"
+          className="ns-btn ns-btn-primary ns-btn-sm shrink-0"
         >
           {busy ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -93,7 +91,7 @@ export function GoogleAdsMcpBanner({ status, projectSlug }: Props) {
             <Plug className="size-3.5" />
           )}
           {action}
-        </Button>
+        </button>
       </div>
     </div>
   );

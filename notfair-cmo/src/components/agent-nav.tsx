@@ -15,7 +15,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { RunningDot } from "@/components/running-dot";
 import type { AgentTemplateKey } from "@/server/agent-templates";
 import { colorForRole } from "@/lib/agent-colors";
 import { cn } from "@/lib/utils";
@@ -57,19 +56,14 @@ const TEMPLATE_ICONS: Record<AgentTemplateKey, LucideIcon> = {
 
 export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
   const pathname = usePathname();
-  // Live counts override the server-side initial map so the badge
-  // numbers update without a server re-render. Initial values keep
-  // first paint correct.
   const live = useLiveCounts();
   const counts: Record<string, number> = { ...inFlightCounts, ...live.agents };
 
   return (
     <SidebarMenu>
       {agents.map((a) => {
-        // Every agent lands on Tasks now. The CMO's tasks are typically
-        // its own first-turn work (onboarding audit, user-assigned planning
-        // jobs); the work it delegates to specialists shows up in those
-        // specialists' tabs. Chat tab is still one click away for free-form.
+        // Every agent lands on Tasks (its workspace) by default. Chat tab
+        // is one click away.
         const href = projectHref(projectSlug, `/agents/${a.slug}/tasks`);
         const agentBase = `/${projectSlug}/agents/${a.slug}`;
         const isActive =
@@ -86,7 +80,7 @@ export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
                 {a.role_label && rolePalette && (
                   <span
                     className={cn(
-                      "ml-1 rounded-sm border px-1.5 py-[1px] text-[10px] font-medium leading-none",
+                      "ml-1 rounded-[4px] border px-1.5 py-[1px] text-[9.5px] font-medium uppercase tracking-wide leading-none",
                       rolePalette.chip,
                     )}
                   >
@@ -94,9 +88,16 @@ export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
                   </span>
                 )}
                 {liveCount > 0 && (
-                  <span className="ml-auto inline-flex items-center gap-1.5">
-                    <RunningDot size="sm" aria-label={`${liveCount} running`} />
-                    <span className="text-[10px] font-medium tabular-nums text-sky-600 dark:text-sky-400">
+                  <span
+                    className="ml-auto inline-flex items-center gap-1.5"
+                    role="status"
+                    aria-label={`${liveCount} running`}
+                  >
+                    <span
+                      aria-hidden
+                      className="ns-dot ns-dot-live"
+                    />
+                    <span className="text-[10px] font-semibold tabular-nums text-[hsl(var(--notfair-accent))]">
                       {liveCount}
                     </span>
                   </span>

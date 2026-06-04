@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
 import { getSkillStatus } from "@/server/agents/skills";
@@ -30,35 +29,32 @@ export default async function AgentSkillsPage({
   const skills = report?.skills ?? [];
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="mx-auto max-w-4xl space-y-4">
-        <header>
-          <h2 className="text-lg font-semibold tracking-tight">Skills</h2>
-          <p className="text-sm text-muted-foreground">
-            Capabilities available to {resolved.name} from this workspace.
-          </p>
+    <div className="h-full overflow-y-auto">
+      <div className="ns-app-wide" style={{ maxWidth: 880 }}>
+        <header className="ns-page-head">
+          <div className="ns-page-head-stack">
+            <h1 className="ns-page-title">Skills</h1>
+            <p className="ns-page-sub">
+              Capabilities available to <b>{resolved.name}</b> from this
+              workspace.
+            </p>
+          </div>
         </header>
 
         {error && (
-          <Card>
-            <CardContent className="space-y-1 py-4 text-sm">
-              <p className="font-medium text-destructive">Could not load skills.</p>
-              <p className="text-xs text-muted-foreground">{error}</p>
-            </CardContent>
-          </Card>
+          <div className="ns-card">
+            <div className="ns-card-body">
+              <p className="text-[14px] font-semibold text-destructive">
+                Could not load skills.
+              </p>
+              <p className="mt-1 text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                {error}
+              </p>
+            </div>
+          </div>
         )}
 
-        {!error && skills.length === 0 && (
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              No skills installed in this workspace yet.
-            </CardContent>
-          </Card>
-        )}
-
-        {!error && skills.length > 0 && (
-          <SkillsList skills={skills} />
-        )}
+        {!error && <SkillsList skills={skills} />}
       </div>
     </div>
   );

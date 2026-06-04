@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
 import { listCronsForProject } from "@/server/scheduler/display";
@@ -50,11 +49,9 @@ export default async function AgentCronPage({
     error = err instanceof Error ? err.message : String(err);
   }
 
-  // Scope to this agent only.
   const myGroup = view.groups.find((g) => g.agent === templateSlug);
   const allCrons = myGroup?.crons ?? [];
 
-  // Expand to occurrences over the window.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const startOfFirstDay = today.getTime();
@@ -79,8 +76,6 @@ export default async function AgentCronPage({
     for (const o of occs) occurrences.push({ ...o, cron_disabled: cron.disabled });
     schedulesByCronId.set(cron.id, scheduleForCalendar(cron.schedule_raw));
   }
-  // Stamp each past occurrence with its run's status so the calendar chip
-  // can render the green-check / red-X indicator without a per-chip fetch.
   annotateOccurrencesWithRunStatus(
     occurrences,
     new Map(
@@ -112,45 +107,47 @@ export default async function AgentCronPage({
   const totalDisabled = allCrons.length - totalActive;
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="mx-auto max-w-6xl space-y-4">
-        <header className="flex flex-row items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">
-              {resolved.name}&rsquo;s scheduled work
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {totalActive} active
+    <div className="h-full overflow-y-auto">
+      <div className="ns-app-wide">
+        <header className="ns-page-head">
+          <div className="ns-page-head-stack">
+            <h1 className="ns-page-title">{resolved.name}&rsquo;s schedule</h1>
+            <p className="ns-page-sub">
+              <b>{totalActive}</b> active
               {totalDisabled > 0 ? ` · ${totalDisabled} disabled` : ""}
             </p>
           </div>
-          <ScheduleCronDialog projectSlug={project.slug} />
+          <div className="ns-page-actions">
+            <ScheduleCronDialog projectSlug={project.slug} />
+          </div>
         </header>
 
         {error && (
-          <Card>
-            <CardContent className="py-6 text-sm">
-              <p className="font-medium text-destructive">Could not load crons.</p>
-              <p className="mt-1 text-xs text-muted-foreground">{error}</p>
-            </CardContent>
-          </Card>
+          <div className="ns-card">
+            <div className="ns-card-body">
+              <p className="text-[14px] font-semibold text-destructive">
+                Could not load crons.
+              </p>
+              <p className="mt-1 text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                {error}
+              </p>
+            </div>
+          </div>
         )}
 
         {!error && allCrons.length === 0 && (
-          <Card>
-            <CardContent className="space-y-2 py-10 text-center">
-              <p className="text-sm font-medium">
-                No scheduled work for {resolved.name} yet.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Ask the agent in chat (&ldquo;run a daily bid review at 9am&rdquo;) or
-                schedule one directly.
-              </p>
-              <div className="flex justify-center pt-2">
-                <ScheduleCronDialog projectSlug={project.slug} />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="ns-empty">
+            <p className="ns-empty-title">
+              No scheduled work for {resolved.name} yet.
+            </p>
+            <p className="ns-empty-sub">
+              Ask the agent in chat (&ldquo;run a daily bid review at 9am&rdquo;)
+              or schedule one directly.
+            </p>
+            <div className="ns-empty-action">
+              <ScheduleCronDialog projectSlug={project.slug} />
+            </div>
+          </div>
         )}
 
         {!error && allCrons.length > 0 && (

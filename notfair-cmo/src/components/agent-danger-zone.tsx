@@ -88,26 +88,37 @@ export function AgentDangerZone({ agentId, agentDisplayName }: Props) {
 
   return (
     <>
-      <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+      <div
+        className="ns-card"
+        style={{
+          boxShadow:
+            "inset 0 0 0 0.5px hsl(0 72% 51% / 0.25), 0 1px 2px rgba(0,0,0,.04)",
+        }}
+      >
+        <div className="flex items-start gap-4 p-[18px]">
+          <span
+            aria-hidden
+            className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-[hsl(0_92%_96%)] text-[hsl(0_72%_42%)]"
+          >
+            <AlertTriangle className="size-4" />
+          </span>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-destructive">Delete this agent</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Removes the agent&rsquo;s workspace along with every chat thread and
-              every scheduled job that targets it. This cannot be undone.
+            <h3 className="text-[14.5px] font-semibold tracking-tight text-[hsl(0_72%_42%)]">
+              Delete this agent
+            </h3>
+            <p className="mt-1 text-[12.5px] leading-snug text-[hsl(var(--notfair-ink-4))]">
+              Removes the agent&rsquo;s workspace along with every chat thread
+              and every scheduled job that targets it. This cannot be undone.
             </p>
           </div>
-          <Button
+          <button
             type="button"
-            variant="destructive"
-            size="sm"
             onClick={() => setOpen(true)}
-            className="shrink-0"
+            className="ns-btn ns-btn-danger ns-btn-sm shrink-0"
           >
-            <Trash2 className="mr-1.5 size-3.5" />
+            <Trash2 className="size-3.5" />
             Delete agent
-          </Button>
+          </button>
         </div>
       </div>
 

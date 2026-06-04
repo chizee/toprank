@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { startAllProposedTasksAction } from "@/server/actions/tasks";
 
 /**
@@ -69,13 +68,18 @@ export function StartAllTasksButton({
       : `Start all ${proposedCount} task${proposedCount === 1 ? "" : "s"}`;
 
   return (
-    <Button onClick={onClick} disabled={disabled} size="sm">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="ns-btn ns-btn-primary ns-btn-sm"
+    >
       {pending || polling ? (
-        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+        <Loader2 className="size-3.5 animate-spin" />
       ) : (
-        <Play className="mr-1.5 size-3.5" />
+        <Play className="size-3.5" />
       )}
       {label}
-    </Button>
+    </button>
   );
 }

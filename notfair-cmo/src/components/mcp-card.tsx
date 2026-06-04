@@ -2,14 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Plug,
-  Loader2,
-  Unplug,
-  BookOpenText,
-  Trash2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, BookOpenText, Trash2, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import {
   startMcpConnect,
@@ -21,6 +14,12 @@ import type { McpSpec } from "@/server/mcp-catalog";
 import type { McpRuntimeStatus } from "@/server/mcp/state";
 import { McpToolsDialog } from "@/components/mcp-tools-dialog";
 import { McpIcon } from "@/components/mcp-icon";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   spec: McpSpec;
@@ -28,10 +27,8 @@ type Props = {
 };
 
 /**
- * One row in the Connections list. Drops the outer Card border because
- * the parent `<ol>` provides a single shared container + dividers; this
- * keeps the visual rhythm of a refined editorial list rather than a
- * stack of disconnected boxes.
+ * One row in the Connections list — Apple-style settings row with
+ * brand glyph, name + status, and a primary connect/disconnect button.
  */
 export function McpCard({ spec, status }: Props) {
   const [pending, startTransition] = useTransition();
@@ -44,11 +41,6 @@ export function McpCard({ spec, status }: Props) {
   async function onConnect() {
     setBusy("connect");
     try {
-      // Carry the current connections-page URL through OAuth so the
-      // callback lands the user back here. Without it, the callback
-      // falls through to `/`, which bounces to the active project's
-      // home — making it look like the connect flow "redirected to a
-      // different project" when really it just lost the return target.
       const return_to = window.location.pathname + window.location.search;
       const result = await startMcpConnect({ mcp_key: spec.key, return_to });
       if (!result.ok) {
@@ -56,8 +48,6 @@ export function McpCard({ spec, status }: Props) {
         setBusy(null);
         return;
       }
-      // Full-page navigation: the authorize URL is on a different origin
-      // (the MCP issuer), so we can't push() into Next's router.
       window.location.href = result.authorize_url;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -94,97 +84,87 @@ export function McpCard({ spec, status }: Props) {
   }
 
   const isBusy = busy !== null || pending;
-  const canViewTools = status.state === "connected";
-  // Every connector is removable now — presets get hidden per-project
-  // via the hidden_mcp_preset_keys list; user rows get deleted. Either
-  // way the card disappears from the connections list.
-  const canRemove = true;
+  const isConnected = status.state === "connected";
 
   return (
     <>
-      <article className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/30">
+      <article className={`ns-row ${isConnected ? "is-connected" : ""}`}>
         <McpIcon
           resourceUrl={spec.resource_url}
           alt={spec.display_name}
           size="lg"
         />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-medium tracking-tight">
-              {spec.display_name}
-            </h3>
-            <StatusDot status={status} />
+        <div className="ns-row-body">
+          <div className="ns-row-title-row">
+            <h3 className="ns-row-title">{spec.display_name}</h3>
+            <StatusLabel status={status} />
           </div>
-          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-            {spec.description}
-          </p>
+          <p className="ns-row-desc line-clamp-1">{spec.description}</p>
           <StatusLine status={status} resourceUrl={spec.resource_url} />
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          {canViewTools && (
-            <Button
+        <div className="ns-row-meta">
+          {isConnected ? (
+            <button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setToolsOpen(true)}
-            >
-              <BookOpenText className="size-3.5" />
-              Tools
-            </Button>
-          )}
-          {canRemove && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
-              disabled={isBusy}
-              onClick={onRemove}
-              aria-label={`Remove ${spec.display_name}`}
-              title="Remove server"
-            >
-              {busy === "remove" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="size-3.5" />
-              )}
-            </Button>
-          )}
-          {status.state === "connected" ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8"
+              className="ns-btn ns-btn-outline ns-btn-sm"
               disabled={isBusy}
               onClick={onDisconnect}
             >
               {busy === "disconnect" ? (
                 <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Unplug className="size-3.5" />
-              )}
+              ) : null}
               Disconnect
-            </Button>
+            </button>
           ) : (
-            <Button
+            <button
               type="button"
-              size="sm"
-              className="h-8"
+              className="ns-btn ns-btn-primary ns-btn-sm"
               disabled={isBusy}
               onClick={onConnect}
             >
               {busy === "connect" ? (
                 <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Plug className="size-3.5" />
-              )}
+              ) : null}
               {status.state === "stale_token" ? "Reconnect" : "Connect"}
-            </Button>
+            </button>
           )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="grid size-7 place-items-center rounded-md text-[hsl(var(--notfair-ink-4))] transition-colors hover:bg-[hsl(var(--notfair-surface-2))] hover:text-[hsl(var(--notfair-ink-2))]"
+                aria-label={`More options for ${spec.display_name}`}
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 rounded-xl p-1">
+              {isConnected && (
+                <DropdownMenuItem
+                  onSelect={() => setToolsOpen(true)}
+                  className="gap-2 rounded-md px-2 py-1.5 text-[13px]"
+                >
+                  <BookOpenText className="size-3.5 text-muted-foreground" />
+                  View tools
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onSelect={onRemove}
+                disabled={isBusy}
+                className="gap-2 rounded-md px-2 py-1.5 text-[13px] text-destructive focus:text-destructive"
+              >
+                {busy === "remove" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="size-3.5" />
+                )}
+                Remove server
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </article>
 
@@ -199,35 +179,34 @@ export function McpCard({ spec, status }: Props) {
   );
 }
 
-/**
- * Inline status indicator — a small filled dot next to the name. Color
- * carries the state, no background pill needed.
- */
-function StatusDot({ status }: { status: McpRuntimeStatus }) {
-  const map: Record<McpRuntimeStatus["state"], { color: string; label: string }> =
-    {
-      connected: { color: "bg-emerald-500", label: "connected" },
-      stale_token: { color: "bg-amber-500", label: "token expired" },
-      unreachable: { color: "bg-destructive", label: "unreachable" },
-      configured_no_token: { color: "bg-amber-500", label: "no token" },
-      not_configured: { color: "bg-muted-foreground/40", label: "not connected" },
-    };
-  const { color, label } = map[status.state];
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
-      role="status"
-    >
-      <span className={`size-1.5 rounded-full ${color}`} aria-hidden />
-      {label}
-    </span>
-  );
+function StatusLabel({ status }: { status: McpRuntimeStatus }) {
+  // Labels are intentionally lowercase + terse — they read as a quiet
+  // status tag, not a sentence. Mirrors the tokens the tests assert on
+  // (`connected`, `no token`, `unreachable`, `token expired`).
+  if (status.state === "connected") {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[hsl(var(--notfair-accent))]"
+        role="status"
+      >
+        <span aria-hidden className="ns-dot ns-dot-on" />
+        connected
+      </span>
+    );
+  }
+  const map: Record<
+    Exclude<McpRuntimeStatus["state"], "connected">,
+    { tone: string; label: string }
+  > = {
+    stale_token: { tone: "ns-tag-amber", label: "token expired" },
+    unreachable: { tone: "ns-tag-red", label: "unreachable" },
+    configured_no_token: { tone: "ns-tag-amber", label: "no token" },
+    not_configured: { tone: "ns-tag", label: "not connected" },
+  };
+  const { tone, label } = map[status.state];
+  return <span className={tone}>{label}</span>;
 }
 
-/**
- * Bottom metadata line: brand host (mono small) plus connection-state
- * details (verified Xm ago, error blurb, etc.) separated by a thin dot.
- */
 function StatusLine({
   status,
   resourceUrl,
@@ -244,11 +223,11 @@ function StatusLine({
   })();
   const detail = describeStatus(status);
   return (
-    <p className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground/80">
+    <p className="mt-1 truncate font-mono text-[10.5px] text-[hsl(var(--notfair-ink-4))]">
       <span>{host}</span>
       {detail ? (
         <>
-          <span className="mx-1.5 text-muted-foreground/40">·</span>
+          <span className="mx-1.5 opacity-50">·</span>
           <span>{detail}</span>
         </>
       ) : null}
@@ -259,7 +238,10 @@ function StatusLine({
 function describeStatus(status: McpRuntimeStatus): string | null {
   switch (status.state) {
     case "connected":
-      return `live · verified ${timeAgo(status.last_checked_at)}`;
+      // The "connected" indicator next to the title already says
+      // everything the user needs at a glance. Show just the host on
+      // this line — no verified timestamp, no live label.
+      return null;
     case "stale_token":
       return `token rejected (HTTP ${status.http_status})`;
     case "unreachable":
@@ -269,11 +251,4 @@ function describeStatus(status: McpRuntimeStatus): string | null {
     case "not_configured":
       return "one-click OAuth saves the token locally";
   }
-}
-
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return "just now";
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  return `${Math.floor(ms / 3_600_000)}h ago`;
 }

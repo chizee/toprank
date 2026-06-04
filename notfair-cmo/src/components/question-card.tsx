@@ -4,9 +4,6 @@ import { useState, useTransition } from "react";
 import { MessageSquareQuote } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   answerQuestionAction,
@@ -78,50 +75,40 @@ export function QuestionCard({ question, options }: QuestionCardProps) {
   }
 
   return (
-    <Card
-      className="overflow-hidden"
+    <article
+      className="ns-card"
       role="region"
       aria-label={question.prompt}
       data-status={question.status}
     >
-      <CardContent className="space-y-3 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className="gap-1 text-[10px]">
-                <MessageSquareQuote className="size-3" />
-                Question
-              </Badge>
-              <Badge
-                variant={actionable ? "default" : "outline"}
-                className="text-[10px]"
-              >
-                {actionable
-                  ? "Needs answer"
-                  : question.status === "answered"
-                    ? "Answered"
-                    : "Dismissed"}
-              </Badge>
-            </div>
-            <p className="text-sm font-medium leading-snug whitespace-pre-wrap">
-              {question.prompt}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Agent <span className="font-mono">{question.agent_id}</span> ·{" "}
-              {timeAgo(question.created_at)}
-            </p>
-          </div>
+      <div className="space-y-3 p-[18px]">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="ns-tag inline-flex items-center gap-1">
+            <MessageSquareQuote className="size-3" />
+            Question
+          </span>
+          <span className={actionable ? "ns-tag-accent" : "ns-tag"}>
+            {actionable
+              ? "Needs answer"
+              : question.status === "answered"
+                ? "Answered"
+                : "Dismissed"}
+          </span>
         </div>
+        <p className="m-0 whitespace-pre-wrap text-[14.5px] font-medium leading-snug text-[hsl(var(--notfair-ink))]">
+          {question.prompt}
+        </p>
+        <p className="m-0 text-[12px] text-[hsl(var(--notfair-ink-4))]">
+          Agent <span className="font-mono">{question.agent_id}</span> ·{" "}
+          {timeAgo(question.created_at)}
+        </p>
 
         {!actionable && (
-          <ResolvedAnswer
-            question={question}
-            options={options}
-          />
+          <ResolvedAnswer question={question} options={options} />
         )}
 
         {actionable && (
-          <div className="space-y-3">
+          <div className="space-y-3 pt-1">
             {options.length > 0 && (
               <div
                 className="grid gap-2"
@@ -141,10 +128,10 @@ export function QuestionCard({ question, options }: QuestionCardProps) {
                       }
                       disabled={pending}
                       className={cn(
-                        "w-full rounded-md border px-3 py-2 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
+                        "w-full rounded-lg border px-3 py-2.5 text-left text-[13.5px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--notfair-accent-border))] disabled:cursor-not-allowed disabled:opacity-50",
                         selected
-                          ? "border-sky-500/80 bg-sky-500/10 text-sky-950 dark:bg-sky-400/15 dark:text-sky-50"
-                          : "border-border/70 hover:border-sky-500/60 hover:bg-sky-500/5",
+                          ? "border-[hsl(var(--notfair-accent-border))] bg-[hsl(var(--notfair-accent-soft))] text-[hsl(var(--notfair-ink))]"
+                          : "border-border bg-card hover:border-[hsl(var(--notfair-accent-border))] hover:bg-[hsl(var(--notfair-accent-soft))]/40",
                       )}
                     >
                       {opt}
@@ -157,7 +144,7 @@ export function QuestionCard({ question, options }: QuestionCardProps) {
             <div className="space-y-1.5">
               <label
                 htmlFor={`q-${question.id}-text`}
-                className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+                className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--notfair-ink-4))]"
               >
                 {options.length > 0 ? "Or add a comment" : "Your answer"}
               </label>
@@ -172,27 +159,32 @@ export function QuestionCard({ question, options }: QuestionCardProps) {
                     : "Type your answer…"
                 }
                 disabled={pending}
-                className="w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-[13.5px] shadow-sm outline-none placeholder:text-muted-foreground focus-visible:border-[hsl(var(--notfair-accent-border))] focus-visible:ring-2 focus-visible:ring-[hsl(var(--notfair-accent-border))] disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={submit} disabled={pending || !canSubmit}>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={pending || !canSubmit}
+                className="ns-btn ns-btn-primary ns-btn-sm"
+              >
                 Send answer
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
+              </button>
+              <button
+                type="button"
                 onClick={dismiss}
                 disabled={pending}
+                className="ns-btn ns-btn-outline ns-btn-sm"
               >
                 Dismiss
-              </Button>
+              </button>
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }
 
@@ -205,7 +197,7 @@ function ResolvedAnswer({
 }) {
   if (question.status === "cancelled") {
     return (
-      <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-border bg-[hsl(var(--notfair-surface-2))]/60 px-3 py-2 text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
         Dismissed without answer.
       </p>
     );
@@ -216,25 +208,29 @@ function ResolvedAnswer({
       : null;
   const text = question.answer_text?.trim() || null;
   return (
-    <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-lg border border-dashed border-border bg-[hsl(var(--notfair-surface-2))]/60 p-3 text-[12.5px]">
+      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-[hsl(var(--notfair-ink-4))]">
         Answer
       </div>
       {chosen && (
-        <p className="mt-1 font-medium leading-relaxed">{chosen}</p>
+        <p className="mt-1 font-medium leading-relaxed text-[hsl(var(--notfair-ink-2))]">
+          {chosen}
+        </p>
       )}
       {text && (
         <p
           className={cn(
             "whitespace-pre-wrap leading-relaxed",
-            chosen ? "mt-1 text-muted-foreground" : "mt-1",
+            chosen
+              ? "mt-1 text-[hsl(var(--notfair-ink-4))]"
+              : "mt-1 text-[hsl(var(--notfair-ink-2))]",
           )}
         >
           {text}
         </p>
       )}
       {!chosen && !text && (
-        <p className="mt-1 italic text-muted-foreground">
+        <p className="mt-1 italic text-[hsl(var(--notfair-ink-4))]">
           (empty answer)
         </p>
       )}

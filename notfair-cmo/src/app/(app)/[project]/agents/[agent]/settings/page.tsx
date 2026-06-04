@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { TEMPLATES } from "@/server/agent-templates";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug, readAgentMeta } from "@/server/agent-meta";
@@ -24,63 +23,86 @@ export default async function AgentSettingsPage({
     : undefined;
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="mx-auto max-w-2xl space-y-6">
-        <header>
-          <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
-          <p className="text-sm text-muted-foreground">
-            {resolved.name}{" "}
-            <span className="font-mono text-xs">· {resolved.agent_id}</span>
-          </p>
+    <div className="h-full overflow-y-auto">
+      <div className="ns-app-narrow">
+        <header className="ns-page-head">
+          <div className="ns-page-head-stack">
+            <h1 className="ns-page-title">Settings</h1>
+            <p className="ns-page-sub">
+              <b>{resolved.name}</b>{" "}
+              <span className="font-mono text-[12px]">· {resolved.agent_id}</span>
+            </p>
+          </div>
         </header>
 
-        <Card>
-          <CardContent className="p-4">
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Name</dt>
-              <dd>{resolved.name}</dd>
+        <section>
+          <h2 className="ns-h2">
+            <span>Identity</span>
+            <span className="ns-h2-meta">Immutable for the life of the project</span>
+          </h2>
+          <div className="ns-card">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 p-[18px]">
+              <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                Name
+              </dt>
+              <dd className="text-[13px] font-medium text-[hsl(var(--notfair-ink-2))]">
+                {resolved.name}
+              </dd>
 
               {role && (
                 <>
-                  <dt className="text-muted-foreground">Role</dt>
-                  <dd>{role.display_name}</dd>
+                  <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                    Role
+                  </dt>
+                  <dd className="text-[13px] text-[hsl(var(--notfair-ink-2))]">
+                    {role.display_name}
+                  </dd>
                 </>
               )}
 
-              <dt className="text-muted-foreground">URL slug</dt>
-              <dd className="font-mono text-xs">{resolved.slug}</dd>
+              <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                URL slug
+              </dt>
+              <dd>
+                <span className="ns-tag-mono">{resolved.slug}</span>
+              </dd>
 
-              <dt className="text-muted-foreground">Agent id</dt>
-              <dd className="font-mono text-xs">{resolved.agent_id}</dd>
+              <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                Agent id
+              </dt>
+              <dd>
+                <span className="ns-tag-mono">{resolved.agent_id}</span>
+              </dd>
 
               {meta?.source_agent_id && (
                 <>
-                  <dt className="text-muted-foreground">Cloned from</dt>
-                  <dd className="font-mono text-xs">{meta.source_agent_id}</dd>
+                  <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                    Cloned from
+                  </dt>
+                  <dd>
+                    <span className="ns-tag-mono">{meta.source_agent_id}</span>
+                  </dd>
                 </>
               )}
 
               {meta?.created_at && (
                 <>
-                  <dt className="text-muted-foreground">Created</dt>
-                  <dd className="tabular-nums">
+                  <dt className="text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                    Created
+                  </dt>
+                  <dd className="text-[13px] tabular-nums text-[hsl(var(--notfair-ink-2))]">
                     {new Date(meta.created_at).toLocaleString()}
                   </dd>
                 </>
               )}
             </dl>
-            <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
-              Agent identity is immutable. The name set at onboarding stays
-              fixed for the life of the project; the URL slug is computed
-              from the role + name.
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <section className="space-y-2 pt-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Danger zone
-          </h3>
+        <section>
+          <h2 className="ns-h2">
+            <span>Danger zone</span>
+          </h2>
           <AgentDangerZone
             agentId={resolved.agent_id}
             agentDisplayName={resolved.name}

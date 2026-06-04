@@ -1,21 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MessageSquare, Clock, Bot, ListChecks, CheckCircle2 } from "lucide-react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+  Bot,
+  Briefcase,
+  Megaphone,
+  MessageCircle,
+  MessageSquare,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 import { getProject } from "@/server/db/projects";
 import { costToday } from "@/server/db/cost";
 import { listPendingApprovals } from "@/server/db/approvals";
 import { listTasks } from "@/server/db/tasks";
 import { listAgentActions } from "@/server/db/agent-actions";
-import { TEMPLATES } from "@/server/agent-templates";
+import { TEMPLATES, type AgentTemplateKey } from "@/server/agent-templates";
 import { listProjectAgents } from "@/server/agent-meta";
 import { projectHref } from "@/lib/project-href";
 
@@ -31,6 +30,13 @@ function timeAgo(iso: string) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+const ROLE_ICON: Record<AgentTemplateKey, LucideIcon> = {
+  cmo: Briefcase,
+  google_ads: Megaphone,
+  meta_ads: MessageCircle,
+  seo: Search,
+};
+
 export default async function ProjectHomePage({
   params,
 }: {
@@ -45,222 +51,241 @@ export default async function ProjectHomePage({
   const tasks = listTasks(project.slug);
   const recent = listAgentActions(project.slug, 8);
   const projectAgents = await listProjectAgents(project.slug);
-  // CMO's URL slug (e.g. "cmo-greg") for any "chat with CMO" deep links
-  // on this page. Falls back to a sensible empty path; the project home
-  // is fine if CMO somehow isn't provisioned yet.
   const cmoAgent = projectAgents.find((a) => a.template_key === "cmo");
   const cmoChatHref = cmoAgent
     ? projectHref(slug, `/agents/${cmoAgent.slug}/chat`)
     : projectHref(slug, "");
 
-  // Intentionally NOT calling openclaw here. The cron tab is the source of
-  // truth for scheduled jobs; calling `openclaw cron list` from the home page
-  // would block render for 5-15s on some machines. Show a link instead.
   const running = tasks.filter((t) => t.status === "working").length;
+  const nothingHappened = tasks.length === 0 && recent.length === 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{project.display_name}</h1>
-          <p className="text-sm text-muted-foreground">
-            Workspace home · slug <span className="font-mono">{project.slug}</span>
+    <div className="ns-app-wide">
+      <header className="ns-page-head">
+        <div className="ns-page-head-stack">
+          <h1 className="ns-page-title">{project.display_name}</h1>
+          <p className="ns-page-sub">
+            Your local AI marketing team. Hand a goal to the CMO and they&rsquo;ll
+            delegate.
           </p>
         </div>
-        <Button asChild>
-          <Link href={cmoChatHref}>
-            <MessageSquare className="mr-1.5 size-4" />
+        <div className="ns-page-actions">
+          <Link href={cmoChatHref} className="ns-btn ns-btn-primary">
+            <MessageSquare className="size-4" />
             Chat with CMO
           </Link>
-        </Button>
-      </div>
+        </div>
+      </header>
 
-      {/* KPI row */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <KpiCard
+      {/* KPI strip — four quiet metric tiles. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <KpiTile
           label="Spend today"
           value={formatUsd(cost.total_usd)}
           hint={`LLM ${formatUsd(cost.by_source.llm)} · Ads ${formatUsd(
             cost.by_source.google_ads + cost.by_source.gsc,
           )}`}
         />
-        <KpiCard
-          label="Scheduled crons"
-          value="→"
-          hint="open cron tab"
-          href={projectHref(slug, "/crons")}
-        />
-        <KpiCard
+        <KpiTile
           label="Active tasks"
           value={String(running)}
           hint={`${tasks.length} total`}
           href={projectHref(slug, "/tasks")}
         />
-        <KpiCard
+        <KpiTile
           label="Pending approvals"
           value={String(pending.length)}
           hint={pending.length === 0 ? "all caught up" : "review →"}
           href={projectHref(slug, "/approvals")}
+          accent={pending.length > 0}
+        />
+        <KpiTile
+          label="Crons"
+          value="·"
+          hint="scheduled work"
+          href={projectHref(slug, "/crons")}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Agents column */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Your agents</CardTitle>
-                <CardDescription>
-                  Each agent runs in its own workspace. Click to chat.
-                </CardDescription>
-              </div>
-              <Button asChild variant="outline" size="sm">
-                <Link href={projectHref(slug, "/agents")}>View all</Link>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
+      {/* Two-up: agents on the left, recent activity on the right. */}
+      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <section className="lg:col-span-2">
+          <div className="ns-h2">
+            <span>Your agents</span>
+            <Link href={projectHref(slug, "/agents")} className="ns-link ns-h2-meta">
+              View all ›
+            </Link>
+          </div>
+          <ol className="ns-group">
             {projectAgents.map((agent) => {
               const role = agent.template_key
                 ? TEMPLATES.find((t) => t.key === agent.template_key)
                 : undefined;
+              const Icon = agent.template_key
+                ? ROLE_ICON[agent.template_key] ?? Bot
+                : Bot;
               return (
-                <Link
-                  key={agent.agent_id}
-                  href={projectHref(slug, `/agents/${agent.slug}/chat`)}
-                  className="flex items-center gap-3 rounded-md border bg-card p-3 transition-colors hover:bg-accent/50"
-                >
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                    <Bot className="size-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-medium">{agent.name}</span>
-                      {role && (
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          {role.display_name}
-                        </span>
-                      )}
-                    </div>
-                    <p className="line-clamp-1 text-xs text-muted-foreground">
-                      {role?.description ?? agent.description ?? ""}
-                    </p>
-                  </div>
-                  <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
-                </Link>
+                <li key={agent.agent_id}>
+                  <Link
+                    href={projectHref(slug, `/agents/${agent.slug}/chat`)}
+                    className="ns-row-button"
+                  >
+                    <span className="ns-glyph" aria-hidden>
+                      <Icon className="size-[18px] text-[hsl(var(--notfair-ink-2))]" />
+                    </span>
+                    <span className="ns-row-body">
+                      <span className="ns-row-title-row">
+                        <span className="ns-row-title">{agent.name}</span>
+                        {role && (
+                          <span className="ns-tag">{role.display_name}</span>
+                        )}
+                      </span>
+                      <span className="ns-row-desc block">
+                        {role?.description ?? agent.description ?? "Custom agent."}
+                      </span>
+                    </span>
+                    <span className="ns-row-meta">
+                      <span className="chev" aria-hidden>
+                        ›
+                      </span>
+                    </span>
+                  </Link>
+                </li>
               );
             })}
-          </CardContent>
-        </Card>
+          </ol>
+        </section>
 
-        {/* Activity column */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Recent activity</CardTitle>
-                <CardDescription>Last 8 agent actions</CardDescription>
-              </div>
-              <Button asChild variant="outline" size="sm">
-                <Link href={projectHref(slug, "/activity")}>All</Link>
-              </Button>
+        <section>
+          <div className="ns-h2">
+            <span>Recent activity</span>
+            <Link
+              href={projectHref(slug, "/activity")}
+              className="ns-link ns-h2-meta"
+            >
+              All ›
+            </Link>
+          </div>
+          {recent.length === 0 ? (
+            <div className="ns-empty">
+              <p className="ns-empty-title">Nothing yet.</p>
+              <p className="ns-empty-sub">
+                Autonomous decisions and scheduled work will show up here.
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {recent.length === 0 ? (
-              <div className="space-y-2 text-sm">
-                <p className="text-muted-foreground">No activity yet.</p>
-                <p className="text-xs text-muted-foreground">
-                  Activity logs autonomous decisions, scheduled work, and tool calls.
-                </p>
-              </div>
-            ) : (
-              <ul className="space-y-2.5 text-xs">
-                {recent.map((a) => (
-                  <li key={a.id} className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-mono text-[9px]">
-                        {a.action_type}
-                      </Badge>
-                      <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
-                        {timeAgo(a.occurred_at)}
-                      </span>
-                    </div>
-                    <p className="line-clamp-2 leading-snug">{a.summary}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+          ) : (
+            <ol className="ns-group">
+              {recent.map((a) => (
+                <li key={a.id} className="ns-row flex-col items-start gap-1">
+                  <div className="flex w-full items-baseline justify-between gap-2">
+                    <span className="ns-tag-mono">{a.action_type}</span>
+                    <span className="text-[11px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
+                      {timeAgo(a.occurred_at)}
+                    </span>
+                  </div>
+                  <p className="m-0 text-[12.5px] leading-snug text-[hsl(var(--notfair-ink-3))] line-clamp-2">
+                    {a.summary}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
       </div>
 
-      {/* Onboarding nudge if nothing has happened yet */}
-      {tasks.length === 0 && recent.length === 0 && (
-        <Card>
-          <CardContent className="space-y-3 py-6 text-sm">
-            <h3 className="font-medium">Getting started</h3>
-            <ol className="space-y-1.5 text-muted-foreground">
-              <li>
-                1.{" "}
-                <Link href={projectHref(slug, "/connections")} className="underline">
-                  Connect Google Ads or GSC
-                </Link>{" "}
-                if you want agents to do real work (optional, chat works without it)
-              </li>
-              <li>
-                2.{" "}
-                <Link href={projectHref(slug, "/agents/cmo/chat")} className="underline">
-                  Chat with the CMO
-                </Link>{" "}
-                to plan what to do
-              </li>
-              <li>
-                3.{" "}
-                <Link href={projectHref(slug, "/crons")} className="underline">
-                  Schedule recurring jobs
-                </Link>{" "}
-                for specialist agents
-              </li>
-            </ol>
-          </CardContent>
-        </Card>
+      {nothingHappened && (
+        <section className="mt-10">
+          <div className="ns-h2">
+            <span>Getting started</span>
+          </div>
+          <ol className="ns-group">
+            <GettingStartedStep
+              n="1"
+              title="Connect your data sources"
+              desc="Wire up Google Ads, Meta Ads, or Search Console so agents can do real work."
+              href={projectHref(slug, "/connections")}
+            />
+            <GettingStartedStep
+              n="2"
+              title="Chat with your CMO"
+              desc="Brief them on goals, audience, and constraints. They&rsquo;ll plan from there."
+              href={cmoChatHref}
+            />
+            <GettingStartedStep
+              n="3"
+              title="Schedule recurring work"
+              desc="Daily bid review, weekly SEO audit — whatever cadence you want."
+              href={projectHref(slug, "/crons")}
+            />
+          </ol>
+        </section>
       )}
     </div>
   );
 }
 
-function KpiCard({
+function KpiTile({
   label,
   value,
   hint,
   href,
+  accent,
 }: {
   label: string;
   value: string;
   hint: string;
   href?: string;
+  accent?: boolean;
 }) {
-  const content = (
-    <Card className={href ? "transition-colors hover:bg-accent/30" : undefined}>
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 text-xs text-muted-foreground">{hint}</CardContent>
-    </Card>
+  const body = (
+    <>
+      <p className="ns-kpi-label">{label}</p>
+      <p
+        className={`ns-kpi-value ${
+          accent ? "text-[hsl(var(--notfair-accent))]" : ""
+        }`}
+      >
+        {value}
+      </p>
+      <p className="ns-kpi-hint">{hint}</p>
+    </>
   );
   if (href)
     return (
-      <Link href={href} className="block">
-        {content}
+      <Link href={href} className="ns-kpi">
+        {body}
       </Link>
     );
-  return content;
+  return <div className="ns-kpi">{body}</div>;
 }
 
-// Silence unused lint for icons reserved for future activity-feed expansion.
-void ListChecks;
-void CheckCircle2;
-void Clock;
+function GettingStartedStep({
+  n,
+  title,
+  desc,
+  href,
+}: {
+  n: string;
+  title: string;
+  desc: string;
+  href: string;
+}) {
+  return (
+    <li>
+      <Link href={href} className="ns-row-button">
+        <span className="ns-glyph ns-glyph-accent" aria-hidden>
+          {n}
+        </span>
+        <span className="ns-row-body">
+          <span className="ns-row-title">{title}</span>
+          <span className="ns-row-desc block">{desc}</span>
+        </span>
+        <span className="ns-row-meta">
+          <span className="chev" aria-hidden>
+            ›
+          </span>
+        </span>
+      </Link>
+    </li>
+  );
+}

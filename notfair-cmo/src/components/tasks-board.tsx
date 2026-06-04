@@ -11,9 +11,6 @@ import {
   X,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -204,14 +201,13 @@ export function TasksBoard({ projectSlug, tasks, agents }: Props) {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+      <div className="flex flex-wrap items-center gap-2 pb-3">
         {/* Agent filter */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
+            <button
+              type="button"
+              className="ns-btn ns-btn-outline ns-btn-sm"
             >
               <Users className="size-3.5" />
               {prefs.agents.length === 0
@@ -219,7 +215,7 @@ export function TasksBoard({ projectSlug, tasks, agents }: Props) {
                 : prefs.agents.length === 1
                   ? agentLabel(agentById, prefs.agents[0])
                   : `${prefs.agents.length} agents`}
-            </Button>
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground uppercase tracking-wide">
@@ -275,14 +271,13 @@ export function TasksBoard({ projectSlug, tasks, agents }: Props) {
         {/* Column visibility */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
+            <button
+              type="button"
+              className="ns-btn ns-btn-outline ns-btn-sm"
             >
               <Columns3 className="size-3.5" />
               {prefs.columns.length} columns
-            </Button>
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-52">
             <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground uppercase tracking-wide">
@@ -335,17 +330,20 @@ export function TasksBoard({ projectSlug, tasks, agents }: Props) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="ml-auto inline-flex overflow-hidden rounded-md border">
+        <div
+          className="ml-auto inline-flex overflow-hidden rounded-full border border-border bg-card p-0.5"
+          style={{ boxShadow: "var(--notfair-shadow-sm)" }}
+        >
           <button
             type="button"
             aria-label="Kanban view"
             aria-pressed={prefs.view === "kanban"}
             onClick={() => setView("kanban")}
             className={cn(
-              "flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors",
+              "flex h-7 w-9 items-center justify-center rounded-full transition-colors",
               prefs.view === "kanban"
-                ? "bg-accent text-foreground"
-                : "hover:bg-accent/50",
+                ? "bg-[hsl(var(--notfair-ink))] text-white"
+                : "text-[hsl(var(--notfair-ink-4))] hover:text-[hsl(var(--notfair-ink))]",
             )}
           >
             <LayoutGrid className="size-3.5" />
@@ -356,10 +354,10 @@ export function TasksBoard({ projectSlug, tasks, agents }: Props) {
             aria-pressed={prefs.view === "list"}
             onClick={() => setView("list")}
             className={cn(
-              "flex h-8 w-8 items-center justify-center border-l text-muted-foreground transition-colors",
+              "flex h-7 w-9 items-center justify-center rounded-full transition-colors",
               prefs.view === "list"
-                ? "bg-accent text-foreground"
-                : "hover:bg-accent/50",
+                ? "bg-[hsl(var(--notfair-ink))] text-white"
+                : "text-[hsl(var(--notfair-ink-4))] hover:text-[hsl(var(--notfair-ink))]",
             )}
           >
             <ListIcon className="size-3.5" />
@@ -389,26 +387,23 @@ export function TasksBoard({ projectSlug, tasks, agents }: Props) {
 
       {/* Body */}
       {tasks.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No tasks yet. Ask your CMO to do something in chat to populate
-            this board.
-          </CardContent>
-        </Card>
+        <div className="ns-empty">
+          <p className="ns-empty-title">No tasks yet.</p>
+          <p className="ns-empty-sub">
+            Ask your CMO to do something in chat to populate this board.
+          </p>
+        </div>
       ) : filteredTasks.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No tasks match the current filter.
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-2 h-auto p-0 text-xs underline underline-offset-2"
-              onClick={clearAgents}
-            >
-              Clear filter
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="ns-empty">
+          <p className="ns-empty-title">No tasks match the current filter.</p>
+          <button
+            type="button"
+            onClick={clearAgents}
+            className="ns-btn ns-btn-ghost ns-btn-sm mt-3"
+          >
+            Clear filter
+          </button>
+        </div>
       ) : prefs.view === "kanban" ? (
         <KanbanView
           projectSlug={projectSlug}
@@ -446,48 +441,42 @@ function KanbanView({
 }) {
   if (visibleColumns.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          No columns selected. Open the Columns menu and pick at least one
-          status to display.
-        </CardContent>
-      </Card>
+      <div className="ns-empty">
+        <p className="ns-empty-title">No columns selected.</p>
+        <p className="ns-empty-sub">
+          Open the Columns menu and pick at least one status to display.
+        </p>
+      </div>
     );
   }
   return (
-    // Horizontal scroll when columns exceed viewport. Each column ~280px
-    // so up to ~3 fit on a typical 16:9 inside the sidebar layout.
     <div className="flex gap-3 overflow-x-auto pb-2">
       {visibleColumns.map((status) => {
         const items = tasks.filter((t) => t.status === status);
         return (
           <section
             key={status}
-            className="flex w-72 shrink-0 flex-col rounded-md border bg-muted/30"
+            className="flex w-72 shrink-0 flex-col rounded-[14px] bg-[hsl(var(--notfair-surface-2))]/60"
+            style={{ boxShadow: "inset 0 0 0 0.5px hsl(var(--border))" }}
             aria-label={`${STATUS_LABEL[status]} column`}
           >
-            <header
-              className={cn(
-                "flex items-center justify-between border-b border-l-2 px-3 py-2",
-                statusBorderTone(status),
-              )}
-            >
+            <header className="flex items-center justify-between border-b border-border/60 px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <span
                   aria-hidden
-                  className={cn("size-2 rounded-full", STATUS_TONE[status])}
+                  className={cn("size-1.5 rounded-full", STATUS_TONE[status])}
                 />
-                <h2 className="text-xs font-medium tracking-tight">
+                <h2 className="text-[12px] font-semibold tracking-tight text-[hsl(var(--notfair-ink-2))]">
                   {STATUS_LABEL[status]}
                 </h2>
               </div>
-              <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+              <span className="font-mono text-[10.5px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
                 {counts[status] ?? 0}
               </span>
             </header>
             <div className="min-h-[120px] flex-1 space-y-2 p-2">
               {items.length === 0 ? (
-                <p className="px-2 py-6 text-center text-[11px] text-muted-foreground/70">
+                <p className="px-2 py-6 text-center text-[11px] text-[hsl(var(--notfair-ink-4))]/70">
                   No tasks.
                 </p>
               ) : (
@@ -520,31 +509,27 @@ function TaskCard({
   return (
     <Link
       href={projectHref(projectSlug, `/tasks/${task.id}`)}
-      className="block rounded-md border bg-card p-3 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30"
+      className="block rounded-[10px] bg-card p-3 transition-colors hover:bg-[hsl(0_0%_99%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--notfair-accent-border))]"
+      style={{ boxShadow: "var(--notfair-shadow-sm)" }}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+        <span className="font-mono text-[10px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
           {task.display_id.toUpperCase()}
         </span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-[10px] text-[hsl(var(--notfair-ink-4))]">
           {relativeTime(task.updated_at)}
         </span>
       </div>
-      <p className="mt-1.5 line-clamp-2 text-[13px] font-medium text-foreground">
+      <p className="mt-1.5 line-clamp-2 text-[13px] font-medium text-[hsl(var(--notfair-ink))]">
         {task.title ?? task.brief}
       </p>
       {task.title && (
-        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+        <p className="mt-0.5 line-clamp-2 text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
           {task.brief}
         </p>
       )}
       <div className="mt-2 flex items-center justify-between gap-2">
-        <Badge
-          variant="outline"
-          className="h-4 px-1.5 text-[10px] font-normal"
-        >
-          {assignee}
-        </Badge>
+        <span className="ns-tag">{assignee}</span>
       </div>
     </Link>
   );
@@ -582,31 +567,34 @@ function ListView({
 
   if (rows.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          No tasks in the selected statuses. Open the Columns menu to
-          include more.
-        </CardContent>
-      </Card>
+      <div className="ns-empty">
+        <p className="ns-empty-title">No tasks in the selected statuses.</p>
+        <p className="ns-empty-sub">
+          Open the Columns menu to include more.
+        </p>
+      </div>
     );
   }
   return (
-    <div className="overflow-hidden rounded-md border">
-      <div className="grid grid-cols-[6rem_7rem_minmax(0,1fr)_9rem_6rem] gap-3 border-b bg-muted/40 px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div
+      className="overflow-hidden rounded-[14px] bg-card"
+      style={{ boxShadow: "var(--notfair-shadow)" }}
+    >
+      <div className="grid grid-cols-[6rem_7rem_minmax(0,1fr)_9rem_6rem] gap-3 border-b border-border/60 bg-[hsl(var(--notfair-surface-2))]/40 px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wide text-[hsl(var(--notfair-ink-4))]">
         <span>ID</span>
         <span>Status</span>
         <span>Description</span>
         <span>Assignee</span>
         <span className="text-right">Updated</span>
       </div>
-      <ul className="divide-y">
+      <ul className="divide-y divide-border/60">
         {rows.map((t) => (
           <li key={t.id}>
             <Link
               href={projectHref(projectSlug, `/tasks/${t.id}`)}
-              className="grid grid-cols-[6rem_7rem_minmax(0,1fr)_9rem_6rem] items-center gap-3 px-3 py-2 text-xs transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/30"
+              className="grid grid-cols-[6rem_7rem_minmax(0,1fr)_9rem_6rem] items-center gap-3 px-4 py-2.5 text-[12.5px] transition-colors hover:bg-[hsl(0_0%_99%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[hsl(var(--notfair-accent-border))]"
             >
-              <span className="truncate font-mono text-[11px] text-muted-foreground tabular-nums">
+              <span className="truncate font-mono text-[11px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
                 {t.display_id.toUpperCase()}
               </span>
               <span className="flex items-center gap-1.5">
@@ -617,22 +605,24 @@ function ListView({
                     STATUS_TONE[t.status],
                   )}
                 />
-                <span className="text-[11px]">{STATUS_LABEL[t.status]}</span>
+                <span className="text-[11.5px] text-[hsl(var(--notfair-ink-3))]">
+                  {STATUS_LABEL[t.status]}
+                </span>
               </span>
               <span className="min-w-0">
-                <span className="block truncate font-medium text-foreground">
+                <span className="block truncate font-medium text-[hsl(var(--notfair-ink))]">
                   {t.title ?? t.brief}
                 </span>
                 {t.title && (
-                  <span className="block truncate text-[11px] text-muted-foreground">
+                  <span className="block truncate text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
                     {t.brief}
                   </span>
                 )}
               </span>
-              <span className="truncate text-muted-foreground">
+              <span className="truncate text-[hsl(var(--notfair-ink-4))]">
                 {agentById.get(t.agent_id)?.name ?? t.agent_id}
               </span>
-              <span className="truncate text-right text-[11px] text-muted-foreground">
+              <span className="truncate text-right text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
                 {relativeTime(t.updated_at)}
               </span>
             </Link>

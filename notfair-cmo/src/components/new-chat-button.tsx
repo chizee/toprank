@@ -3,7 +3,6 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { projectHref } from "@/lib/project-href";
 
 type Props = {
@@ -12,10 +11,7 @@ type Props = {
 };
 
 /**
- * Discoverable "new chat" affordance next to the thread dropdown. Mints a
- * fresh UUID + routes to its chat URL — the dropdown's own "New thread"
- * item does the same, but having it as a top-level button surfaces the
- * action without an extra click into the menu.
+ * Discoverable "new chat" affordance next to the thread dropdown.
  */
 export function NewChatButton({ projectSlug, agentSlug }: Props) {
   const router = useRouter();
@@ -29,16 +25,16 @@ export function NewChatButton({ projectSlug, agentSlug }: Props) {
   }
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
+    <button
+      type="button"
       onClick={newThread}
       disabled={pending}
       aria-label="New chat"
       title="New chat"
+      className="ns-btn ns-btn-outline ns-btn-sm"
     >
       <Plus className="size-3.5" />
-      <span className="ml-1">New chat</span>
-    </Button>
+      <span>New chat</span>
+    </button>
   );
 }

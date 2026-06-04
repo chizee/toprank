@@ -3,8 +3,6 @@
 import { useState, useTransition } from "react";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -31,15 +29,12 @@ const ACTION_TYPE_LABEL: Record<Approval["action_type"], string> = {
   other: "Other",
 };
 
-const STATUS_VARIANT: Record<
-  Approval["status"],
-  { label: string; variant: "default" | "secondary" | "outline" | "destructive" }
-> = {
-  pending: { label: "Pending", variant: "default" },
-  revision_requested: { label: "Revision requested", variant: "secondary" },
-  approved: { label: "Approved", variant: "outline" },
-  rejected: { label: "Rejected", variant: "destructive" },
-  expired: { label: "Expired", variant: "outline" },
+const STATUS_TAG: Record<Approval["status"], { label: string; cls: string }> = {
+  pending: { label: "Pending", cls: "ns-tag-accent" },
+  revision_requested: { label: "Revision requested", cls: "ns-tag-amber" },
+  approved: { label: "Approved", cls: "ns-tag-accent" },
+  rejected: { label: "Rejected", cls: "ns-tag-red" },
+  expired: { label: "Expired", cls: "ns-tag" },
 };
 
 function formatUsd(n: number) {
@@ -68,7 +63,7 @@ export function ApprovalCard({ approval }: ApprovalCardProps) {
 
   const actionable =
     approval.status === "pending" || approval.status === "revision_requested";
-  const statusBadge = STATUS_VARIANT[approval.status];
+  const statusTag = STATUS_TAG[approval.status];
 
   function approve() {
     start(async () => {
@@ -117,96 +112,93 @@ export function ApprovalCard({ approval }: ApprovalCardProps) {
 
   return (
     <>
-      <Card
-        className="overflow-hidden"
+      <article
+        className="ns-card"
         role="region"
         aria-label={approval.action_summary}
         data-status={approval.status}
       >
-        <CardContent className="space-y-3 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge variant="outline" className="text-[10px]">
-                  {ACTION_TYPE_LABEL[approval.action_type]}
-                </Badge>
-                <Badge variant={statusBadge.variant} className="text-[10px]">
-                  {statusBadge.label}
-                </Badge>
-                {approval.decided_by_kind === "policy" && (
-                  <Badge variant="outline" className="gap-1 text-[10px]">
-                    <ShieldCheck className="size-3" />
-                    Auto by policy
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm font-medium leading-snug">
-                {approval.action_summary}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {approval.cost_estimate_usd > 0 && (
-                  <>
-                    Cost:{" "}
-                    <span className="font-medium">
-                      {formatUsd(approval.cost_estimate_usd)}
-                    </span>{" "}
-                    ·{" "}
-                  </>
-                )}
-                Agent <span className="font-mono">{approval.agent_id}</span> ·{" "}
-                {timeAgo(approval.created_at)}
-              </p>
-            </div>
+        <div className="space-y-3 p-[18px]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="ns-tag">{ACTION_TYPE_LABEL[approval.action_type]}</span>
+            <span className={statusTag.cls}>{statusTag.label}</span>
+            {approval.decided_by_kind === "policy" && (
+              <span className="ns-tag inline-flex items-center gap-1">
+                <ShieldCheck className="size-3" />
+                Auto by policy
+              </span>
+            )}
           </div>
+          <p className="m-0 text-[14.5px] font-medium leading-snug text-[hsl(var(--notfair-ink))]">
+            {approval.action_summary}
+          </p>
+          <p className="m-0 text-[12px] text-[hsl(var(--notfair-ink-4))]">
+            {approval.cost_estimate_usd > 0 && (
+              <>
+                Cost:{" "}
+                <span className="font-medium text-[hsl(var(--notfair-ink-2))]">
+                  {formatUsd(approval.cost_estimate_usd)}
+                </span>{" "}
+                ·{" "}
+              </>
+            )}
+            Agent <span className="font-mono">{approval.agent_id}</span> ·{" "}
+            {timeAgo(approval.created_at)}
+          </p>
 
-          {/* Reasoning is shown inline (no toggle) when present — there's no
-              separate Why? button to discover the rationale. */}
           {approval.reasoning && (
-            <p className="rounded-md bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+            <p className="m-0 whitespace-pre-wrap rounded-lg bg-[hsl(var(--notfair-surface-2))] p-3 text-[12.5px] leading-relaxed text-[hsl(var(--notfair-ink-3))]">
               {approval.reasoning}
             </p>
           )}
 
           {approval.decision_note && !actionable && (
-            <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border bg-[hsl(var(--notfair-surface-2))]/60 p-3 text-[12px]">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--notfair-ink-4))]">
                 Decision note
               </div>
-              <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+              <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[hsl(var(--notfair-ink-2))]">
                 {approval.decision_note}
               </p>
             </div>
           )}
 
           {actionable && (
-            <div className="space-y-3">
+            <div className="space-y-3 pt-1">
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={approve} disabled={pending}>
+                <button
+                  type="button"
+                  onClick={approve}
+                  disabled={pending}
+                  className="ns-btn ns-btn-primary ns-btn-sm"
+                >
                   Approve
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
+                </button>
+                <button
+                  type="button"
                   onClick={() => setDenyOpen(true)}
                   disabled={pending}
+                  className="ns-btn ns-btn-outline ns-btn-sm"
                 >
                   Deny
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowPolicyForm((s) => !s)}
                   disabled={pending}
+                  className="ns-btn ns-btn-ghost ns-btn-sm"
                 >
                   <ShieldCheck className="size-3.5" />
                   Always approve
-                </Button>
+                </button>
               </div>
 
               {showPolicyForm && (
-                <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3 text-xs">
-                  <p className="font-medium">Create auto-approval policy</p>
-                  <p className="text-muted-foreground">
+                <div className="space-y-2 rounded-lg border border-border bg-[hsl(var(--notfair-surface-2))]/60 p-3 text-[12px]">
+                  <p className="m-0 font-semibold text-[hsl(var(--notfair-ink))]">
+                    Create auto-approval policy
+                  </p>
+                  <p className="m-0 text-[hsl(var(--notfair-ink-4))]">
                     Future{" "}
                     <span className="font-mono">
                       {ACTION_TYPE_LABEL[approval.action_type]}
@@ -247,24 +239,29 @@ export function ApprovalCard({ approval }: ApprovalCardProps) {
                     />
                   </label>
                   <div className="flex gap-2 pt-1">
-                    <Button size="sm" onClick={alwaysApprove} disabled={pending}>
+                    <button
+                      type="button"
+                      onClick={alwaysApprove}
+                      disabled={pending}
+                      className="ns-btn ns-btn-primary ns-btn-sm"
+                    >
                       Save policy
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setShowPolicyForm(false)}
                       disabled={pending}
+                      className="ns-btn ns-btn-ghost ns-btn-sm"
                     >
                       Cancel
-                    </Button>
+                    </button>
                   </div>
                 </div>
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </article>
 
       <Dialog open={denyOpen} onOpenChange={(open) => !pending && setDenyOpen(open)}>
         <DialogContent>

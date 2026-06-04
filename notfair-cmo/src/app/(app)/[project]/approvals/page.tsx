@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { getProject } from "@/server/db/projects";
 import {
   listActionableApprovals,
@@ -34,8 +32,6 @@ export default async function ApprovalsPage({
   const project = getProject(slug);
   if (!project || project.archived_at) notFound();
 
-  // Bulk-fetch everything we render — better-sqlite3 is synchronous and the
-  // page is small enough that one round-trip per panel keeps the code simple.
   const actionable = listActionableApprovals(project.slug);
   const resolved =
     activeTab === "resolved" ? listResolvedApprovals(project.slug, 50) : [];
@@ -48,26 +44,35 @@ export default async function ApprovalsPage({
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Approvals</h1>
-        <p className="text-sm text-muted-foreground">
-          Inbox for the project <span className="font-mono">{project.slug}</span>. Approvals
-          surface here when an agent wants to make a write that the project's policies
-          don't already cover.
-        </p>
+    <div className="ns-app-narrow">
+      <header className="ns-page-head">
+        <div className="ns-page-head-stack">
+          <h1 className="ns-page-title">Approvals</h1>
+          <p className="ns-page-sub">
+            Your inbox for agent decisions. Anything not already covered by an
+            <b> auto-approve rule</b> lands here for a quick yes or no.
+          </p>
+        </div>
       </header>
 
-      <nav className="flex gap-1 border-b border-border" role="tablist" aria-label="Approval tabs">
+      <nav
+        className="ns-tabs mb-6"
+        role="tablist"
+        aria-label="Approval tabs"
+      >
         <TabLink
           slug={slug}
           tab="pending"
           active={activeTab}
           label="Inbox"
           count={counts.pending}
-          highlightCount
         />
-        <TabLink slug={slug} tab="resolved" active={activeTab} label="Resolved" />
+        <TabLink
+          slug={slug}
+          tab="resolved"
+          active={activeTab}
+          label="Resolved"
+        />
         <TabLink
           slug={slug}
           tab="policies"
@@ -76,52 +81,46 @@ export default async function ApprovalsPage({
         />
       </nav>
 
-      {activeTab === "pending" && (
-        actionable.length === 0 ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <h2 className="text-lg font-medium">All caught up.</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Agents will surface decisions here. Manage auto-approve rules in the
-                <span className="px-1">
-                  <Link
-                    href={`${projectHref(slug, "/approvals")}?tab=policies`}
-                    className="underline"
-                  >
-                    Auto-approve rules
-                  </Link>
-                </span>
-                tab.
-              </p>
-            </CardContent>
-          </Card>
+      {activeTab === "pending" &&
+        (actionable.length === 0 ? (
+          <div className="ns-empty">
+            <p className="ns-empty-title">All caught up.</p>
+            <p className="ns-empty-sub">
+              When an agent needs your go-ahead, it&rsquo;ll show up here.
+              Manage rules in{" "}
+              <Link
+                href={`${projectHref(slug, "/approvals")}?tab=policies`}
+                className="ns-link"
+              >
+                Auto-approve rules
+              </Link>
+              .
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
             {actionable.map((a) => (
               <ApprovalCard key={a.id} approval={a} />
             ))}
           </div>
-        )
-      )}
+        ))}
 
-      {activeTab === "resolved" && (
-        resolved.length === 0 ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <h2 className="text-lg font-medium">No resolved approvals yet.</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Decisions show up here after they're approved, rejected, or auto-handled.
-              </p>
-            </CardContent>
-          </Card>
+      {activeTab === "resolved" &&
+        (resolved.length === 0 ? (
+          <div className="ns-empty">
+            <p className="ns-empty-title">No resolved approvals yet.</p>
+            <p className="ns-empty-sub">
+              Decisions show up here after they&rsquo;re approved, rejected, or
+              auto-handled.
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
             {resolved.map((a) => (
               <ApprovalCard key={a.id} approval={a} />
             ))}
           </div>
-        )
-      )}
+        ))}
 
       {activeTab === "policies" && (
         <PolicyList projectSlug={project.slug} policies={policies} />
@@ -136,38 +135,37 @@ function TabLink({
   active,
   label,
   count,
-  highlightCount = false,
 }: {
   slug: string;
   tab: TabKey;
   active: TabKey;
   label: string;
   count?: number;
-  highlightCount?: boolean;
 }) {
   const isActive = active === tab;
-  const href = tab === "pending"
-    ? projectHref(slug, "/approvals")
-    : `${projectHref(slug, "/approvals")}?tab=${tab}`;
+  const href =
+    tab === "pending"
+      ? projectHref(slug, "/approvals")
+      : `${projectHref(slug, "/approvals")}?tab=${tab}`;
   return (
     <Link
       href={href}
       role="tab"
       aria-selected={isActive}
-      className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors ${
-        isActive
-          ? "border-foreground font-medium text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground"
-      }`}
+      className="ns-tab"
+      data-active={isActive}
     >
       {label}
       {count !== undefined && count > 0 && (
-        <Badge
-          variant={highlightCount ? "default" : "secondary"}
-          className="h-5 px-1.5 text-[10px]"
+        <span
+          className={`ml-1 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums leading-none ${
+            isActive
+              ? "bg-[hsl(var(--notfair-ink))] text-white"
+              : "bg-[hsl(var(--notfair-surface-2))] text-[hsl(var(--notfair-ink-3))]"
+          }`}
         >
           {count}
-        </Badge>
+        </span>
       )}
     </Link>
   );

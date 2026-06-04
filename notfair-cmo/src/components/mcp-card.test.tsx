@@ -88,10 +88,13 @@ describe("McpCard", () => {
     expect(screen.getByText("notfair.co")).toBeInTheDocument();
   });
 
-  it("renders a 'connected' indicator with the verified time when connected", () => {
+  it("renders a 'connected' indicator and just the host when connected", () => {
     render(<McpCard spec={spec} status={connected({ tools_count: null })} />);
     expect(screen.getByText("connected")).toBeInTheDocument();
-    expect(screen.getByText(/live · verified/)).toBeInTheDocument();
+    // The "connected" tag carries the live signal; the status line shows
+    // only the host so the row doesn't repeat itself.
+    expect(screen.getByText("notfair.co")).toBeInTheDocument();
+    expect(screen.queryByText(/verified/)).not.toBeInTheDocument();
   });
 
   it("shows a Disconnect button when connected and a Connect button otherwise", () => {

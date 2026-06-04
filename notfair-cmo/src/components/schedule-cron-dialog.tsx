@@ -91,15 +91,18 @@ export function ScheduleCronDialog({ projectSlug, defaultSpecialist, variant = "
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {variant === "icon" ? (
-          <Button size="sm" variant="outline">
+          <button
+            type="button"
+            className="ns-btn ns-btn-outline ns-btn-sm"
+          >
             <Plus className="size-4" />
             <span className="sr-only">Schedule recurring work</span>
-          </Button>
+          </button>
         ) : (
-          <Button size="sm">
-            <Plus className="mr-1.5 size-4" />
+          <button type="button" className="ns-btn ns-btn-primary">
+            <Plus className="size-4" />
             New cron
-          </Button>
+          </button>
         )}
       </DialogTrigger>
       <DialogContent className="max-w-lg">

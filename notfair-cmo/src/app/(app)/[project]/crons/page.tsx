@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { getProject } from "@/server/db/projects";
 import { listCronsForProject } from "@/server/scheduler/display";
 import {
@@ -23,7 +22,7 @@ function scheduleForCalendar(s: unknown): ScheduleInput | null {
   return null;
 }
 
-const NUM_DAYS = 14; // 2-week window; UI shows 7 at a time with prev/next.
+const NUM_DAYS = 14;
 
 export default async function CronsPage({
   params,
@@ -43,18 +42,15 @@ export default async function CronsPage({
     error = err instanceof Error ? err.message : String(err);
   }
 
-  // Flatten crons + agent slugs for the calendar.
   const allCrons = view.groups.flatMap((g) => g.crons);
   const agentSlugs = view.groups.map((g) => g.agent);
 
-  // Compute the time window: today 00:00 local → +NUM_DAYS.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const startOfFirstDay = today.getTime();
   const dayMs = 24 * 60 * 60 * 1000;
   const until = startOfFirstDay + NUM_DAYS * dayMs;
 
-  // Expand every cron into occurrences within the window.
   const occurrences: CalendarOccurrence[] = [];
   const schedulesByCronId = new Map<string, ReturnType<typeof scheduleForCalendar>>();
   for (const cron of allCrons) {
@@ -102,42 +98,51 @@ export default async function CronsPage({
   const totalDisabled = allCrons.length - totalActive;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <header className="flex flex-row items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Crons</h1>
-          <p className="text-sm text-muted-foreground">
-            Workspace <span className="font-mono">{project.slug}</span> ·{" "}
-            {totalActive} active{totalDisabled > 0 ? ` · ${totalDisabled} disabled` : ""}
+    <div className="ns-app-wide">
+      <header className="ns-page-head">
+        <div className="ns-page-head-stack">
+          <h1 className="ns-page-title">Crons</h1>
+          <p className="ns-page-sub">
+            <b>{totalActive}</b> active
+            {totalDisabled > 0 ? ` · ${totalDisabled} disabled` : ""} ·
+            recurring work scheduled across your agents.
           </p>
         </div>
-        <ScheduleCronDialog projectSlug={project.slug} />
+        <div className="ns-page-actions">
+          <ScheduleCronDialog projectSlug={project.slug} />
+        </div>
       </header>
 
       {error && (
-        <Card>
-          <CardContent className="py-6 text-sm">
-            <p className="font-medium text-destructive">Could not load crons.</p>
-            <p className="mt-1 text-xs text-muted-foreground">{error}</p>
-            <p className="mt-2 text-xs">
-              Run <code className="rounded bg-muted px-1.5 py-0.5">notfair-cmo doctor</code> for help.
+        <div className="ns-card">
+          <div className="ns-card-body">
+            <p className="text-[14px] font-semibold text-destructive">
+              Could not load crons.
             </p>
-          </CardContent>
-        </Card>
+            <p className="mt-1 text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+              {error}
+            </p>
+            <p className="mt-2 text-[12px] text-[hsl(var(--notfair-ink-4))]">
+              Run{" "}
+              <code className="rounded bg-[hsl(var(--notfair-surface-2))] px-1.5 py-px font-mono">
+                notfair-cmo doctor
+              </code>{" "}
+              for help.
+            </p>
+          </div>
+        </div>
       )}
 
       {!error && allCrons.length === 0 && (
-        <Card>
-          <CardContent className="space-y-3 py-12 text-center">
-            <h2 className="text-base font-medium">No scheduled work yet.</h2>
-            <p className="text-sm text-muted-foreground">
-              Schedule a recurring job for one of this project&rsquo;s agents.
-            </p>
-            <div className="flex justify-center pt-2">
-              <ScheduleCronDialog projectSlug={project.slug} />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="ns-empty">
+          <p className="ns-empty-title">No scheduled work yet.</p>
+          <p className="ns-empty-sub">
+            Schedule a recurring job for one of this project&rsquo;s agents.
+          </p>
+          <div className="ns-empty-action">
+            <ScheduleCronDialog projectSlug={project.slug} />
+          </div>
+        </div>
       )}
 
       {!error && allCrons.length > 0 && (

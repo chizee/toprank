@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, FileText, Sparkles, Clock, Settings, ListChecks } from "lucide-react";
+import {
+  MessageSquare,
+  FileText,
+  Sparkles,
+  Clock,
+  Settings,
+  ListChecks,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tab = {
@@ -11,9 +18,7 @@ type Tab = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-// Tasks is the default landing surface for specialists (and the workspace
-// where the live transcript lives), so it leads. Chat is still available as
-// a free-form thread when the user wants to talk outside the task model.
+// Tasks leads — it's the agent's workspace where the live transcript sits.
 const TABS: Tab[] = [
   { key: "tasks", label: "Tasks", icon: ListChecks },
   { key: "chat", label: "Chat", icon: MessageSquare },
@@ -35,8 +40,12 @@ export function AgentTabs({
 
   return (
     <nav
-      className="flex items-center gap-1 border-b bg-background/60 px-4 backdrop-blur"
+      className="sticky top-0 z-20 flex items-center gap-1 border-b border-border/60 bg-[rgba(245,245,247,0.78)] px-4 backdrop-blur-md"
       aria-label="Agent sections"
+      style={{
+        backdropFilter: "saturate(180%) blur(20px)",
+        WebkitBackdropFilter: "saturate(180%) blur(20px)",
+      }}
     >
       {TABS.map(({ key, label, icon: Icon }) => {
         const href = `${base}/${key}`;
@@ -47,7 +56,7 @@ export function AgentTabs({
             key={key}
             href={href}
             className={cn(
-              "relative flex items-center gap-1.5 px-3 py-2 text-sm transition-colors",
+              "relative flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium tracking-tight transition-colors",
               isActive
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-foreground",
@@ -58,7 +67,7 @@ export function AgentTabs({
             {isActive && (
               <span
                 aria-hidden
-                className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-foreground"
+                className="absolute inset-x-2.5 -bottom-px h-[1.5px] rounded-full bg-[hsl(var(--notfair-accent))]"
               />
             )}
           </Link>

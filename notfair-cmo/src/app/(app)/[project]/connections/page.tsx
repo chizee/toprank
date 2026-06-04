@@ -24,23 +24,12 @@ export default async function ConnectionsPage({
   if (!project || project.archived_at) notFound();
 
   const catalog = getMcpCatalog(project.slug);
-  // Status probes happen in parallel — each goes through the in-process
-  // probe cache (60s for connected, 10s for unreachable), so a hot reload
-  // resolves almost entirely from memory. First-visit cost is bounded by
-  // the per-probe timeout in `getMcpStatus` (6s) since Promise.all waits
-  // for the slowest probe.
   const statuses = await Promise.all(
     catalog.map((s) => getMcpStatus(project.slug, s.key)),
   );
 
   const builtinTools = summarizeBuiltinTools();
   const connectedCount = statuses.filter((s) => s.state === "connected").length;
-  // Used by the Browse-connectors dialog to render already-connected
-  // tiles as non-clickable "connected" pills. We pass both keys *and*
-  // normalized resource URLs because the trusted-connector id and the
-  // stored mcp_tokens.server_name don't always match (e.g. NotFair Meta
-  // Ads was historically slugified to `notfair-meta-ads` while the tile
-  // uses canonical id `notfair-metaads`). The URL is the stable signal.
   const connectedSpecs = catalog.filter(
     (_, i) => statuses[i].state === "connected",
   );
@@ -50,42 +39,31 @@ export default async function ConnectionsPage({
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12">
-      {/* Editorial header — eyebrow, large title, sublabel, and the
-          primary action lifted into the top-right slot. */}
-      <header className="border-b border-border/60 pb-8">
-        <div className="flex items-start justify-between gap-6">
-          <div className="min-w-0">
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Workspace · {project.display_name}
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-              Connections
-            </h1>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-              MCP servers are the tools your agents call. Browse the curated
-              list or paste any OAuth&nbsp;2.0 URL.
-            </p>
-          </div>
-          <div className="shrink-0">
-            <AddMcpServerMenu
-              connectedKeys={connectedKeys}
-              connectedResourceUrls={connectedResourceUrls}
-            />
-          </div>
+    <div className="ns-app-narrow">
+      <header className="ns-page-head">
+        <div className="ns-page-head-stack">
+          <h1 className="ns-page-title">Connections</h1>
+          <p className="ns-page-sub">
+            MCP servers are the tools your agents call. Browse the curated list
+            or paste any <b>OAuth&nbsp;2.0</b> URL.
+          </p>
+        </div>
+        <div className="ns-page-actions">
+          <AddMcpServerMenu
+            connectedKeys={connectedKeys}
+            connectedResourceUrls={connectedResourceUrls}
+          />
         </div>
       </header>
 
       <McpFlashBanner connected={mcp_connected} error={mcp_error} />
 
-      {/* Built-in section — visually anchored with the orchestration
-          accent so users can tell at a glance it's not an external MCP. */}
-      <section className="mt-10">
-        <SectionHeading
-          label="Built-in"
-          meta="ships with the platform"
-        />
-        <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card">
+      <section>
+        <h2 className="ns-h2">
+          <span>Built-in</span>
+          <span className="ns-h2-meta">Ships with notfair-cmo</span>
+        </h2>
+        <div className="ns-group">
           <BuiltinMcpCard
             name="Orchestration"
             description="Built-in tools your agents use to coordinate: assign tasks, request approvals, write PROJECT.md, comment, and report status."
@@ -94,26 +72,25 @@ export default async function ConnectionsPage({
         </div>
       </section>
 
-      {/* External servers — one list, one container, sharp row dividers. */}
-      <section className="mt-10">
-        <SectionHeading
-          label="Servers"
-          meta={
-            catalog.length === 0
-              ? "none yet"
-              : `${connectedCount} of ${catalog.length} connected`
-          }
-        />
+      <section>
+        <h2 className="ns-h2">
+          <span>Servers</span>
+          <span className="ns-h2-meta">
+            {catalog.length === 0
+              ? "None yet"
+              : `${connectedCount} of ${catalog.length} connected`}
+          </span>
+        </h2>
         {catalog.length === 0 ? (
-          <div className="mt-3 overflow-hidden rounded-xl border border-dashed border-border bg-card">
-            <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-              No external MCP servers yet. Use{" "}
-              <span className="font-medium text-foreground">Add server</span>{" "}
+          <div className="ns-empty">
+            <p className="ns-empty-title">No MCP servers yet.</p>
+            <p className="ns-empty-sub">
+              Use <span className="font-medium text-foreground">Add server</span>{" "}
               above to browse trusted connectors or paste a URL.
             </p>
           </div>
         ) : (
-          <ol className="mt-3 overflow-hidden rounded-xl border border-border bg-card divide-y divide-border">
+          <ol className="ns-group">
             {catalog.map((spec, i) => (
               <li key={spec.key}>
                 <McpCard spec={spec} status={statuses[i]} />
@@ -122,19 +99,6 @@ export default async function ConnectionsPage({
           </ol>
         )}
       </section>
-    </div>
-  );
-}
-
-function SectionHeading({ label, meta }: { label: string; meta: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </h2>
-      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
-        {meta}
-      </span>
     </div>
   );
 }
