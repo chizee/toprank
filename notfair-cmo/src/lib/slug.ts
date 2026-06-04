@@ -41,7 +41,15 @@ export function slugify(input: string, maxLen = 40): SlugResult {
   }
 
   if (RESERVED_SLUGS.has(capped)) {
-    return { ok: false, reason: `'${capped}' is reserved` };
+    // Explicitly say "system word" — the previous wording ("'notfair'
+    // is reserved") read like a row collision and led users to
+    // delete-and-retry expecting the conflict to clear, when really
+    // the slug is on a static block-list. Suggest a workaround so the
+    // user isn't stuck guessing.
+    return {
+      ok: false,
+      reason: `"${capped}" is a reserved system name — try a variation like "${capped}-team" or "${capped}-1".`,
+    };
   }
 
   return { ok: true, slug: capped };
