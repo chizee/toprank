@@ -65,16 +65,17 @@ afterEach(() => {
 });
 
 describe("ProjectSwitcher", () => {
-  it("shows the active project display name and slug", () => {
+  it("shows the active project display name (and not the slug)", () => {
     render(<ProjectSwitcher projects={projects} activeSlug="proj-a" />);
     expect(screen.getByText("Alpha")).toBeInTheDocument();
-    expect(screen.getByText("proj-a")).toBeInTheDocument();
+    // The slug subtitle was redundant — only the avatar + display name
+    // render in the trigger now.
+    expect(screen.queryByText("proj-a")).not.toBeInTheDocument();
   });
 
   it("falls back to placeholder text when no project is active", () => {
     render(<ProjectSwitcher projects={[]} activeSlug={null} />);
-    expect(screen.getByText("No project")).toBeInTheDocument();
-    expect(screen.getByText("Create one to get started")).toBeInTheDocument();
+    expect(screen.getByText("No workspace")).toBeInTheDocument();
   });
 
   it("shows the project initials in the avatar", () => {

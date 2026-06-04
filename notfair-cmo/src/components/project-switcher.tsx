@@ -48,14 +48,9 @@ export function ProjectSwitcher({ projects, activeSlug }: Props) {
           <div className="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold">
             {(active?.display_name ?? "—").slice(0, 2).toUpperCase()}
           </div>
-          <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-medium">
-              {active?.display_name ?? "No project"}
-            </span>
-            <span className="truncate text-xs text-muted-foreground">
-              {active ? active.slug : "Create one to get started"}
-            </span>
-          </div>
+          <span className="flex-1 truncate text-left text-sm font-medium leading-tight">
+            {active?.display_name ?? "No workspace"}
+          </span>
           <ChevronsUpDown className="ml-auto size-4" />
         </SidebarMenuButton>
       </DropdownMenuTrigger>
