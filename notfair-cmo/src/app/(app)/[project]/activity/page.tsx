@@ -27,7 +27,7 @@ export default async function ActivityPage({
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>
         <p className="text-sm text-muted-foreground">
-          Project <span className="font-mono">{project.slug}</span> · {actions.length} actions ·
+          Workspace <span className="font-mono">{project.slug}</span> · {actions.length} actions ·
           append-only audit log
         </p>
       </header>

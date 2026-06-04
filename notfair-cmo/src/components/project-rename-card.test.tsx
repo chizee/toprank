@@ -52,12 +52,12 @@ describe("ProjectRenameCard", () => {
     expect(screen.getByRole("button", { name: /save name/i })).toBeDisabled();
   });
 
-  it("flips the button to 'Rename project' when the slug changes", () => {
+  it("flips the button to 'Rename workspace' when the slug changes", () => {
     render(<ProjectRenameCard currentSlug="alpha" currentDisplayName="Alpha" />);
     const input = screen.getByLabelText(/display name/i);
     fireEvent.change(input, { target: { value: "Bravo" } });
     expect(
-      screen.getByRole("button", { name: /rename project/i }),
+      screen.getByRole("button", { name: /rename workspace/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/slug changes from/i)).toBeInTheDocument();
   });
@@ -68,7 +68,7 @@ describe("ProjectRenameCard", () => {
     fireEvent.change(input, { target: { value: "@@@" } });
     expect(screen.getByText(/invalid name/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /save name|rename project/i }),
+      screen.getByRole("button", { name: /save name|rename workspace/i }),
     ).toBeDisabled();
   });
 
@@ -85,7 +85,7 @@ describe("ProjectRenameCard", () => {
     render(<ProjectRenameCard currentSlug="alpha" currentDisplayName="Alpha" />);
     const input = screen.getByLabelText(/display name/i);
     fireEvent.change(input, { target: { value: "Bravo" } });
-    fireEvent.click(screen.getByRole("button", { name: /rename project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /rename workspace/i }));
     await waitFor(() =>
       expect(renameProjectFullAction).toHaveBeenCalledWith({
         current_slug: "alpha",
@@ -111,7 +111,7 @@ describe("ProjectRenameCard", () => {
     render(<ProjectRenameCard currentSlug="alpha" currentDisplayName="Alpha" />);
     const input = screen.getByLabelText(/display name/i);
     fireEvent.change(input, { target: { value: "Bravo" } });
-    fireEvent.click(screen.getByRole("button", { name: /rename project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /rename workspace/i }));
     await waitFor(() =>
       expect(toast.success.mock.calls[0][0]).toMatch(/1 agents moved/),
     );
@@ -136,7 +136,7 @@ describe("ProjectRenameCard", () => {
     render(<ProjectRenameCard currentSlug="alpha" currentDisplayName="Alpha" />);
     const input = screen.getByLabelText(/display name/i);
     fireEvent.change(input, { target: { value: "Bravo" } });
-    fireEvent.click(screen.getByRole("button", { name: /rename project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /rename workspace/i }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("boom"));
   });
 });

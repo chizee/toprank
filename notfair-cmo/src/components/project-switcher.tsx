@@ -64,7 +64,7 @@ export function ProjectSwitcher({ projects, activeSlug }: Props) {
           Projects
         </DropdownMenuLabel>
         {projects.length === 0 && (
-          <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>
+          <DropdownMenuItem disabled>No workspaces yet</DropdownMenuItem>
         )}
         {projects.map((p) => (
           <DropdownMenuItem
@@ -84,7 +84,7 @@ export function ProjectSwitcher({ projects, activeSlug }: Props) {
         <DropdownMenuItem asChild>
           <a href="/onboarding" className="gap-2">
             <Plus className="size-4" />
-            <span>New project</span>
+            <span>New workspace</span>
           </a>
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -44,6 +44,26 @@ export const MCP_CATALOG_PRESETS: McpSpec[] = [
       "https://notfair.co/.well-known/oauth-protected-resource/api/mcp/google_ads",
     source: "preset",
   },
+  {
+    key: "notfair-metaads",
+    display_name: "NotFair Meta Ads",
+    description:
+      "Live Meta Ads (Facebook + Instagram) operations: campaigns, ad sets, ads, creatives, insights.",
+    resource_url: "https://notfair.co/api/mcp/meta_ads",
+    discovery_url:
+      "https://notfair.co/.well-known/oauth-protected-resource/api/mcp/meta_ads",
+    source: "preset",
+  },
+  {
+    key: "notfair-googlesearchconsole",
+    display_name: "NotFair Google Search Console",
+    description:
+      "Organic search performance: queries, pages, impressions, clicks, indexing.",
+    resource_url: "https://notfair.co/api/mcp/google_search_console",
+    discovery_url:
+      "https://notfair.co/.well-known/oauth-protected-resource/api/mcp/google_search_console",
+    source: "preset",
+  },
 ];
 
 /** True if any preset reserves this key. Presets win over user rows. */

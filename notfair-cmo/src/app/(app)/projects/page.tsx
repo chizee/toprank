@@ -11,18 +11,18 @@ export default function ProjectsListPage() {
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Workspaces</h1>
           <p className="text-sm text-muted-foreground">{projects.length} total</p>
         </div>
         <Button asChild>
-          <Link href="/onboarding">New project</Link>
+          <Link href="/onboarding">New workspace</Link>
         </Button>
       </div>
 
       {projects.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No projects yet.{" "}
+            No workspaces yet.{" "}
             <Link className="underline" href="/onboarding">
               Create your first one
             </Link>

@@ -19,10 +19,25 @@ import {
   setOnboardingAccountAction,
   getOnboardingTaskForSkipAction,
   getProvisioningProgressAction,
+  getConnectStepStateAction,
+  listMetaAdsAccounts,
+  setOnboardingMetaAdsAccountAction,
+  listGscProperties,
+  setOnboardingGscPropertyAction,
   type GoogleAdsAccount,
+  type MetaAdsAccount,
+  type GscProperty,
+  type ConnectStepState,
 } from "@/server/onboarding/accounts";
+import { BrowseConnectorsDialog } from "@/components/browse-connectors-dialog";
 
-type Step = "name" | "connect" | "account" | "setup";
+type Step =
+  | "name"
+  | "connect"
+  | "account"
+  | "meta-account"
+  | "gsc-property"
+  | "setup";
 
 export function OnboardingFlow() {
   return (
@@ -38,7 +53,11 @@ function OnboardingFlowInner() {
   const stepParam = params.get("step");
   const slug = params.get("slug") ?? null;
   const step: Step =
-    stepParam === "connect" || stepParam === "account" || stepParam === "setup"
+    stepParam === "connect" ||
+    stepParam === "account" ||
+    stepParam === "meta-account" ||
+    stepParam === "gsc-property" ||
+    stepParam === "setup"
       ? stepParam
       : "name";
 
@@ -60,10 +79,15 @@ function OnboardingFlowInner() {
         )}
         {step === "connect" && slug && <ConnectStep slug={slug} />}
         {step === "account" && slug && <AccountStep slug={slug} />}
+        {step === "meta-account" && slug && <MetaAccountStep slug={slug} />}
+        {step === "gsc-property" && slug && <GscPropertyStep slug={slug} />}
         {step === "setup" && slug && <SetupStep slug={slug} />}
-        {(step === "connect" || step === "account" || step === "setup") && !slug && (
-          <MissingSlug />
-        )}
+        {(step === "connect" ||
+          step === "account" ||
+          step === "meta-account" ||
+          step === "gsc-property" ||
+          step === "setup") &&
+          !slug && <MissingSlug />}
       </main>
     </div>
   );
@@ -157,13 +181,13 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
           Let&rsquo;s set up your CMO.
         </h1>
         <p className="text-sm text-muted-foreground">
-          Tell me what this project is so I can hit the ground running.
+          Tell me what this workspace is so I can hit the ground running.
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Project basics</CardTitle>
+          <CardTitle className="text-base">Workspace basics</CardTitle>
           <CardDescription>
             Name is required. Site and codebase are optional but help the
             CMO write a more accurate first plan. Slug (used in agent
@@ -173,13 +197,13 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
         <CardContent>
           <form action={formAction} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="display_name">Project name</Label>
+              <Label htmlFor="display_name">Workspace name</Label>
               <Input
                 id="display_name"
                 name="display_name"
                 required
                 autoFocus
-                placeholder="Acme Q4 launch"
+                placeholder="Notfair"
                 maxLength={80}
                 disabled={isPending}
               />
@@ -196,7 +220,7 @@ function NameStep({ onCreated }: { onCreated: (slug: string) => void }) {
                 id="website_url"
                 name="website_url"
                 type="url"
-                placeholder="https://acme.com"
+                placeholder="https://notfair.co"
                 maxLength={500}
                 disabled={isPending}
               />
@@ -310,83 +334,332 @@ function HarnessPicker({ disabled }: { disabled: boolean }) {
 
 // ── Step 2: Connect ────────────────────────────────────────────────
 
+/**
+ * Spec for one of the recommended-MCP tiles in the connect step. The three
+ * recommended MCPs (Google Ads, Meta Ads, Google Search Console) each get
+ * their own first-class tile because connecting them triggers the
+ * provisioning of a matching specialist agent.
+ */
+type RecommendedTile = {
+  mcp_key: string;
+  display_name: string;
+  /** Short description shown under the title when the tile isn't connected. */
+  description: string;
+  /** Sub-step the OAuth callback should land on so the user can pick an
+   *  account/property when their token covers more than one. */
+  account_step: "account" | "meta-account" | "gsc-property";
+  /** Label for the "Select X" sub-action when connected but not selected. */
+  account_action_label: string;
+};
+
+const RECOMMENDED_TILES: RecommendedTile[] = [
+  {
+    mcp_key: "notfair-googleads",
+    display_name: "Google Ads",
+    description: "Campaigns, bids, keywords, search terms, change history.",
+    account_step: "account",
+    account_action_label: "Select Google Ads account",
+  },
+  {
+    mcp_key: "notfair-metaads",
+    display_name: "Meta Ads",
+    description: "Facebook + Instagram campaigns, ad sets, creative, insights.",
+    account_step: "meta-account",
+    account_action_label: "Select Meta ad account",
+  },
+  {
+    mcp_key: "notfair-googlesearchconsole",
+    display_name: "Google Search Console",
+    description: "Organic search performance, queries, pages, indexing.",
+    account_step: "gsc-property",
+    account_action_label: "Select GSC property",
+  },
+];
+
+type ConnectStepStateView =
+  | { phase: "loading" }
+  | { phase: "loaded"; state: ConnectStepState }
+  | { phase: "error"; message: string };
+
 function ConnectStep({ slug }: { slug: string }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<ConnectStepStateView>({ phase: "loading" });
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [tileBusy, setTileBusy] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState(false);
   const connectionsHref = projectHref(slug, "/connections");
 
-  async function onConnect() {
-    setBusy(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await getConnectStepStateAction(slug);
+      if (cancelled) return;
+      if (!result.ok) {
+        setView({ phase: "error", message: result.error });
+        return;
+      }
+      setView({ phase: "loaded", state: result.state });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  async function onConnectTile(tile: RecommendedTile) {
+    setTileBusy(tile.mcp_key);
     try {
       const result = await startMcpConnect({
-        mcp_key: "notfair-googleads",
-        return_to: `/onboarding?step=account&slug=${encodeURIComponent(slug)}`,
+        mcp_key: tile.mcp_key,
+        // After OAuth lands, route through the matching account-picker
+        // step. That step auto-skips if the bearer covers a single
+        // account/property; otherwise it shows a picker. Both paths
+        // ultimately redirect back to /onboarding?step=connect so the
+        // user can continue adding tools.
+        return_to: `/onboarding?step=${tile.account_step}&slug=${encodeURIComponent(slug)}`,
       });
       if (!result.ok) {
         toast.error(result.error);
-        setBusy(false);
+        setTileBusy(null);
         return;
       }
-      // Cross-origin redirect to the OAuth issuer.
       window.location.href = result.authorize_url;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
-      setBusy(false);
+      setTileBusy(null);
     }
   }
 
+  function onPickAccount(tile: RecommendedTile) {
+    router.push(
+      `/onboarding?step=${tile.account_step}&slug=${encodeURIComponent(slug)}`,
+    );
+  }
+
+  async function onDone() {
+    setAdvancing(true);
+    // The setup step waits for ensureProjectAgents (CMO + any specialists
+    // provisioned by the connect-time hooks) and only then routes the user
+    // into the CMO task workspace. Going through it instead of the direct
+    // task URL means we don't race agent registration with the gateway
+    // snapshot on a fresh project.
+    router.replace(
+      `/onboarding?step=setup&slug=${encodeURIComponent(slug)}&from=connect`,
+    );
+  }
+
   function onSkip() {
-    // Hand off to the dedicated setup screen instead of redirecting
-    // straight to the task. The setup screen waits for `ensureProjectAgents`
-    // to finish (publishing per-template progress) and only then resolves
-    // the CMO + first-task slugs and navigates the user in.
     router.replace(
       `/onboarding?step=setup&slug=${encodeURIComponent(slug)}&from=skip`,
     );
   }
 
+  if (view.phase === "loading") {
+    return (
+      <Card>
+        <CardContent className="space-y-2 pt-6 pb-6">
+          <div className="flex items-center gap-3 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+            <span className="font-medium">Loading your connections&hellip;</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (view.phase === "error") {
+    return (
+      <Card role="alert">
+        <CardContent className="space-y-3 pt-6 pb-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="size-4 text-amber-600" aria-hidden />
+            <span className="font-medium text-sm">
+              Couldn&rsquo;t load connection state.
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">{view.message}</p>
+          <Button asChild>
+            <Link href="/onboarding">Start over</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { state } = view;
+  const tileStateByKey = {
+    "notfair-googleads": state.googleads,
+    "notfair-metaads": state.metaads,
+    "notfair-googlesearchconsole": state.gsc,
+  } as const;
+  const anyConnected =
+    state.googleads.connected ||
+    state.metaads.connected ||
+    state.gsc.connected ||
+    state.extra_connected_count > 0;
+
   return (
     <>
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Connect your Google Ads.
+          Connect your tools.
         </h1>
         <p className="text-sm text-muted-foreground">
-          I&rsquo;ll read your account so I can show you what to fix. Read-only
-          &mdash; I won&rsquo;t change anything yet.
+          Each tool you connect lets one of your specialist agents come
+          online. Read-only at first &mdash; nothing changes until you
+          approve a write.
         </p>
       </header>
 
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {RECOMMENDED_TILES.map((tile) => (
+          <RecommendedConnectorTile
+            key={tile.mcp_key}
+            tile={tile}
+            state={tileStateByKey[tile.mcp_key as keyof typeof tileStateByKey]}
+            busy={tileBusy === tile.mcp_key}
+            disabled={tileBusy !== null && tileBusy !== tile.mcp_key}
+            onConnect={() => onConnectTile(tile)}
+            onPickAccount={() => onPickAccount(tile)}
+          />
+        ))}
+        <MoreConnectorsTile
+          extraConnectedCount={state.extra_connected_count}
+          onOpen={() => setMoreOpen(true)}
+        />
+      </div>
+
       <Card>
-        <CardContent className="space-y-4 pt-6">
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={onConnect} disabled={busy} size="lg">
-              {busy ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Plug className="mr-1.5 size-4" />
-              )}
-              Connect Google Ads
-            </Button>
-            <Button
-              onClick={onSkip}
-              variant="ghost"
-              disabled={busy}
-              aria-label="Skip Google Ads connection for now and go to CMO tasks"
-            >
-              Skip for now
-            </Button>
-          </div>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6 pb-6">
           <p className="text-xs text-muted-foreground">
-            You can disconnect anytime in{" "}
+            You can connect, disconnect, or add custom MCPs anytime in{" "}
             <Link href={connectionsHref} className="underline underline-offset-2">
               Connections
             </Link>
             .
           </p>
+          {anyConnected ? (
+            <Button onClick={onDone} disabled={advancing} size="lg">
+              {advancing && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+              Done adding MCPs &mdash; next step
+            </Button>
+          ) : (
+            <Button
+              onClick={onSkip}
+              variant="ghost"
+              disabled={advancing}
+            >
+              Skip for now
+            </Button>
+          )}
         </CardContent>
       </Card>
+
+      <BrowseConnectorsDialog
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        // Hide the three recommended MCPs — they each have their own tile
+        // above, so showing them in the More dialog would be a duplicate.
+        hideKeys={RECOMMENDED_TILES.map((t) => t.mcp_key)}
+        connectedKeys={[
+          ...(state.googleads.connected ? ["notfair-googleads"] : []),
+          ...(state.metaads.connected ? ["notfair-metaads"] : []),
+          ...(state.gsc.connected ? ["notfair-googlesearchconsole"] : []),
+        ]}
+      />
     </>
+  );
+}
+
+function RecommendedConnectorTile({
+  tile,
+  state,
+  busy,
+  disabled,
+  onConnect,
+  onPickAccount,
+}: {
+  tile: RecommendedTile;
+  state: { connected: boolean; account_selected: boolean };
+  busy: boolean;
+  disabled: boolean;
+  onConnect: () => void;
+  onPickAccount: () => void;
+}) {
+  if (state.connected) {
+    return (
+      <div className="flex flex-col gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4">
+        <div className="flex items-start gap-2">
+          <div className="size-2 mt-1.5 rounded-full bg-emerald-500" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{tile.display_name}</p>
+            <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">
+              Connected
+              {state.account_selected ? " · account selected" : null}
+            </p>
+          </div>
+        </div>
+        {state.account_selected ? null : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onPickAccount}
+            disabled={disabled}
+            className="self-start"
+          >
+            {tile.account_action_label}
+          </Button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onConnect}
+      disabled={busy || disabled}
+      className="flex flex-col gap-2 rounded-md border border-border bg-card p-4 text-left transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">{tile.display_name}</p>
+        {busy ? (
+          <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+        ) : (
+          <Plug className="size-3.5 text-muted-foreground" />
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground line-clamp-2">
+        {tile.description}
+      </p>
+    </button>
+  );
+}
+
+function MoreConnectorsTile({
+  extraConnectedCount,
+  onOpen,
+}: {
+  extraConnectedCount: number;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col gap-2 rounded-md border border-dashed border-border bg-card p-4 text-left transition-colors hover:bg-muted/40"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">More tools</p>
+        {extraConnectedCount > 0 ? (
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">
+            {extraConnectedCount} connected
+          </span>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground line-clamp-2">
+        Stripe, Supabase, PostHog, and any custom MCP you want to wire up.
+      </p>
+    </button>
   );
 }
 
@@ -597,14 +870,12 @@ function AccountStep({ slug }: { slug: string }) {
         setState({ phase: "error", message: result.error });
         return;
       }
-      // Land on the CMO's task workspace with the freshly-created audit
-      // task pre-selected — startTaskIfProposed kicks it off, the user
-      // watches it run live in the standard task UX.
+      // Back to the connect step so the user can wire up the rest of
+      // their tools. The CMO audit task is minted by
+      // setOnboardingAccountAction and stays blocked behind the
+      // project-onboarding task until the user clicks "Done — next step".
       router.replace(
-        projectHref(
-          slug,
-          `/agents/${result.cmo_agent_slug}/tasks?task=${encodeURIComponent(result.task_display_id)}`,
-        ),
+        `/onboarding?step=connect&slug=${encodeURIComponent(slug)}`,
       );
     })();
   }, [state, slug, router]);
@@ -619,10 +890,7 @@ function AccountStep({ slug }: { slug: string }) {
         return;
       }
       router.replace(
-        projectHref(
-          slug,
-          `/agents/${result.cmo_agent_slug}/tasks?task=${encodeURIComponent(result.task_display_id)}`,
-        ),
+        `/onboarding?step=connect&slug=${encodeURIComponent(slug)}`,
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -722,7 +990,7 @@ function AccountStep({ slug }: { slug: string }) {
         </h1>
         <p className="text-sm text-muted-foreground">
           Your connection has {state.accounts.length} accounts. Pick the one
-          you want me to audit for this project. You can switch later in
+          you want me to audit for this workspace. You can switch later in
           Settings.
         </p>
       </header>
@@ -776,12 +1044,368 @@ function AccountStep({ slug }: { slug: string }) {
   );
 }
 
+// ── Step 3b: Pick Meta Ads ad-account (auto-skipped if only 1) ─────
+//
+// Mirrors AccountStep but for the notfair-metaads MCP. Lands the user
+// back on the connect step after picking so they can wire up another
+// MCP or finish onboarding.
+
+type MetaListState =
+  | { phase: "loading" }
+  | { phase: "loaded"; accounts: MetaAdsAccount[]; default_account_id: string | null }
+  | { phase: "error"; message: string };
+
+function MetaAccountStep({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<MetaListState>({ phase: "loading" });
+  const [pickingId, setPickingId] = useState<string | null>(null);
+  const autoSelectedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await listMetaAdsAccounts(slug);
+      if (cancelled) return;
+      if (!result.ok) {
+        setState({ phase: "error", message: result.error });
+        return;
+      }
+      setState({
+        phase: "loaded",
+        accounts: result.accounts,
+        default_account_id: result.default_account_id,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    if (state.phase !== "loaded") return;
+    if (state.accounts.length !== 1) return;
+    if (autoSelectedRef.current) return;
+    autoSelectedRef.current = true;
+    (async () => {
+      const only = state.accounts[0]!;
+      const result = await setOnboardingMetaAdsAccountAction(slug, only.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        setState({ phase: "error", message: result.error });
+        return;
+      }
+      router.replace(
+        `/onboarding?step=connect&slug=${encodeURIComponent(slug)}`,
+      );
+    })();
+  }, [state, slug, router]);
+
+  async function onPick(account: MetaAdsAccount) {
+    setPickingId(account.id);
+    try {
+      const result = await setOnboardingMetaAdsAccountAction(slug, account.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        setPickingId(null);
+        return;
+      }
+      router.replace(
+        `/onboarding?step=connect&slug=${encodeURIComponent(slug)}`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      setPickingId(null);
+    }
+  }
+
+  return (
+    <AccountPickerScaffold
+      slug={slug}
+      mcpDisplayName="Meta Ads"
+      idLabel="Ad account ID"
+      state={
+        state.phase === "loading"
+          ? { phase: "loading" }
+          : state.phase === "error"
+            ? { phase: "error", message: state.message }
+            : {
+                phase: "loaded",
+                items: state.accounts.map((a) => ({
+                  id: a.id,
+                  name: a.name,
+                  isDefault: a.id === state.default_account_id,
+                  isPicking: pickingId === a.id,
+                })),
+                anyPicking: pickingId !== null,
+              }
+      }
+      onPick={(id) => {
+        const a = state.phase === "loaded" ? state.accounts.find((x) => x.id === id) : null;
+        if (a) onPick(a);
+      }}
+    />
+  );
+}
+
+// ── Step 3c: Pick Google Search Console property (auto-skipped if only 1) ──
+
+type GscListState =
+  | { phase: "loading" }
+  | { phase: "loaded"; properties: GscProperty[]; default_property_id: string | null }
+  | { phase: "error"; message: string };
+
+function GscPropertyStep({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<GscListState>({ phase: "loading" });
+  const [pickingId, setPickingId] = useState<string | null>(null);
+  const autoSelectedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await listGscProperties(slug);
+      if (cancelled) return;
+      if (!result.ok) {
+        setState({ phase: "error", message: result.error });
+        return;
+      }
+      setState({
+        phase: "loaded",
+        properties: result.properties,
+        default_property_id: result.default_property_id,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    if (state.phase !== "loaded") return;
+    if (state.properties.length !== 1) return;
+    if (autoSelectedRef.current) return;
+    autoSelectedRef.current = true;
+    (async () => {
+      const only = state.properties[0]!;
+      const result = await setOnboardingGscPropertyAction(slug, only.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        setState({ phase: "error", message: result.error });
+        return;
+      }
+      router.replace(
+        `/onboarding?step=connect&slug=${encodeURIComponent(slug)}`,
+      );
+    })();
+  }, [state, slug, router]);
+
+  async function onPick(property: GscProperty) {
+    setPickingId(property.id);
+    try {
+      const result = await setOnboardingGscPropertyAction(slug, property.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        setPickingId(null);
+        return;
+      }
+      router.replace(
+        `/onboarding?step=connect&slug=${encodeURIComponent(slug)}`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      setPickingId(null);
+    }
+  }
+
+  return (
+    <AccountPickerScaffold
+      slug={slug}
+      mcpDisplayName="Google Search Console"
+      idLabel="Property"
+      state={
+        state.phase === "loading"
+          ? { phase: "loading" }
+          : state.phase === "error"
+            ? { phase: "error", message: state.message }
+            : {
+                phase: "loaded",
+                items: state.properties.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  isDefault: p.id === state.default_property_id,
+                  isPicking: pickingId === p.id,
+                })),
+                anyPicking: pickingId !== null,
+              }
+      }
+      onPick={(id) => {
+        const p = state.phase === "loaded" ? state.properties.find((x) => x.id === id) : null;
+        if (p) onPick(p);
+      }}
+    />
+  );
+}
+
+// ── Shared picker shell for Meta + GSC ─────────────────────────────
+//
+// Visually identical to the Google Ads picker but parameterized by the
+// MCP display label and the id-label shown under each row. Used by
+// MetaAccountStep + GscPropertyStep to avoid duplicating ~80 lines of
+// loading / error / empty / single-item / picker JSX three times.
+
+type AccountPickerScaffoldState =
+  | { phase: "loading" }
+  | { phase: "error"; message: string }
+  | {
+      phase: "loaded";
+      items: { id: string; name: string; isDefault: boolean; isPicking: boolean }[];
+      anyPicking: boolean;
+    };
+
+function AccountPickerScaffold({
+  slug,
+  mcpDisplayName,
+  idLabel,
+  state,
+  onPick,
+}: {
+  slug: string;
+  mcpDisplayName: string;
+  idLabel: string;
+  state: AccountPickerScaffoldState;
+  onPick: (id: string) => void;
+}) {
+  if (state.phase === "loading") {
+    return (
+      <Card>
+        <CardContent className="space-y-2 pt-6 pb-6">
+          <div className="flex items-center gap-3 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+            <span className="font-medium">
+              Loading your {mcpDisplayName} accounts&hellip;
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (state.phase === "error") {
+    return (
+      <Card role="alert">
+        <CardContent className="space-y-3 pt-6 pb-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="size-4 text-amber-600" aria-hidden />
+            <span className="font-medium text-sm">
+              Couldn&rsquo;t load your {mcpDisplayName} accounts.
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">{state.message}</p>
+          <div className="flex gap-2">
+            <Button asChild>
+              <Link href={`/onboarding?step=connect&slug=${encodeURIComponent(slug)}`}>
+                Back to connect
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (state.items.length === 0) {
+    return (
+      <Card role="alert">
+        <CardContent className="space-y-3 pt-6 pb-6">
+          <p className="text-sm font-medium">
+            No {mcpDisplayName} accounts on this connection.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Try a different account or skip this connector for now.
+          </p>
+          <Button asChild>
+            <Link href={`/onboarding?step=connect&slug=${encodeURIComponent(slug)}`}>
+              Back to connect
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (state.items.length === 1) {
+    return (
+      <Card>
+        <CardContent className="space-y-2 pt-6 pb-6">
+          <div className="flex items-center gap-3 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+            <span className="font-medium">
+              Using your only {mcpDisplayName} account&hellip;
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <>
+      <header className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          Which {mcpDisplayName} account?
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Your connection has {state.items.length} accounts. Pick the one
+          you want me to use for this workspace. You can switch later in
+          Settings.
+        </p>
+      </header>
+      <ul className="space-y-2 list-none p-0">
+        {state.items.map((item) => {
+          const isOtherPicking = state.anyPicking && !item.isPicking;
+          return (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() => onPick(item.id)}
+                disabled={state.anyPicking}
+                aria-label={`Use ${item.name} (${item.id})`}
+                className={cn(
+                  "block w-full rounded-md border bg-card p-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30 disabled:cursor-not-allowed",
+                  isOtherPicking && "opacity-50",
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{item.name}</span>
+                      {item.isDefault && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {idLabel} {item.id}
+                    </p>
+                  </div>
+                  {item.isPicking ? (
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+                  ) : (
+                    <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+                  )}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
 function MissingSlug() {
   return (
     <Card>
       <CardContent className="space-y-3 pt-6 pb-6">
         <p className="text-sm text-muted-foreground">
-          This step needs a project. Start from the beginning.
+          This step needs a workspace. Start from the beginning.
         </p>
         <Button asChild>
           <Link href="/onboarding">Start over</Link>

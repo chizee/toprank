@@ -107,7 +107,7 @@ export default async function CronsPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Crons</h1>
           <p className="text-sm text-muted-foreground">
-            Project <span className="font-mono">{project.slug}</span> ·{" "}
+            Workspace <span className="font-mono">{project.slug}</span> ·{" "}
             {totalActive} active{totalDisabled > 0 ? ` · ${totalDisabled} disabled` : ""}
           </p>
         </div>

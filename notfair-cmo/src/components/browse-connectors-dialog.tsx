@@ -31,6 +31,14 @@ type Props = {
   /** Normalized resource URLs of connected entries — used to detect
    *  legacy rows whose key doesn't match the trusted-connector id. */
   connectedResourceUrls?: string[];
+  /**
+   * Catalog keys to exclude entirely from the grid. Used by the
+   * onboarding connect step, which surfaces the three recommended
+   * MCPs (Google Ads, Meta Ads, GSC) as first-class tiles and only
+   * uses this dialog for the "More" overflow. Without this filter the
+   * dialog would render duplicates of the tiles the user already sees.
+   */
+  hideKeys?: string[];
 };
 
 /**
@@ -50,9 +58,14 @@ export function BrowseConnectorsDialog({
   onOpenChange,
   connectedKeys = [],
   connectedResourceUrls = [],
+  hideKeys = [],
 }: Props) {
   const connectedKeySet = new Set(connectedKeys);
   const connectedUrlSet = new Set(connectedResourceUrls);
+  const hideKeySet = new Set(hideKeys);
+  const visibleConnectors = TRUSTED_CONNECTORS.filter(
+    (c) => !hideKeySet.has(c.id),
+  );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -64,7 +77,7 @@ export function BrowseConnectorsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {TRUSTED_CONNECTORS.map((c) => {
+          {visibleConnectors.map((c) => {
             const alreadyConnected =
               connectedKeySet.has(c.id) ||
               connectedUrlSet.has(normalizeResourceUrl(c.resource_url));

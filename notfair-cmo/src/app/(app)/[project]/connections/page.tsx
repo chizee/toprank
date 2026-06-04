@@ -57,7 +57,7 @@ export default async function ConnectionsPage({
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Project · {project.display_name}
+              Workspace · {project.display_name}
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">
               Connections

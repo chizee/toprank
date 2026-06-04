@@ -67,11 +67,11 @@ afterEach(() => {
 });
 
 describe("DangerZone (project)", () => {
-  it("renders the delete-project CTA card", () => {
+  it("renders the delete-workspace CTA card", () => {
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    expect(screen.getByText("Delete this project")).toBeInTheDocument();
+    expect(screen.getByText("Delete this workspace")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /delete project/i }),
+      screen.getByRole("button", { name: /delete workspace/i }),
     ).toBeInTheDocument();
   });
 
@@ -80,7 +80,7 @@ describe("DangerZone (project)", () => {
       () => new Promise(() => {}),
     );
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
     expect(
       await screen.findByText(/counting what will be removed/i),
     ).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe("DangerZone (project)", () => {
   it("shows summary stats and existing agents in the dialog", async () => {
     getProjectDeletionSummaryAction.mockResolvedValue({ ok: true, data: summary });
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
     expect(await screen.findByText("3")).toBeInTheDocument();
     expect(screen.getByText("Agents")).toBeInTheDocument();
     expect(screen.getByText("Threads")).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe("DangerZone (project)", () => {
       error: "boom",
     });
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
     expect(
       await screen.findByText(/could not load deletion summary: boom/i),
     ).toBeInTheDocument();
@@ -125,7 +125,7 @@ describe("DangerZone (project)", () => {
       },
     });
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
     await screen.findByText("CMO");
     fireEvent.click(screen.getByRole("button", { name: /delete forever/i }));
     await waitFor(() =>
@@ -151,7 +151,7 @@ describe("DangerZone (project)", () => {
       },
     });
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
     await screen.findByText("CMO");
     fireEvent.click(screen.getByRole("button", { name: /delete forever/i }));
     await waitFor(() =>
@@ -163,7 +163,7 @@ describe("DangerZone (project)", () => {
     getProjectDeletionSummaryAction.mockResolvedValue({ ok: true, data: summary });
     deleteProjectAction.mockResolvedValue({ ok: false, error: "denied" });
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
     await screen.findByText("CMO");
     fireEvent.click(screen.getByRole("button", { name: /delete forever/i }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("denied"));
@@ -173,7 +173,7 @@ describe("DangerZone (project)", () => {
   it("closes the dialog on Cancel", async () => {
     getProjectDeletionSummaryAction.mockResolvedValue({ ok: true, data: summary });
     render(<DangerZone projectSlug="alpha" projectName="Alpha" />);
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
     await screen.findByText("CMO");
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     await waitFor(() => expect(screen.queryByText("CMO")).not.toBeInTheDocument());

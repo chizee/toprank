@@ -64,7 +64,7 @@ export default async function ProjectHomePage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{project.display_name}</h1>
           <p className="text-sm text-muted-foreground">
-            Project home · slug <span className="font-mono">{project.slug}</span>
+            Workspace home · slug <span className="font-mono">{project.slug}</span>
           </p>
         </div>
         <Button asChild>

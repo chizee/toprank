@@ -78,9 +78,9 @@ export function DangerZone({ projectSlug, projectName }: Props) {
         <div className="flex items-start gap-3">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-destructive">Delete this project</h3>
+            <h3 className="text-sm font-semibold text-destructive">Delete this workspace</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Removes all agents created for this project, every scheduled cron job, and
+              Removes all agents created for this workspace, every scheduled cron job, and
               every thread of chat history. This cannot be undone.
             </p>
           </div>
@@ -92,7 +92,7 @@ export function DangerZone({ projectSlug, projectName }: Props) {
             className="shrink-0"
           >
             <Trash2 className="mr-1.5 size-3.5" />
-            Delete project
+            Delete workspace
           </Button>
         </div>
       </div>

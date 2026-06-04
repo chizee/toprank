@@ -15,10 +15,16 @@ vi.mock("@/server/mcp/rpc", () => ({
 
 const getProjectMock = vi.fn();
 const setProjectGoogleAdsAccountMock = vi.fn();
+const setProjectMetaAdsAccountMock = vi.fn();
+const setProjectGscPropertyMock = vi.fn();
 vi.mock("@/server/db/projects", () => ({
   getProject: (...args: unknown[]) => getProjectMock(...args),
   setProjectGoogleAdsAccount: (...args: unknown[]) =>
     setProjectGoogleAdsAccountMock(...args),
+  setProjectMetaAdsAccount: (...args: unknown[]) =>
+    setProjectMetaAdsAccountMock(...args),
+  setProjectGscProperty: (...args: unknown[]) =>
+    setProjectGscPropertyMock(...args),
 }));
 
 vi.mock("next/cache", () => ({
@@ -84,6 +90,10 @@ vi.mock("@/server/agent-meta", () => ({
 import {
   listGoogleAdsAccounts,
   setOnboardingAccountAction,
+  listMetaAdsAccounts,
+  setOnboardingMetaAdsAccountAction,
+  listGscProperties,
+  setOnboardingGscPropertyAction,
 } from "./accounts";
 
 // ── Fixtures ───────────────────────────────────────────────────────
@@ -285,6 +295,183 @@ describe("setOnboardingAccountAction", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/couldn't verify/i);
     expect(setProjectGoogleAdsAccountMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── Meta Ads ───────────────────────────────────────────────────────
+
+describe("listMetaAdsAccounts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getMcpConfigMock.mockReturnValue({
+      url: "https://notfair.co/api/mcp/meta_ads",
+      token: "tok",
+    });
+  });
+
+  it("parses the Meta Graph `data` array shape (id + name)", async () => {
+    mcpRpcMock.mockResolvedValueOnce(
+      toolCallResult({
+        data: [
+          { id: "act_111", name: "Brand A" },
+          { id: "act_222", name: "Brand B" },
+        ],
+      }),
+    );
+    const r = await listMetaAdsAccounts("acme");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.accounts).toEqual([
+        { id: "act_111", name: "Brand A" },
+        { id: "act_222", name: "Brand B" },
+      ]);
+      expect(r.default_account_id).toBeNull();
+    }
+  });
+
+  it("returns shape error when neither `data` nor `accounts` is present", async () => {
+    mcpRpcMock.mockResolvedValueOnce(toolCallResult({ foo: "bar" }));
+    const r = await listMetaAdsAccounts("acme");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe("shape");
+  });
+
+  it("returns mcp_not_configured when no token row exists for the project", async () => {
+    getMcpConfigMock.mockReturnValueOnce(null);
+    const r = await listMetaAdsAccounts("acme");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe("mcp_not_configured");
+  });
+});
+
+describe("setOnboardingMetaAdsAccountAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getProjectMock.mockReturnValue({
+      id: "p-1",
+      slug: "acme",
+      display_name: "Acme",
+    });
+    getMcpConfigMock.mockReturnValue({
+      url: "https://notfair.co/api/mcp/meta_ads",
+      token: "tok",
+    });
+  });
+
+  it("persists the chosen ad-account when it's in the bearer's list", async () => {
+    mcpRpcMock.mockResolvedValueOnce(
+      toolCallResult({
+        data: [
+          { id: "act_111", name: "Brand A" },
+          { id: "act_222", name: "Brand B" },
+        ],
+      }),
+    );
+    setProjectMetaAdsAccountMock.mockReturnValue({
+      slug: "acme",
+      meta_ads_account_id: "act_222",
+    });
+    const r = await setOnboardingMetaAdsAccountAction("acme", "act_222");
+    expect(r.ok).toBe(true);
+    expect(setProjectMetaAdsAccountMock).toHaveBeenCalledWith("acme", "act_222");
+  });
+
+  it("rejects when the account isn't in the bearer's list (tamper defense)", async () => {
+    mcpRpcMock.mockResolvedValueOnce(
+      toolCallResult({ data: [{ id: "act_111", name: "Brand A" }] }),
+    );
+    const r = await setOnboardingMetaAdsAccountAction("acme", "act_evil");
+    expect(r.ok).toBe(false);
+    expect(setProjectMetaAdsAccountMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── GSC ────────────────────────────────────────────────────────────
+
+describe("listGscProperties", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getMcpConfigMock.mockReturnValue({
+      url: "https://notfair.co/api/mcp/google_search_console",
+      token: "tok",
+    });
+  });
+
+  it("parses the Search Console `siteEntry` shape", async () => {
+    mcpRpcMock.mockResolvedValueOnce(
+      toolCallResult({
+        siteEntry: [
+          {
+            siteUrl: "https://notfair.co/",
+            permissionLevel: "siteOwner",
+          },
+          { siteUrl: "sc-domain:notfair.co", permissionLevel: "siteFullUser" },
+        ],
+      }),
+    );
+    const r = await listGscProperties("acme");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.properties.map((p) => p.id)).toEqual([
+        "https://notfair.co/",
+        "sc-domain:notfair.co",
+      ]);
+      // prettyGscName strips scheme + sc-domain prefix.
+      expect(r.properties[0]!.name).toBe("notfair.co");
+      expect(r.properties[1]!.name).toBe("notfair.co");
+      expect(r.properties[0]!.permission).toBe("siteOwner");
+    }
+  });
+
+  it("returns shape error when neither siteEntry nor sites is present", async () => {
+    mcpRpcMock.mockResolvedValueOnce(toolCallResult({ foo: "bar" }));
+    const r = await listGscProperties("acme");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe("shape");
+  });
+});
+
+describe("setOnboardingGscPropertyAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getProjectMock.mockReturnValue({
+      id: "p-1",
+      slug: "acme",
+      display_name: "Acme",
+    });
+    getMcpConfigMock.mockReturnValue({
+      url: "https://notfair.co/api/mcp/google_search_console",
+      token: "tok",
+    });
+  });
+
+  it("persists the chosen property when it's in the bearer's list", async () => {
+    mcpRpcMock.mockResolvedValueOnce(
+      toolCallResult({
+        siteEntry: [{ siteUrl: "sc-domain:notfair.co", permissionLevel: "siteOwner" }],
+      }),
+    );
+    setProjectGscPropertyMock.mockReturnValue({
+      slug: "acme",
+      gsc_property_id: "sc-domain:notfair.co",
+    });
+    const r = await setOnboardingGscPropertyAction("acme", "sc-domain:notfair.co");
+    expect(r.ok).toBe(true);
+    expect(setProjectGscPropertyMock).toHaveBeenCalledWith(
+      "acme",
+      "sc-domain:notfair.co",
+    );
+  });
+
+  it("rejects when the property isn't in the bearer's list", async () => {
+    mcpRpcMock.mockResolvedValueOnce(
+      toolCallResult({
+        siteEntry: [{ siteUrl: "https://other.example/", permissionLevel: "siteUser" }],
+      }),
+    );
+    const r = await setOnboardingGscPropertyAction("acme", "sc-domain:evil.com");
+    expect(r.ok).toBe(false);
+    expect(setProjectGscPropertyMock).not.toHaveBeenCalled();
   });
 });
 

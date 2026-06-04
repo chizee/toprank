@@ -9,6 +9,12 @@ const {
   setOnboardingAccountAction,
   getOnboardingTaskForSkipAction,
   getProvisioningProgressAction,
+  getConnectStepStateAction,
+  listMetaAdsAccounts,
+  setOnboardingMetaAdsAccountAction,
+  listGscProperties,
+  setOnboardingGscPropertyAction,
+  addUserMcpServerAction,
   routerPush,
   routerReplace,
   toastFns,
@@ -20,6 +26,12 @@ const {
   setOnboardingAccountAction: vi.fn(),
   getOnboardingTaskForSkipAction: vi.fn(),
   getProvisioningProgressAction: vi.fn(),
+  getConnectStepStateAction: vi.fn(),
+  listMetaAdsAccounts: vi.fn(),
+  setOnboardingMetaAdsAccountAction: vi.fn(),
+  listGscProperties: vi.fn(),
+  setOnboardingGscPropertyAction: vi.fn(),
+  addUserMcpServerAction: vi.fn(),
   routerPush: vi.fn(),
   routerReplace: vi.fn(),
   toastFns: {
@@ -36,6 +48,7 @@ vi.mock("@/server/actions/projects", () => ({
 
 vi.mock("@/server/actions/mcp", () => ({
   startMcpConnect: (...args: unknown[]) => startMcpConnect(...args),
+  addUserMcpServerAction: (...args: unknown[]) => addUserMcpServerAction(...args),
 }));
 
 vi.mock("@/server/onboarding/accounts", () => ({
@@ -46,6 +59,14 @@ vi.mock("@/server/onboarding/accounts", () => ({
     getOnboardingTaskForSkipAction(...args),
   getProvisioningProgressAction: (...args: unknown[]) =>
     getProvisioningProgressAction(...args),
+  getConnectStepStateAction: (...args: unknown[]) =>
+    getConnectStepStateAction(...args),
+  listMetaAdsAccounts: (...args: unknown[]) => listMetaAdsAccounts(...args),
+  setOnboardingMetaAdsAccountAction: (...args: unknown[]) =>
+    setOnboardingMetaAdsAccountAction(...args),
+  listGscProperties: (...args: unknown[]) => listGscProperties(...args),
+  setOnboardingGscPropertyAction: (...args: unknown[]) =>
+    setOnboardingGscPropertyAction(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -90,11 +111,28 @@ beforeEach(() => {
   setOnboardingAccountAction.mockReset();
   getOnboardingTaskForSkipAction.mockReset();
   getProvisioningProgressAction.mockReset();
+  getConnectStepStateAction.mockReset();
+  listMetaAdsAccounts.mockReset();
+  setOnboardingMetaAdsAccountAction.mockReset();
+  listGscProperties.mockReset();
+  setOnboardingGscPropertyAction.mockReset();
+  addUserMcpServerAction.mockReset();
   routerPush.mockReset();
   routerReplace.mockReset();
   toastFns.success.mockReset();
   toastFns.error.mockReset();
   searchParamsRef.current = new URLSearchParams();
+  // Sensible default — connect-step renders need this to resolve.
+  getConnectStepStateAction.mockResolvedValue({
+    ok: true,
+    state: {
+      googleads: { connected: false, account_selected: false },
+      metaads: { connected: false, account_selected: false },
+      gsc: { connected: false, account_selected: false },
+      extra_connected_count: 0,
+      website_url: null,
+    },
+  });
 });
 
 afterEach(() => {
@@ -140,7 +178,7 @@ describe("OnboardingFlow — NameStep (default step)", () => {
   it("renders an inline error alert when the server action returns ok=false", async () => {
     createProjectForOnboardingAction.mockResolvedValue({
       ok: false,
-      error: "Please enter a project name.",
+      error: "Please enter a workspace name.",
     });
     render(<OnboardingFlow />);
     fireEvent.change(screen.getByLabelText(/Name/i), {
@@ -148,7 +186,7 @@ describe("OnboardingFlow — NameStep (default step)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Continue/i }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Please enter a project name.");
+    expect(alert).toHaveTextContent("Please enter a workspace name.");
     expect(routerPush).not.toHaveBeenCalled();
   });
 
@@ -175,7 +213,7 @@ describe("OnboardingFlow — MissingSlug", () => {
     setStep("connect", null);
     render(<OnboardingFlow />);
     expect(
-      screen.getByText(/This step needs a project. Start from the beginning./i),
+      screen.getByText(/This step needs a workspace. Start from the beginning./i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Start over/i }),
@@ -186,27 +224,36 @@ describe("OnboardingFlow — MissingSlug", () => {
     setStep("account", null);
     render(<OnboardingFlow />);
     expect(
-      screen.getByText(/This step needs a project. Start from the beginning./i),
+      screen.getByText(/This step needs a workspace. Start from the beginning./i),
     ).toBeInTheDocument();
   });
 });
 
 describe("OnboardingFlow — ConnectStep", () => {
-  it("renders the connect headline + Connect/Skip buttons", () => {
+  it("renders the three recommended-MCP tiles + Skip when nothing is connected", async () => {
     setStep("connect", "acme");
     render(<OnboardingFlow />);
     expect(
-      screen.getByRole("heading", { name: /Connect your Google Ads/i }),
+      await screen.findByRole("heading", { name: /Connect your tools/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Connect Google Ads/i }),
+      screen.getByRole("button", { name: /^Google Ads/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Skip Google Ads/i }),
+      screen.getByRole("button", { name: /^Meta Ads/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Google Search Console/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /More tools/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Skip for now/i }),
     ).toBeInTheDocument();
   });
 
-  it("calls startMcpConnect with the onboarding return_to and redirects on success", async () => {
+  it("starts OAuth for Google Ads with a connect-step return_to", async () => {
     const loc = setLocationHref();
     startMcpConnect.mockResolvedValue({
       ok: true,
@@ -214,7 +261,7 @@ describe("OnboardingFlow — ConnectStep", () => {
     });
     setStep("connect", "acme");
     render(<OnboardingFlow />);
-    fireEvent.click(screen.getByRole("button", { name: /Connect Google Ads/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Google Ads/i }));
     await waitFor(() =>
       expect(startMcpConnect).toHaveBeenCalledWith({
         mcp_key: "notfair-googleads",
@@ -226,34 +273,80 @@ describe("OnboardingFlow — ConnectStep", () => {
     );
   });
 
-  it("toasts and re-enables the button when startMcpConnect returns ok=false", async () => {
+  it("toasts and re-enables the tile when startMcpConnect returns ok=false", async () => {
     startMcpConnect.mockResolvedValue({ ok: false, error: "registration failed" });
     setStep("connect", "acme");
     render(<OnboardingFlow />);
-    const btn = screen.getByRole("button", { name: /Connect Google Ads/i });
-    fireEvent.click(btn);
+    const tile = await screen.findByRole("button", { name: /^Google Ads/i });
+    fireEvent.click(tile);
     await waitFor(() =>
       expect(toastFns.error).toHaveBeenCalledWith("registration failed"),
     );
-    expect(btn).not.toBeDisabled();
+    expect(tile).not.toBeDisabled();
   });
 
   it("toasts the thrown error when startMcpConnect throws", async () => {
     startMcpConnect.mockRejectedValue(new Error("offline"));
     setStep("connect", "acme");
     render(<OnboardingFlow />);
-    fireEvent.click(screen.getByRole("button", { name: /Connect Google Ads/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Google Ads/i }));
     await waitFor(() =>
       expect(toastFns.error).toHaveBeenCalledWith("offline"),
     );
   });
 
-  it("hands off to the setup screen when the user clicks Skip", () => {
+  it("hands off to the setup screen via Skip when zero MCPs are connected", async () => {
     setStep("connect", "acme");
     render(<OnboardingFlow />);
-    fireEvent.click(screen.getByRole("button", { name: /Skip Google Ads/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Skip for now/i }));
     expect(routerReplace).toHaveBeenCalledWith(
       "/onboarding?step=setup&slug=acme&from=skip",
+    );
+  });
+
+  it("flips Skip → 'Done adding MCPs — next step' once at least one MCP is connected", async () => {
+    getConnectStepStateAction.mockResolvedValue({
+      ok: true,
+      state: {
+        googleads: { connected: true, account_selected: true },
+        metaads: { connected: false, account_selected: false },
+        gsc: { connected: false, account_selected: false },
+        extra_connected_count: 0,
+        website_url: null,
+      },
+    });
+    setStep("connect", "acme");
+    render(<OnboardingFlow />);
+    const done = await screen.findByRole("button", { name: /Done adding MCPs/i });
+    expect(done).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Skip for now/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(done);
+    expect(routerReplace).toHaveBeenCalledWith(
+      "/onboarding?step=setup&slug=acme&from=connect",
+    );
+  });
+
+  it("shows a 'Select Google Ads account' sub-action when the MCP is connected but no account is picked", async () => {
+    getConnectStepStateAction.mockResolvedValue({
+      ok: true,
+      state: {
+        googleads: { connected: true, account_selected: false },
+        metaads: { connected: false, account_selected: false },
+        gsc: { connected: false, account_selected: false },
+        extra_connected_count: 0,
+        website_url: null,
+      },
+    });
+    setStep("connect", "acme");
+    render(<OnboardingFlow />);
+    const pick = await screen.findByRole("button", {
+      name: /Select Google Ads account/i,
+    });
+    fireEvent.click(pick);
+    expect(routerPush).toHaveBeenCalledWith(
+      "/onboarding?step=account&slug=acme",
     );
   });
 });
@@ -406,7 +499,7 @@ describe("OnboardingFlow — AccountStep", () => {
     );
   });
 
-  it("auto-selects the only account and replaces the URL with the task display id", async () => {
+  it("auto-selects the only account and routes back to the connect step", async () => {
     listGoogleAdsAccounts.mockResolvedValue({
       ok: true,
       accounts: [{ id: "123-456-7890", name: "Solo Account" }],
@@ -425,7 +518,7 @@ describe("OnboardingFlow — AccountStep", () => {
     );
     await waitFor(() =>
       expect(routerReplace).toHaveBeenCalledWith(
-        "/acme/agents/cmo-greg/tasks?task=AUDIT-1",
+        "/onboarding?step=connect&slug=acme",
       ),
     );
   });
@@ -469,7 +562,7 @@ describe("OnboardingFlow — AccountStep", () => {
     expect(screen.getByText(/Customer ID 222/)).toBeInTheDocument();
   });
 
-  it("picks the chosen account and replaces the URL with the task display id", async () => {
+  it("picks the chosen account and routes back to the connect step", async () => {
     listGoogleAdsAccounts.mockResolvedValue({
       ok: true,
       accounts: [
@@ -495,7 +588,7 @@ describe("OnboardingFlow — AccountStep", () => {
     );
     await waitFor(() =>
       expect(routerReplace).toHaveBeenCalledWith(
-        "/acme/agents/cmo-greg/tasks?task=TASK-9",
+        "/onboarding?step=connect&slug=acme",
       ),
     );
   });

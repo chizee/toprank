@@ -40,7 +40,7 @@ export default async function AgentsPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
           <p className="text-sm text-muted-foreground">
-            Project <span className="font-mono">{project.slug}</span> ·{" "}
+            Workspace <span className="font-mono">{project.slug}</span> ·{" "}
             {projectAgents.length} agent
             {projectAgents.length === 1 ? "" : "s"} · running on {project.harness_adapter === "codex-local" ? "Codex" : "Claude Code"}
           </p>

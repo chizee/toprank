@@ -99,7 +99,7 @@ Style:
   starting the next.`;
 
 export type AgentTemplate = {
-  key: "cmo" | "google_ads" | "seo";
+  key: "cmo" | "google_ads" | "meta_ads" | "gsc" | "seo";
   /**
    * Label for the ROLE this template represents (e.g. "CMO", "Google
    * Ads"). Used in the sidebar role pill + anywhere the UI says
@@ -127,6 +127,15 @@ export type AgentTemplate = {
    * provisions a clone of it for a project.
    */
   default_onboarding: boolean;
+  /**
+   * MCP catalog key this specialist needs to do its job. When set:
+   *   - The agent is provisioned conditionally — only when the matching
+   *     MCP is connected for the project (see provisionSpecialistForMcp).
+   *   - The agent's page shows a "Connect <platform>" blocker when the
+   *     MCP token is missing (see resolveMcpBlocker).
+   * CMO and other tools-less templates leave this undefined.
+   */
+  requires_mcp_key?: string;
 };
 
 export type AgentTemplateKey = AgentTemplate["key"];
@@ -134,11 +143,25 @@ export type AgentTemplateKey = AgentTemplate["key"];
 /**
  * Subset of TEMPLATES included in the default onboarding bundle. Single
  * source of truth for "which agents does a freshly-created project get?".
- * Used by createProject actions to scope ensureProjectAgents and by
- * listProjectAgents to decide which template entries to synthesize as
- * placeholders before disk-overlay merges in.
+ *
+ * Only CMO ships by default now. The three specialists (Google Ads,
+ * Meta Ads, Google Search Console) are gated on the user connecting the
+ * matching MCP — the connect step in onboarding triggers provisioning
+ * via provisionSpecialistForMcp as each token lands.
  */
-export const DEFAULT_ONBOARDING_TEMPLATE_KEYS: AgentTemplateKey[] = ["cmo", "google_ads"];
+export const DEFAULT_ONBOARDING_TEMPLATE_KEYS: AgentTemplateKey[] = ["cmo"];
+
+/**
+ * Template key → MCP catalog key mapping for the specialists that the
+ * onboarding connect step gates provisioning on. Inverse lookup
+ * (MCP key → template key) used by provisionSpecialistForMcp when an
+ * OAuth callback lands and we need to decide which specialist to mint.
+ */
+export const SPECIALIST_TEMPLATE_BY_MCP_KEY: Record<string, AgentTemplateKey> = {
+  "notfair-googleads": "google_ads",
+  "notfair-metaads": "meta_ads",
+  "notfair-googlesearchconsole": "gsc",
+};
 
 export function templateForKey(key: string): AgentTemplate | undefined {
   return TEMPLATES.find((t) => t.key === key || t.key.replace(/_/g, "-") === key);
@@ -201,7 +224,92 @@ a wide net on the first pass; filter in-script for free.
 
 You also have the platform's \`exec\` tool for shell, \`read/edit/write\`
 for files in your workspace, and the orchestration MCP for coordination.`,
-    default_onboarding: true,
+    default_onboarding: false,
+    requires_mcp_key: "notfair-googleads",
+  },
+  {
+    key: "meta_ads",
+    display_name: "Meta Ads",
+    default_name: "Mia",
+    description: "Runs Meta Ads (Facebook + Instagram) campaigns, ad sets, creative, audiences.",
+    capabilities: [
+      "Audit ad-account spend, ROAS, CPM, frequency",
+      "Diagnose ad-set delivery + audience overlap",
+      "Surface creative fatigue + winners",
+      "Propose budget shifts + bid changes",
+      "Schedule recurring performance + pacing checks",
+      "Uses notfair-metaads MCP when account connected",
+    ],
+    model: "openai-codex/gpt-5.5",
+    system_prompt: `You are a Meta Ads (Facebook + Instagram) specialist agent on the notfair-cmo platform.
+
+${SPECIALIST_ROLE}
+
+## Your domain tools
+
+When the notfair-metaads MCP is connected to this project, use its
+\`runScript\` tool for reads — \`ads.graph\` for single Graph API calls,
+\`ads.graphParallel\` to fan out across insights / adsets / creatives /
+account in one pass, and \`ads.insights\` for the conventional insights
+pull with sensible defaults. Cast a wide net on the first call; filter
+in-script for free.
+
+Domain conventions you should respect:
+- Refer to spend in account currency, not abstract units. Always quote
+  numbers (spend, ROAS, CPM, CTR, freq) when reporting findings.
+- Default to the last 30 days for performance reads unless the brief
+  asks for a different window. Use date_preset \`last_30d\` for
+  consistency.
+- Audience overlap, creative fatigue, and CPM spikes are the three
+  things to look for in a "what's wrong" pass; ROAS by ad set + by
+  creative are the two things to look at in a "what's working" pass.
+
+You also have the platform's \`exec\` tool for shell, \`read/edit/write\`
+for files in your workspace, and the orchestration MCP for coordination.`,
+    default_onboarding: false,
+    requires_mcp_key: "notfair-metaads",
+  },
+  {
+    key: "gsc",
+    display_name: "Google Search Console",
+    default_name: "Sasha",
+    description: "Organic search performance — queries, pages, impressions, clicks, indexing.",
+    capabilities: [
+      "Pull search performance (queries, pages, devices, countries)",
+      "Surface query/page movers week-over-week",
+      "Identify pages losing impressions or rankings",
+      "Diagnose indexing issues + coverage gaps",
+      "Schedule recurring ranking/click summaries",
+      "Uses notfair-googlesearchconsole MCP when property connected",
+    ],
+    model: "openai-codex/gpt-5.5",
+    system_prompt: `You are a Google Search Console specialist agent on the notfair-cmo platform.
+
+${SPECIALIST_ROLE}
+
+## Your domain tools
+
+When the notfair-googlesearchconsole MCP is connected to this project,
+use its tools to pull organic search performance (impressions, clicks,
+position) sliced by query, page, country, and device. The selected GSC
+property (e.g. \`sc-domain:example.com\` or \`https://example.com/\`)
+is persisted on the project — every call you make should target that
+property unless the brief explicitly asks for another.
+
+Domain conventions you should respect:
+- Always quote impressions, clicks, CTR, and average position when
+  reporting findings. The user trusts numbers more than adjectives.
+- Default to the last 28 days for performance reads unless the brief
+  asks for a different window. That window aligns with Search Console's
+  native default.
+- Movers analysis matters more than absolutes here — surface queries +
+  pages that moved week-over-week (impressions or position), not the
+  static top-10 lists the user has already seen.
+
+You also have the platform's \`exec\` tool for shell, \`read/edit/write\`
+for files in your workspace, and the orchestration MCP for coordination.`,
+    default_onboarding: false,
+    requires_mcp_key: "notfair-googlesearchconsole",
   },
   {
     key: "seo",
@@ -231,6 +339,34 @@ for files in your workspace, and the orchestration MCP for coordination.`,
     default_onboarding: false,
   },
 ];
+
+/**
+ * Provision the specialist agent that matches a newly-connected MCP. Called
+ * from the OAuth callback right after `setMcpBearer` lands a token. Looks
+ * up the template via SPECIALIST_TEMPLATE_BY_MCP_KEY, then calls
+ * ensureProjectAgents with that single template.
+ *
+ * Idempotent: if the agent already exists (user reconnected after a
+ * disconnect, or token was set via a non-OAuth path that already
+ * triggered provisioning), ensureProjectAgents returns it in `existed`
+ * and writes no files.
+ *
+ * No-op when:
+ *   - The catalog_key isn't one of the recommended specialists (e.g.
+ *     Stripe / Supabase MCPs from the "More" tile — those don't get an
+ *     agent).
+ *   - The project doesn't exist (defensive — shouldn't happen via the
+ *     OAuth callback path which only runs after the project is created).
+ */
+export async function provisionSpecialistForMcp(
+  project_slug: string,
+  catalog_key: string,
+): Promise<EnsureAgentsResult | null> {
+  const template_key = SPECIALIST_TEMPLATE_BY_MCP_KEY[catalog_key];
+  if (!template_key) return null;
+  if (!getProject(project_slug)) return null;
+  return ensureProjectAgents(project_slug, [template_key]);
+}
 
 export function agentNameFor(
   project_slug: string,

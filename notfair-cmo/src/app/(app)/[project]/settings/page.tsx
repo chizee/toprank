@@ -17,7 +17,7 @@ export default async function SettingsPage({
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          Project <span className="font-mono">{project.slug}</span>
+          Workspace <span className="font-mono">{project.slug}</span>
         </p>
       </header>
 

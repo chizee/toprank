@@ -68,9 +68,9 @@ export function ProjectRenameCard({
       <div className="flex items-start gap-3">
         <Pencil className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold">Rename this project</h3>
+          <h3 className="text-sm font-semibold">Rename this workspace</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Changing the slug renames every agent in the project, rewrites all
+            Changing the slug renames every agent in the workspace, rewrites all
             cron names, moves workspace dirs, relocates session JSONL files,
             and repoints DB rows.
           </p>
@@ -102,7 +102,7 @@ export function ProjectRenameCard({
             <code className="rounded bg-muted px-1 font-mono">{currentSlug}</code>{" "}
             to{" "}
             <code className="rounded bg-muted px-1 font-mono">{derivedSlug}</code>
-            . Every agent will be cloned into the new project and the old one
+            . Every agent will be cloned into the new workspace and the old one
             removed.
           </p>
         ) : (
@@ -120,7 +120,7 @@ export function ProjectRenameCard({
               {slugChanged ? "Renaming…" : "Saving…"}
             </>
           ) : slugChanged ? (
-            "Rename project"
+            "Rename workspace"
           ) : (
             "Save name"
           )}

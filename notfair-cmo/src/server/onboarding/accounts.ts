@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 
 import { getMcpConfig, mcpRpcAutoRefresh } from "@/server/mcp/rpc";
-import { getProject, setProjectGoogleAdsAccount } from "@/server/db/projects";
+import {
+  getProject,
+  setProjectGoogleAdsAccount,
+  setProjectMetaAdsAccount,
+  setProjectGscProperty,
+} from "@/server/db/projects";
 import type { Project } from "@/types";
 
 /**
@@ -398,4 +403,397 @@ export async function getOnboardingTaskForSkipAction(
     task_display_id: onboardingTask.display_id,
     cmo_agent_slug: cmo.slug,
   };
+}
+
+// ── Meta Ads account picker ────────────────────────────────────────
+//
+// Mirrors the Google Ads pattern. The notfair-metaads MCP exposes a
+// `listAdAccounts` tool that returns the ad accounts the current bearer
+// can reach. Onboarding asks the user to pick one and we persist it on
+// `projects.meta_ads_account_id`.
+
+const META_ADS_MCP_KEY = "notfair-metaads";
+const META_ADS_LIST_TOOL = "listAdAccounts";
+
+export type MetaAdsAccount = {
+  /** Numeric ad-account id with the `act_` prefix (e.g. `act_123456`). */
+  id: string;
+  /** Display name pulled from the Meta Graph payload. Falls back to id. */
+  name: string;
+};
+
+export type ListMetaAdsAccountsResult =
+  | { ok: true; accounts: MetaAdsAccount[]; default_account_id: string | null }
+  | { ok: false; error: string; kind: "mcp_not_configured" | "rpc" | "shape" };
+
+export async function listMetaAdsAccounts(
+  project_slug: string,
+): Promise<ListMetaAdsAccountsResult> {
+  const cfg = getMcpConfig(project_slug, META_ADS_MCP_KEY);
+  if (!cfg) {
+    return {
+      ok: false,
+      kind: "mcp_not_configured",
+      error: "Meta Ads MCP is not configured for this project.",
+    };
+  }
+
+  const rpcResult = await mcpRpcAutoRefresh<ListAccountsToolResult>(
+    project_slug,
+    META_ADS_MCP_KEY,
+    "tools/call",
+    { name: META_ADS_LIST_TOOL, arguments: {} },
+    { timeoutMs: LIST_TIMEOUT_MS },
+  );
+  if (!rpcResult.ok) {
+    return { ok: false, kind: "rpc", error: rpcErrorMessage(rpcResult) };
+  }
+
+  const parsed = parseMetaAccountsPayload(rpcResult.result);
+  if (!parsed) {
+    return {
+      ok: false,
+      kind: "shape",
+      error: `MCP ${META_ADS_LIST_TOOL} returned an unexpected shape.`,
+    };
+  }
+  return { ok: true, ...parsed };
+}
+
+type MetaAccountsPayload = {
+  // The Meta MCP wraps Graph API responses, which use `data` for the
+  // collection. We also accept the Google-Ads-style `accounts` key
+  // defensively in case the MCP normalizes the shape upstream.
+  data?: Array<{ id?: unknown; name?: unknown; account_id?: unknown }>;
+  accounts?: Array<{ id?: unknown; name?: unknown }>;
+  defaultAccountId?: unknown;
+};
+
+function parseMetaAccountsPayload(
+  result: ListAccountsToolResult,
+): { accounts: MetaAdsAccount[]; default_account_id: string | null } | null {
+  if (!result || typeof result !== "object") return null;
+  if (result.isError) return null;
+  const text = result.content?.[0]?.text;
+  if (typeof text !== "string") return null;
+  let body: MetaAccountsPayload;
+  try {
+    body = JSON.parse(text) as MetaAccountsPayload;
+  } catch {
+    return null;
+  }
+  const raw = Array.isArray(body.data)
+    ? body.data
+    : Array.isArray(body.accounts)
+      ? body.accounts
+      : null;
+  if (!raw) return null;
+  const accounts: MetaAdsAccount[] = [];
+  for (const a of raw) {
+    if (!a || typeof a !== "object") continue;
+    const id = String(a.id ?? "").trim();
+    const name = String(a.name ?? "").trim() || id;
+    if (id) accounts.push({ id, name });
+  }
+  const default_account_id =
+    typeof body.defaultAccountId === "string" || typeof body.defaultAccountId === "number"
+      ? String(body.defaultAccountId)
+      : null;
+  return { accounts, default_account_id };
+}
+
+export type SetMetaAdsAccountResult =
+  | { ok: true; project: Project }
+  | { ok: false; error: string };
+
+export async function setOnboardingMetaAdsAccountAction(
+  project_slug: string,
+  account_id: string,
+): Promise<SetMetaAdsAccountResult> {
+  if (!project_slug.trim() || !account_id.trim()) {
+    return { ok: false, error: "Missing project slug or account id." };
+  }
+  if (!getProject(project_slug)) return { ok: false, error: "Project not found." };
+
+  const list = await listMetaAdsAccounts(project_slug);
+  if (!list.ok) {
+    return {
+      ok: false,
+      error: `Couldn't verify account against Meta Ads MCP: ${list.error}`,
+    };
+  }
+  const match = list.accounts.find((a) => a.id === account_id);
+  if (!match) {
+    return {
+      ok: false,
+      error: `Account ${account_id} isn't in this bearer's reachable accounts.`,
+    };
+  }
+  const updated = setProjectMetaAdsAccount(project_slug, match.id);
+  if (!updated) return { ok: false, error: "Project not found." };
+  revalidatePath("/", "layout");
+  return { ok: true, project: updated };
+}
+
+// ── Google Search Console property picker ──────────────────────────
+//
+// Mirrors the Google Ads pattern. Per the GSC REST API the unit is a
+// "site" (e.g. `https://example.com/` or `sc-domain:example.com`); we
+// surface them as "properties" in the UI to match what users see in
+// Search Console.
+//
+// **Tool name is a best-guess.** The notfair-googlesearchconsole MCP
+// is freshly added; we expect a tool called `listSites` (mirroring the
+// Search Console API method). If the real tool name is different
+// (e.g. `listProperties`, `listConnectedSites`), change the constant
+// below — the failure mode is a clean RPC "method not found" error
+// surfaced through the existing rpcErrorMessage formatter.
+
+const GSC_MCP_KEY = "notfair-googlesearchconsole";
+const GSC_LIST_TOOL = "listSites";
+
+export type GscProperty = {
+  /** Site URL exactly as Search Console uses it. */
+  id: string;
+  /** Display label — typically equals id but trimmed of the scheme. */
+  name: string;
+  /** Permission level the bearer has on this property (owner / full / …). */
+  permission?: string;
+};
+
+export type ListGscPropertiesResult =
+  | { ok: true; properties: GscProperty[]; default_property_id: string | null }
+  | { ok: false; error: string; kind: "mcp_not_configured" | "rpc" | "shape" };
+
+export async function listGscProperties(
+  project_slug: string,
+): Promise<ListGscPropertiesResult> {
+  const cfg = getMcpConfig(project_slug, GSC_MCP_KEY);
+  if (!cfg) {
+    return {
+      ok: false,
+      kind: "mcp_not_configured",
+      error: "Google Search Console MCP is not configured for this project.",
+    };
+  }
+
+  const rpcResult = await mcpRpcAutoRefresh<ListAccountsToolResult>(
+    project_slug,
+    GSC_MCP_KEY,
+    "tools/call",
+    { name: GSC_LIST_TOOL, arguments: {} },
+    { timeoutMs: LIST_TIMEOUT_MS },
+  );
+  if (!rpcResult.ok) {
+    return { ok: false, kind: "rpc", error: rpcErrorMessage(rpcResult) };
+  }
+
+  const parsed = parseGscPropertiesPayload(rpcResult.result);
+  if (!parsed) {
+    return {
+      ok: false,
+      kind: "shape",
+      error: `MCP ${GSC_LIST_TOOL} returned an unexpected shape.`,
+    };
+  }
+  return { ok: true, ...parsed };
+}
+
+type GscPropertiesPayload = {
+  // Search Console REST returns `siteEntry: [{ siteUrl, permissionLevel }]`.
+  // The MCP may pass that through unchanged, or normalize to a flatter
+  // shape. Accept both, plus a defensive `sites` array.
+  siteEntry?: Array<{ siteUrl?: unknown; permissionLevel?: unknown }>;
+  sites?: Array<{ id?: unknown; name?: unknown; siteUrl?: unknown }>;
+  defaultPropertyId?: unknown;
+};
+
+function parseGscPropertiesPayload(
+  result: ListAccountsToolResult,
+): { properties: GscProperty[]; default_property_id: string | null } | null {
+  if (!result || typeof result !== "object") return null;
+  if (result.isError) return null;
+  const text = result.content?.[0]?.text;
+  if (typeof text !== "string") return null;
+  let body: GscPropertiesPayload;
+  try {
+    body = JSON.parse(text) as GscPropertiesPayload;
+  } catch {
+    return null;
+  }
+  const properties: GscProperty[] = [];
+  if (Array.isArray(body.siteEntry)) {
+    for (const s of body.siteEntry) {
+      const id = String(s?.siteUrl ?? "").trim();
+      if (!id) continue;
+      properties.push({
+        id,
+        name: prettyGscName(id),
+        permission:
+          typeof s?.permissionLevel === "string" ? s.permissionLevel : undefined,
+      });
+    }
+  } else if (Array.isArray(body.sites)) {
+    for (const s of body.sites) {
+      const id = String(s?.id ?? s?.siteUrl ?? "").trim();
+      if (!id) continue;
+      const name = String(s?.name ?? "").trim() || prettyGscName(id);
+      properties.push({ id, name });
+    }
+  } else {
+    return null;
+  }
+  const default_property_id =
+    typeof body.defaultPropertyId === "string"
+      ? body.defaultPropertyId
+      : null;
+  return { properties, default_property_id };
+}
+
+function prettyGscName(siteUrl: string): string {
+  // `sc-domain:example.com` → `example.com`
+  // `https://example.com/` → `example.com`
+  if (siteUrl.startsWith("sc-domain:")) return siteUrl.slice("sc-domain:".length);
+  try {
+    const u = new URL(siteUrl);
+    return u.host + (u.pathname === "/" ? "" : u.pathname);
+  } catch {
+    return siteUrl;
+  }
+}
+
+export type SetGscPropertyResult =
+  | { ok: true; project: Project }
+  | { ok: false; error: string };
+
+export async function setOnboardingGscPropertyAction(
+  project_slug: string,
+  property_id: string,
+): Promise<SetGscPropertyResult> {
+  if (!project_slug.trim() || !property_id.trim()) {
+    return { ok: false, error: "Missing project slug or property id." };
+  }
+  if (!getProject(project_slug)) return { ok: false, error: "Project not found." };
+
+  const list = await listGscProperties(project_slug);
+  if (!list.ok) {
+    return {
+      ok: false,
+      error: `Couldn't verify property against GSC MCP: ${list.error}`,
+    };
+  }
+  const match = list.properties.find((p) => p.id === property_id);
+  if (!match) {
+    return {
+      ok: false,
+      error: `Property ${property_id} isn't in this bearer's reachable properties.`,
+    };
+  }
+  const updated = setProjectGscProperty(project_slug, match.id);
+  if (!updated) return { ok: false, error: "Project not found." };
+  revalidatePath("/", "layout");
+  return { ok: true, project: updated };
+}
+
+// ── Onboarding connect-step state ──────────────────────────────────
+//
+// The multi-MCP onboarding step renders one tile per recommended MCP
+// (Google Ads, Meta Ads, GSC) plus a "More" tile. Each tile needs:
+//
+//   - is the MCP connected? (token row exists)
+//   - is an account/property selected on the project row?
+//   - the display name to label the tile
+//
+// We also surface a count of additional non-recommended connectors the
+// user has wired up via the "More" tile so the tile can show that
+// number ("More · 2 connected").
+
+export type ConnectedMcpState = {
+  /** True when an mcp_tokens row exists for this catalog_key. */
+  connected: boolean;
+  /**
+   * True when the user has picked a specific account/property for this MCP
+   * (i.e. the project column is non-null). Always false when not connected.
+   */
+  account_selected: boolean;
+};
+
+export type ConnectStepState = {
+  googleads: ConnectedMcpState;
+  metaads: ConnectedMcpState;
+  gsc: ConnectedMcpState;
+  /**
+   * Count of connected MCPs that aren't in the recommended trio
+   * (Stripe, Supabase, PostHog, …, plus any user-pasted custom servers).
+   */
+  extra_connected_count: number;
+  /**
+   * Project's website_url — used by the connect step to pre-load context
+   * about what the user is connecting tools for. Optional in the schema;
+   * propagated here for the redirect-target builder.
+   */
+  website_url: string | null;
+};
+
+export type GetConnectStepStateResult =
+  | { ok: true; state: ConnectStepState }
+  | { ok: false; error: string };
+
+export async function getConnectStepStateAction(
+  project_slug: string,
+): Promise<GetConnectStepStateResult> {
+  if (!project_slug.trim()) return { ok: false, error: "Missing project slug." };
+  const project = getProject(project_slug);
+  if (!project) return { ok: false, error: "Project not found." };
+
+  const { findMcpToken, listProjectMcpTokens } = await import(
+    "@/server/mcp/tokens"
+  );
+
+  const RECOMMENDED_KEYS = new Set([
+    "notfair-googleads",
+    "notfair-metaads",
+    "notfair-googlesearchconsole",
+  ]);
+  const allTokens = listProjectMcpTokens(project_slug);
+  const extra_connected_count = allTokens.filter(
+    (t) => !RECOMMENDED_KEYS.has(t.server_name),
+  ).length;
+
+  return {
+    ok: true,
+    state: {
+      googleads: {
+        connected: !!findMcpToken(project_slug, "notfair-googleads"),
+        account_selected: !!project.google_ads_account_id,
+      },
+      metaads: {
+        connected: !!findMcpToken(project_slug, "notfair-metaads"),
+        account_selected: !!project.meta_ads_account_id,
+      },
+      gsc: {
+        connected: !!findMcpToken(project_slug, "notfair-googlesearchconsole"),
+        account_selected: !!project.gsc_property_id,
+      },
+      extra_connected_count,
+      website_url: project.website_url,
+    },
+  };
+}
+
+// ── Shared RPC error formatter ─────────────────────────────────────
+
+function rpcErrorMessage(
+  rpcResult: Extract<
+    Awaited<ReturnType<typeof mcpRpcAutoRefresh>>,
+    { ok: false }
+  >,
+): string {
+  if (rpcResult.kind === "http_error") return `HTTP ${rpcResult.status}`;
+  if (rpcResult.kind === "rpc_error")
+    return `RPC ${rpcResult.code}: ${rpcResult.message}`;
+  if (rpcResult.kind === "timeout") return "MCP call timed out";
+  if (rpcResult.kind === "aborted") return "MCP call aborted";
+  if (rpcResult.kind === "malformed_response") return rpcResult.message;
+  return rpcResult.message;
 }

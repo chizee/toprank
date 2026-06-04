@@ -82,10 +82,10 @@ describe("ProjectSwitcher", () => {
     expect(screen.getAllByText("AL").length).toBeGreaterThan(0);
   });
 
-  it("renders a 'New project' link to /onboarding", () => {
+  it("renders a 'New workspace' link to /onboarding", () => {
     render(<ProjectSwitcher projects={projects} activeSlug="proj-a" />);
     openMenu();
-    expect(screen.getByText("New project")).toBeInTheDocument();
+    expect(screen.getByText("New workspace")).toBeInTheDocument();
   });
 
   it("opens the menu and lists all projects", () => {
@@ -124,9 +124,9 @@ describe("ProjectSwitcher", () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it("shows 'No projects yet' when projects list is empty", () => {
+  it("shows 'No workspaces yet' when projects list is empty", () => {
     render(<ProjectSwitcher projects={[]} activeSlug={null} />);
     openMenu();
-    expect(screen.getByText("No projects yet")).toBeInTheDocument();
+    expect(screen.getByText("No workspaces yet")).toBeInTheDocument();
   });
 });

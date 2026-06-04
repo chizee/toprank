@@ -147,9 +147,25 @@ export async function GET(request: Request) {
     return NextResponse.redirect(back);
   }
 
-  // Token is stored — now wire it into every agent's harness config so
-  // running agents actually see the MCP tool surface. Without this step
-  // the Connections page reads "Connected" (because the probe finds the
+  // Token is stored — now provision the specialist agent that matches
+  // this MCP (when it's one of the recommended trio: notfair-googleads,
+  // notfair-metaads, notfair-googlesearchconsole). The agent must exist
+  // BEFORE we register the MCP for it: registerCatalogMcpForProject
+  // iterates the project's agents and writes one MCP entry per agent,
+  // so a fresh specialist needs to be on disk first or it gets skipped.
+  // No-op for non-specialist MCPs (Stripe, Supabase, …).
+  try {
+    const { provisionSpecialistForMcp } = await import(
+      "@/server/agent-templates"
+    );
+    await provisionSpecialistForMcp(pending.project_slug, pending.catalog_key);
+  } catch (err) {
+    console.error("[mcp-oauth] provisionSpecialistForMcp threw:", err);
+  }
+
+  // Wire the new token into every agent's harness config so running
+  // agents actually see the MCP tool surface. Without this step the
+  // Connections page reads "Connected" (because the probe finds the
   // token) but Greg / Ana can't call any of the catalog's tools because
   // the adapter config file was never updated.
   try {

@@ -56,6 +56,8 @@ export function createProject(input: CreateProjectInput): CreateProjectResult {
     created_at: new Date().toISOString(),
     archived_at: null,
     google_ads_account_id: null,
+    meta_ads_account_id: null,
+    gsc_property_id: null,
     website_url,
     codebase_path,
     harness_adapter,
@@ -105,6 +107,36 @@ export function setProjectGoogleAdsAccount(
   if (!existing) return null;
   db.prepare("UPDATE projects SET google_ads_account_id = ? WHERE slug = ?").run(
     account_id,
+    slug,
+  );
+  return getProject(slug);
+}
+
+/** Same shape as setProjectGoogleAdsAccount but for the Meta Ads ad-account id. */
+export function setProjectMetaAdsAccount(
+  slug: string,
+  account_id: string | null,
+): Project | null {
+  const db = getDb();
+  const existing = db.prepare("SELECT 1 FROM projects WHERE slug = ?").get(slug);
+  if (!existing) return null;
+  db.prepare("UPDATE projects SET meta_ads_account_id = ? WHERE slug = ?").run(
+    account_id,
+    slug,
+  );
+  return getProject(slug);
+}
+
+/** Same shape as setProjectGoogleAdsAccount but for the GSC property id. */
+export function setProjectGscProperty(
+  slug: string,
+  property_id: string | null,
+): Project | null {
+  const db = getDb();
+  const existing = db.prepare("SELECT 1 FROM projects WHERE slug = ?").get(slug);
+  if (!existing) return null;
+  db.prepare("UPDATE projects SET gsc_property_id = ? WHERE slug = ?").run(
+    property_id,
     slug,
   );
   return getProject(slug);

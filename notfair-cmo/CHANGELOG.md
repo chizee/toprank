@@ -1,5 +1,17 @@
 # notfair-cmo
 
+## 0.5.0 — 2026-06-03
+
+**Multi-MCP onboarding + per-MCP specialist agents.** The connect step in onboarding is now a four-tile picker: Google Ads, Meta Ads, Google Search Console, and a "More" overflow modal. Each recommended tile is OAuth-wired to its own NotFair MCP and, on successful connect, triggers provisioning of the matching specialist agent — `meta_ads` (Mia) and `gsc` (Sasha) join the existing `cmo` (Greg) and `google_ads` (Ana) templates. CMO is the only template that ships unconditionally; specialists are gated on the user actually connecting their MCP.
+
+After each OAuth callback the user lands back on the connect step so they can wire up the next tool. When a connected MCP exposes more than one account/property, the matching account picker (Meta `act_*` ad accounts, GSC `sc-domain:` / URL properties) auto-selects when only one is reachable and otherwise shows a Google-Ads-style picker. Selections persist as `projects.meta_ads_account_id` and `projects.gsc_property_id` (migration 015) so specialists always target the right entity.
+
+Skip → "Done adding MCPs — next step" once at least one MCP is wired. The setup screen still waits for `ensureProjectAgents` (CMO + any specialists provisioned by the connect-time hooks) before routing the user into the CMO task workspace.
+
+Agent pages now render a **"Connect <Platform> MCP"** blocker in place of the chat/tasks UI when a specialist's required MCP token is missing — both before initial connect and after a later disconnect. The predicate is colocated in `src/server/onboarding/agent-mcp-blocker.ts` for unit-test coverage; the card lives at `src/components/agent-mcp-blocker-card.tsx`.
+
+The trusted-connectors registry promotes Meta Ads and Google Search Console to first-class `MCP_CATALOG_PRESETS` so they're always visible on the Connections page even when not yet connected. The "More" modal on the onboarding step hides the recommended trio (they have first-class tiles already) via a new `hideKeys` prop on `BrowseConnectorsDialog`. **Heads-up:** the GSC MCP listing tool is best-guessed as `listSites` (Search Console API's native term); if the deployed MCP uses a different method name, swap the `GSC_LIST_TOOL` constant in `src/server/onboarding/accounts.ts` — the failure surface is a clean "method not found" RPC error.
+
 ## 0.4.4 — 2026-06-03
 
 **Cron jobs actually run now.** The Crons calendar was rendering future occurrences from the cron expression and creating `scheduled_jobs` rows, but the tick loop that actually dispatches due jobs was never starting. `ensureSchedulerRunning()` was defined in `src/server/scheduler/tick.ts` and imported from nowhere — no layout, no instrumentation, no CLI. Net effect: clicking a past occurrence on the calendar showed no status badge and the Result section had nothing to render, because `scheduled_job_runs` stayed empty forever.

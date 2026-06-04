@@ -15,6 +15,20 @@ export type Project = {
    */
   google_ads_account_id: string | null;
   /**
+   * Selected Meta Ads ad-account id (e.g. "act_123456"). Same pattern as
+   * google_ads_account_id: the notfair-metaads bearer may grant access
+   * to multiple ad accounts, and onboarding asks the user to pick the
+   * one this project should target. Null until picked.
+   */
+  meta_ads_account_id: string | null;
+  /**
+   * Selected Google Search Console property id (e.g. "sc-domain:example.com"
+   * or "https://example.com/"). Same idea as the ad-account fields: the
+   * notfair-googlesearchconsole bearer may cover multiple verified
+   * properties, and we persist the chosen one. Null until picked.
+   */
+  gsc_property_id: string | null;
+  /**
    * Optional inputs the user provided at onboarding so the CMO has a
    * starting point for its first task (writing PROJECT.md). Both are
    * free-text — the CMO uses whichever exist + decides how to explore.

@@ -106,7 +106,7 @@ export function ScheduleCronDialog({ projectSlug, defaultSpecialist, variant = "
         <DialogHeader>
           <DialogTitle>Schedule recurring work</DialogTitle>
           <DialogDescription>
-            Creates a scheduled job under this project. The brief is the message the
+            Creates a scheduled job under this workspace. The brief is the message the
             agent will receive on each tick.
           </DialogDescription>
         </DialogHeader>

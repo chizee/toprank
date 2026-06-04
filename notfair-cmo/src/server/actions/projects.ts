@@ -41,7 +41,7 @@ export type ActionResult<T = void> =
 // in a client wrapper later if needed.
 export async function createProjectAction(formData: FormData): Promise<void> {
   const display_name = String(formData.get("display_name") ?? "").trim();
-  if (!display_name) throw new Error("Please enter a project name.");
+  if (!display_name) throw new Error("Please enter a workspace name.");
 
   const result = createProject({ display_name });
   if (!result.ok) throw new Error(result.reason);
@@ -92,7 +92,7 @@ export async function createProjectForOnboardingAction(
   formData: FormData,
 ): Promise<ActionResult<{ slug: string; display_name: string }>> {
   const display_name = String(formData.get("display_name") ?? "").trim();
-  if (!display_name) return { ok: false, error: "Please enter a project name." };
+  if (!display_name) return { ok: false, error: "Please enter a workspace name." };
 
   const website_url = String(formData.get("website_url") ?? "").trim() || null;
   const codebase_path = String(formData.get("codebase_path") ?? "").trim() || null;
