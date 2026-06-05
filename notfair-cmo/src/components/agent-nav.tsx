@@ -49,9 +49,10 @@ export function AgentNav({ projectSlug, agents, inFlightCounts = {} }: Props) {
   return (
     <SidebarMenu>
       {agents.map((a) => {
-        // Every agent lands on Tasks (its workspace) by default. Chat tab
-        // is one click away.
-        const href = projectHref(projectSlug, `/agents/${a.slug}/tasks`);
+        // Every agent lands on Chat by default — users start by talking to
+        // the agent. Tasks tab (the audit/history view of filed work) is one
+        // click away.
+        const href = projectHref(projectSlug, `/agents/${a.slug}/chat`);
         const agentBase = `/${projectSlug}/agents/${a.slug}`;
         const isActive =
           pathname === agentBase || pathname?.startsWith(`${agentBase}/`);

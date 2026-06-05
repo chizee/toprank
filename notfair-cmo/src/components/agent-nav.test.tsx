@@ -58,21 +58,21 @@ afterEach(() => {
 });
 
 describe("AgentNav", () => {
-  it("renders one entry per agent linking to the tasks tab", () => {
+  it("renders one entry per agent linking to the chat tab", () => {
     render(<AgentNav projectSlug="proj" agents={agents} />);
     // The link's accessible name includes the personal name + role pill
     // text, so /Greg|CMO/i / /Ana|Google Ads/i both match.
     expect(screen.getByRole("link", { name: /Greg/i })).toHaveAttribute(
       "href",
-      "/proj/agents/cmo-greg/tasks",
+      "/proj/agents/cmo-greg/chat",
     );
     expect(screen.getByRole("link", { name: /Ana/i })).toHaveAttribute(
       "href",
-      "/proj/agents/google-ads-ana/tasks",
+      "/proj/agents/google-ads-ana/chat",
     );
     expect(screen.getByRole("link", { name: /Custom Bot/i })).toHaveAttribute(
       "href",
-      "/proj/agents/custom/tasks",
+      "/proj/agents/custom/chat",
     );
   });
 

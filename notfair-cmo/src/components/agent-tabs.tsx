@@ -18,10 +18,12 @@ type Tab = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-// Tasks leads — it's the agent's workspace where the live transcript sits.
+// Chat leads — users start by talking to the agent; tasks materialize from
+// that conversation. The Tasks tab is the audit/history view of work the
+// agent (or its orchestrator) has filed, not a place to create work.
 const TABS: Tab[] = [
-  { key: "tasks", label: "Tasks", icon: ListChecks },
   { key: "chat", label: "Chat", icon: MessageSquare },
+  { key: "tasks", label: "Tasks", icon: ListChecks },
   { key: "files", label: "Files", icon: FileText },
   { key: "skills", label: "Skills", icon: Sparkles },
   { key: "cron", label: "Cron", icon: Clock },

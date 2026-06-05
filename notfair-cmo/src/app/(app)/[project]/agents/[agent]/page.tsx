@@ -7,5 +7,5 @@ export default async function AgentIndexPage({
   params: Promise<{ agent: string; project: string }>;
 }) {
   const { agent, project } = await params;
-  redirect(projectHref(project, `/agents/${agent}/tasks`));
+  redirect(projectHref(project, `/agents/${agent}/chat`));
 }
