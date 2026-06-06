@@ -1,5 +1,19 @@
 # notfair-cmo
 
+## 0.6.0 — 2026-06-05
+
+**Workspace browser tool — agents can drive real Chrome.** One managed Chrome instance per workspace at `~/.notfair-cmo/projects/<slug>/browser/user-data/`, shared by every agent in that project via labeled tabs. The user signs into Google / Meta / Search Console once (Settings → Workspace browser → Launch + Open <service>), cookies persist in the workspace profile, and every agent inherits the session on subsequent runs.
+
+The agent surface is 11 small typed MCP tools — `browser_status`, `browser_tabs`, `browser_open`, `browser_close`, `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_back` — matching the granularity of the rest of the `notfair-orchestration` MCP. `browser_shutdown` is intentionally NOT exposed to agents: with multiple agents sharing one workspace Chrome, any agent calling shutdown would kill the browser mid-task for the others. Browser lifecycle is user-owned (Settings → Stop) and process-exit-owned.
+
+Agents are taught the snapshot-before-act discipline and the `label=<agent_id>` convention via the shared orchestration skill so multi-agent runs at 9am (CMO + Google Ads + Meta + SEO crons firing together) don't race — each agent only acts on its own tab.
+
+**Idle auto-shutdown.** A 30s background tick stops any workspace browser with no agent activity in the last 5 minutes (override via `NOTFAIR_BROWSER_IDLE_TIMEOUT_MS`). Settings card surfaces the countdown as "auto-stops in 258s if idle" alongside uptime.
+
+**Settings → Workspace browser card.** Live status (running / not running, port, uptime, idle countdown), Launch / Stop, sign-in shortcuts for Google / Meta / Search Console, and a list of open tabs. Verified end-to-end in dev: launching from Settings spawns Chrome with the workspace `--user-data-dir`, status flips to running, Stop tears it down cleanly.
+
+Under the hood: Chrome lifecycle (binary discovery, `SingletonLock` cleanup, deterministic CDP port allocation in 19000-19099) borrowed from openclaw; Playwright (CDP-attach mode, via `playwright-core`) for the actual page driving. No bundled browser — uses system Chrome. SSRF/loopback hardening from openclaw was intentionally NOT ported: notfair-cmo is single-user localhost-only, and the MCP server already requires bearer auth.
+
 ## 0.5.0 — 2026-06-03
 
 **Multi-MCP onboarding + per-MCP specialist agents.** The connect step in onboarding is now a four-tile picker: Google Ads, Meta Ads, Google Search Console, and a "More" overflow modal. Each recommended tile is OAuth-wired to its own NotFair MCP and, on successful connect, triggers provisioning of the matching specialist agent — `meta_ads` (Mia) and `gsc` (Sasha) join the existing `cmo` (Greg) and `google_ads` (Ana) templates. CMO is the only template that ships unconditionally; specialists are gated on the user actually connecting their MCP.
