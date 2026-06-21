@@ -359,6 +359,13 @@ def _port_in_use(port: int, host: str = "127.0.0.1") -> bool:
             return False
 
 
+def _should_auto_open(no_open: bool, platform: str, display: str) -> bool:
+    """Whether to auto-open the browser. Honors --no-open on every platform."""
+    if no_open:
+        return False
+    return bool(display) or platform == "darwin" or platform == "win32"
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="notfair-content-calendar")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -396,7 +403,7 @@ def main(argv=None) -> int:
     print(f"Reading: {calendar_path}")
     print("Ctrl+C to stop.")
 
-    if not args.no_open and os.environ.get("DISPLAY", "") or sys.platform == "darwin" or sys.platform == "win32":
+    if _should_auto_open(args.no_open, sys.platform, os.environ.get("DISPLAY", "")):
         # Open in a thread so we don't block startup if the browser command stalls.
         threading.Thread(target=lambda: (time.sleep(0.2), webbrowser.open(url)), daemon=True).start()
 
