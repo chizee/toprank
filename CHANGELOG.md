@@ -11,6 +11,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.25.7] — 2026-06-29
+
+### Added — ten new SEO skills (local, international, technical, commerce, off-page)
+
+Major expansion of the SEO suite. All native skills built to repo conventions
+(frontmatter triggers, `seo/shared/preamble.md` integration):
+
+- **`local-seo`** — Local pack / Google Business Profile audit: NAP consistency,
+  GBP completeness, review health, local & service-area pages, `LocalBusiness` schema.
+- **`hreflang-international`** — Hreflang correctness (return tags, x-default,
+  codes, hreflang↔canonical conflicts) + international URL-structure strategy.
+- **`sitemap-audit`** — XML sitemap discovery, structural limits, lastmod accuracy,
+  and a URL reality cross-check (non-200 / noindex / canonicalized-away listed).
+- **`image-seo`** — Alt text, WebP/AVIF, compression, srcset, CLS width/height,
+  lazy-load (incl. lazy-loaded-LCP), image sitemaps, `ImageObject` schema.
+- **`ecommerce-seo`** — PLP/PDP, faceted-navigation crawl-budget traps, variant
+  canonicals, out-of-stock handling, `Product`/`Offer`/`Review` schema.
+- **`programmatic-seo`** — Templated pages at scale: demand validation, a
+  uniqueness/value gate, internal-link hubs, indexation mgmt, doorway-page guardrails.
+- **`competitor-pages`** — Coverage matrix + intent/depth/schema/E-E-A-T comparison
+  vs. top-ranking URLs, producing a brief handable to `content-writer`.
+- **`sxo`** — Search Experience Optimization: SERP click factors + post-click
+  experience/conversion (above-the-fold intent match, CWV, CTAs, anti-pogo-sticking).
+- **`seo-drift`** — Baseline + compare to catch regressions (lost rankings,
+  deindexed pages, overwritten titles, flipped noindex/canonical).
+- **`backlink-audit`** — Off-page audit from the free GSC Links report by default
+  (or a paid Ahrefs/Semrush/DataForSEO export); explicit about data limits.
+
+All registered in `AGENTS.md`, `.claude-plugin/plugin.json`,
+`.claude-plugin/marketplace.json`, and `README.md`.
+
+Skills that would duplicate existing skills were intentionally not added (to avoid
+skill-routing collisions); the pure paid-data MCP wiring was skipped in favor of
+`backlink-audit` consuming such data when present.
+
+---
+
+
+---
+
 ## [0.25.6] — 2026-06-04
 
 ### Added
