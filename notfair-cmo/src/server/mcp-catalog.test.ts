@@ -72,6 +72,16 @@ describe("MCP_CATALOG_PRESETS", () => {
     const keys = MCP_CATALOG_PRESETS.map((m) => m.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
+
+  it("ships the five NotFair platform presets", () => {
+    expect(MCP_CATALOG_PRESETS.map((m) => m.key)).toEqual([
+      "notfair-googleads",
+      "notfair-metaads",
+      "notfair-googlesearchconsole",
+      "notfair-googleanalytics",
+      "notfair-xads",
+    ]);
+  });
 });
 
 describe("isPresetKey", () => {

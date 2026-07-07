@@ -129,6 +129,8 @@ beforeEach(() => {
       googleads: { connected: false, account_selected: false },
       metaads: { connected: false, account_selected: false },
       gsc: { connected: false, account_selected: false },
+      googleanalytics: { connected: false, account_selected: false },
+      xads: { connected: false, account_selected: false },
       extras: [],
       extra_connected_count: 0,
       website_url: null,
@@ -231,7 +233,7 @@ describe("OnboardingFlow — MissingSlug", () => {
 });
 
 describe("OnboardingFlow — ConnectStep", () => {
-  it("renders the three recommended-MCP tiles + Skip when nothing is connected", async () => {
+  it("renders the five recommended-MCP tiles + Skip when nothing is connected", async () => {
     setStep("connect", "acme");
     render(<OnboardingFlow />);
     expect(
@@ -247,11 +249,37 @@ describe("OnboardingFlow — ConnectStep", () => {
       screen.getByRole("button", { name: /Google Search Console/i }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: /^Google Analytics/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^X Ads/i }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("button", { name: /More tools/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /^Skip/i }),
     ).toBeInTheDocument();
+  });
+
+  it("starts OAuth for a no-picker MCP (Google Analytics) with a connect-step return_to", async () => {
+    const loc = setLocationHref();
+    startMcpConnect.mockResolvedValue({
+      ok: true,
+      authorize_url: "https://issuer.example/oauth",
+    });
+    setStep("connect", "acme");
+    render(<OnboardingFlow />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Google Analytics/i }),
+    );
+    await waitFor(() =>
+      expect(startMcpConnect).toHaveBeenCalledWith({
+        mcp_key: "notfair-googleanalytics",
+        return_to: "/onboarding?step=connect&slug=acme",
+      }),
+    );
+    await waitFor(() => expect(loc.href).toBe("https://issuer.example/oauth"));
   });
 
   it("starts OAuth for Google Ads with a connect-step return_to", async () => {
@@ -312,6 +340,8 @@ describe("OnboardingFlow — ConnectStep", () => {
         googleads: { connected: true, account_selected: true },
         metaads: { connected: false, account_selected: false },
         gsc: { connected: false, account_selected: false },
+        googleanalytics: { connected: false, account_selected: false },
+        xads: { connected: false, account_selected: false },
         extras: [],
         extra_connected_count: 0,
         website_url: null,
@@ -337,6 +367,8 @@ describe("OnboardingFlow — ConnectStep", () => {
         googleads: { connected: false, account_selected: false },
         metaads: { connected: false, account_selected: false },
         gsc: { connected: false, account_selected: false },
+        googleanalytics: { connected: false, account_selected: false },
+        xads: { connected: false, account_selected: false },
         extras: [
           {
             key: "stripe",
@@ -373,6 +405,8 @@ describe("OnboardingFlow — ConnectStep", () => {
         googleads: { connected: true, account_selected: false },
         metaads: { connected: false, account_selected: false },
         gsc: { connected: false, account_selected: false },
+        googleanalytics: { connected: false, account_selected: false },
+        xads: { connected: false, account_selected: false },
         extras: [],
         extra_connected_count: 0,
         website_url: null,

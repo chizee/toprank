@@ -385,10 +385,11 @@ function HarnessPicker({ disabled }: { disabled: boolean }) {
 // ── Step 2: Connect ────────────────────────────────────────────────
 
 /**
- * Spec for one of the recommended-MCP tiles in the connect step. The three
- * recommended MCPs (Google Ads, Meta Ads, Google Search Console) each get
- * their own first-class tile because connecting them triggers the
- * provisioning of a matching specialist agent.
+ * Spec for one of the recommended-MCP tiles in the connect step. The core
+ * MCPs (Google Ads, Meta Ads, Google Search Console) each get their own
+ * first-class tile because connecting them triggers the provisioning of a
+ * matching specialist agent; Google Analytics and X Ads get tiles too but
+ * provision no specialist (their data flows to the CMO + existing agents).
  */
 type RecommendedTile = {
   mcp_key: string;
@@ -398,20 +399,22 @@ type RecommendedTile = {
   mcp_display_name: string;
   /** Short agent label rendered as a pill badge next to the title,
    *  e.g. "Google Ads agent". The badge makes the MCP↔agent dependency
-   *  explicit so users understand connecting this MCP enables that agent. */
-  agent_badge: string;
+   *  explicit so users understand connecting this MCP enables that agent.
+   *  Absent for MCPs that don't provision a specialist. */
+  agent_badge?: string;
   /** What the user gets — phrased as the agent's capabilities (verbs),
    *  not the MCP's data surfaces (nouns). Concrete benefit over abstract
    *  feature listing. */
   description: string;
-  /** Resource URL the OAuth flow targets — also feeds <McpIcon>'s favicon
+  /** Resource URL the OAuth flow targets — also feeds <McpIcon>'s icon
    *  lookup so each tile shows the brand mark the connections page uses. */
   resource_url: string;
   /** Sub-step the OAuth callback should land on so the user can pick an
-   *  account/property when their token covers more than one. */
-  account_step: "account" | "meta-account" | "gsc-property";
+   *  account/property when their token covers more than one. Absent when
+   *  the MCP has no picker — OAuth returns straight to the connect step. */
+  account_step?: "account" | "meta-account" | "gsc-property";
   /** Label for the "Select X" sub-action when connected but not selected. */
-  account_action_label: string;
+  account_action_label?: string;
 };
 
 const RECOMMENDED_TILES: RecommendedTile[] = [
@@ -446,6 +449,20 @@ const RECOMMENDED_TILES: RecommendedTile[] = [
     resource_url: "https://notfair.co/api/mcp/google_search_console",
     account_step: "gsc-property",
     account_action_label: "Select GSC property",
+  },
+  {
+    mcp_key: "notfair-googleanalytics",
+    mcp_display_name: "Google Analytics MCP",
+    description:
+      "Analyzes GA4 traffic, channels, and conversions; explains what moved and why.",
+    resource_url: "https://notfair.co/api/mcp/google_analytics",
+  },
+  {
+    mcp_key: "notfair-xads",
+    mcp_display_name: "X Ads MCP",
+    description:
+      "Audits X (Twitter) campaigns and line items, tracks spend and engagement.",
+    resource_url: "https://notfair.co/api/mcp/x_ads",
   },
 ];
 
@@ -486,8 +503,9 @@ function ConnectStep({ slug }: { slug: string }) {
         // step. That step auto-skips if the bearer covers a single
         // account/property; otherwise it shows a picker. Both paths
         // ultimately redirect back to /onboarding?step=connect so the
-        // user can continue adding tools.
-        return_to: `/onboarding?step=${tile.account_step}&slug=${encodeURIComponent(slug)}`,
+        // user can continue adding tools. MCPs without a picker return
+        // straight to the connect step.
+        return_to: `/onboarding?step=${tile.account_step ?? "connect"}&slug=${encodeURIComponent(slug)}`,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -502,6 +520,7 @@ function ConnectStep({ slug }: { slug: string }) {
   }
 
   function onPickAccount(tile: RecommendedTile) {
+    if (!tile.account_step) return;
     router.push(
       `/onboarding?step=${tile.account_step}&slug=${encodeURIComponent(slug)}`,
     );
@@ -556,11 +575,15 @@ function ConnectStep({ slug }: { slug: string }) {
     "notfair-googleads": state.googleads,
     "notfair-metaads": state.metaads,
     "notfair-googlesearchconsole": state.gsc,
+    "notfair-googleanalytics": state.googleanalytics,
+    "notfair-xads": state.xads,
   } as const;
   const anyConnected =
     state.googleads.connected ||
     state.metaads.connected ||
     state.gsc.connected ||
+    state.googleanalytics.connected ||
+    state.xads.connected ||
     state.extra_connected_count > 0;
 
   return (
@@ -609,6 +632,10 @@ function ConnectStep({ slug }: { slug: string }) {
               ...(state.googleads.connected ? ["notfair-googleads"] : []),
               ...(state.metaads.connected ? ["notfair-metaads"] : []),
               ...(state.gsc.connected ? ["notfair-googlesearchconsole"] : []),
+              ...(state.googleanalytics.connected
+                ? ["notfair-googleanalytics"]
+                : []),
+              ...(state.xads.connected ? ["notfair-xads"] : []),
               ...state.extras.map((e) => e.key),
             ]}
             trigger={
@@ -695,7 +722,11 @@ function RecommendedConnectorTile({
         type="button"
         onClick={state.connected ? undefined : onConnect}
         disabled={busy || disabled}
-        aria-label={`${tile.mcp_display_name} — required for ${tile.agent_badge}`}
+        aria-label={
+          tile.agent_badge
+            ? `${tile.mcp_display_name} — required for ${tile.agent_badge}`
+            : tile.mcp_display_name
+        }
         className={`ns-tile w-full ${state.connected ? "is-connected" : ""}`}
         // When already connected, the row itself is non-actionable; the
         // sub-action below handles "pick account" and the row would
@@ -708,12 +739,14 @@ function RecommendedConnectorTile({
         <span className="ns-tile-body">
           <span className="ns-tile-name-row">
             <span className="ns-tile-name">{tile.mcp_display_name}</span>
-            <span className="ns-tile-badge">
-              Required for {tile.agent_badge}
-            </span>
+            {tile.agent_badge && (
+              <span className="ns-tile-badge">
+                Required for {tile.agent_badge}
+              </span>
+            )}
           </span>
           <span className="ns-tile-desc block">{tile.description}</span>
-          {state.connected && !state.account_selected && (
+          {tile.account_step && state.connected && !state.account_selected && (
             <button
               type="button"
               onClick={(e) => {

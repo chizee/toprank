@@ -64,6 +64,26 @@ export const MCP_CATALOG_PRESETS: McpSpec[] = [
       "https://notfair.co/.well-known/oauth-protected-resource/api/mcp/google_search_console",
     source: "preset",
   },
+  {
+    key: "notfair-googleanalytics",
+    display_name: "NotFair Google Analytics",
+    description:
+      "GA4 traffic and conversion analytics: sessions, channels, pages, events, audiences.",
+    resource_url: "https://notfair.co/api/mcp/google_analytics",
+    discovery_url:
+      "https://notfair.co/.well-known/oauth-protected-resource/api/mcp/google_analytics",
+    source: "preset",
+  },
+  {
+    key: "notfair-xads",
+    display_name: "NotFair X Ads",
+    description:
+      "Live X (Twitter) Ads operations: campaigns, line items, promoted posts, analytics.",
+    resource_url: "https://notfair.co/api/mcp/x_ads",
+    discovery_url:
+      "https://notfair.co/.well-known/oauth-protected-resource/api/mcp/x_ads",
+    source: "preset",
+  },
 ];
 
 /** True if any preset reserves this key. Presets win over user rows. */
