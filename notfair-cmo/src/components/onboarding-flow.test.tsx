@@ -129,7 +129,6 @@ beforeEach(() => {
       googleads: { connected: false, account_selected: false },
       metaads: { connected: false, account_selected: false },
       gsc: { connected: false, account_selected: false },
-      googleanalytics: { connected: false, account_selected: false },
       xads: { connected: false, account_selected: false },
       extras: [],
       extra_connected_count: 0,
@@ -233,7 +232,7 @@ describe("OnboardingFlow — MissingSlug", () => {
 });
 
 describe("OnboardingFlow — ConnectStep", () => {
-  it("renders the five recommended-MCP tiles + Skip when nothing is connected", async () => {
+  it("renders the four recommended-MCP tiles + Skip when nothing is connected", async () => {
     setStep("connect", "acme");
     render(<OnboardingFlow />);
     expect(
@@ -249,15 +248,13 @@ describe("OnboardingFlow — ConnectStep", () => {
       screen.getByRole("button", { name: /Google Search Console/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /^Google Analytics/i }),
+      screen.getByRole("button", { name: /^X Ads/i }),
     ).toBeInTheDocument();
-    // X Ads provisions a specialist like the trio — its tile must carry
-    // the agent badge in the accessible name.
+    // Google Analytics powers no specialist — it lives under "More
+    // tools" now, not as a first-class tile.
     expect(
-      screen.getByRole("button", {
-        name: /^X Ads MCP — required for X Ads agent/i,
-      }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^Google Analytics/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /More tools/i }),
     ).toBeInTheDocument();
@@ -266,7 +263,7 @@ describe("OnboardingFlow — ConnectStep", () => {
     ).toBeInTheDocument();
   });
 
-  it("starts OAuth for a no-picker MCP (Google Analytics) with a connect-step return_to", async () => {
+  it("starts OAuth for a no-picker MCP (X Ads) with a connect-step return_to", async () => {
     const loc = setLocationHref();
     startMcpConnect.mockResolvedValue({
       ok: true,
@@ -275,11 +272,11 @@ describe("OnboardingFlow — ConnectStep", () => {
     setStep("connect", "acme");
     render(<OnboardingFlow />);
     fireEvent.click(
-      await screen.findByRole("button", { name: /^Google Analytics/i }),
+      await screen.findByRole("button", { name: /^X Ads/i }),
     );
     await waitFor(() =>
       expect(startMcpConnect).toHaveBeenCalledWith({
-        mcp_key: "notfair-googleanalytics",
+        mcp_key: "notfair-xads",
         return_to: "/onboarding?step=connect&slug=acme",
       }),
     );
@@ -344,8 +341,7 @@ describe("OnboardingFlow — ConnectStep", () => {
         googleads: { connected: true, account_selected: true },
         metaads: { connected: false, account_selected: false },
         gsc: { connected: false, account_selected: false },
-        googleanalytics: { connected: false, account_selected: false },
-        xads: { connected: false, account_selected: false },
+          xads: { connected: false, account_selected: false },
         extras: [],
         extra_connected_count: 0,
         website_url: null,
@@ -371,8 +367,7 @@ describe("OnboardingFlow — ConnectStep", () => {
         googleads: { connected: false, account_selected: false },
         metaads: { connected: false, account_selected: false },
         gsc: { connected: false, account_selected: false },
-        googleanalytics: { connected: false, account_selected: false },
-        xads: { connected: false, account_selected: false },
+          xads: { connected: false, account_selected: false },
         extras: [
           {
             key: "stripe",
@@ -409,8 +404,7 @@ describe("OnboardingFlow — ConnectStep", () => {
         googleads: { connected: true, account_selected: false },
         metaads: { connected: false, account_selected: false },
         gsc: { connected: false, account_selected: false },
-        googleanalytics: { connected: false, account_selected: false },
-        xads: { connected: false, account_selected: false },
+          xads: { connected: false, account_selected: false },
         extras: [],
         extra_connected_count: 0,
         website_url: null,

@@ -54,6 +54,12 @@ export const TRUSTED_CONNECTORS: TrustedConnector[] = [
     resource_url: "https://notfair.co/api/mcp/google_search_console",
   },
   {
+    id: "notfair-googleanalytics",
+    display_name: "NotFair Google Analytics",
+    description: "GA4 traffic, channels, conversions, audiences.",
+    resource_url: "https://notfair.co/api/mcp/google_analytics",
+  },
+  {
     id: "stripe",
     display_name: "Stripe",
     description: "Payments, customers, subscriptions, invoices.",

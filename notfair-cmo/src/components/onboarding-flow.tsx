@@ -390,8 +390,8 @@ function HarnessPicker({ disabled }: { disabled: boolean }) {
  * Spec for one of the recommended-MCP tiles in the connect step. The core
  * MCPs (Google Ads, Meta Ads, Google Search Console, X Ads) each get their
  * own first-class tile because connecting them triggers the provisioning of
- * a matching specialist agent; Google Analytics gets a tile too but
- * provisions no specialist (its data flows to the CMO + existing agents).
+ * a matching specialist agent. MCPs that power no specialist (Google
+ * Analytics) live in the "More tools" browse dialog instead.
  */
 type RecommendedTile = {
   mcp_key: string;
@@ -399,14 +399,9 @@ type RecommendedTile = {
    *  as the tile's aria-label so existing tests that match by platform
    *  prefix (`/^Google Ads/`) still resolve. */
   mcp_display_name: string;
-  /** Short agent label rendered as a pill badge next to the title,
-   *  e.g. "Google Ads agent". The badge makes the MCP↔agent dependency
-   *  explicit so users understand connecting this MCP enables that agent.
-   *  Absent for MCPs that don't provision a specialist. */
-  agent_badge?: string;
-  /** What the user gets — phrased as the agent's capabilities (verbs),
-   *  not the MCP's data surfaces (nouns). Concrete benefit over abstract
-   *  feature listing. */
+  /** What the user gets — phrased as "Gives the <X> agent the ability
+   *  to …" so the MCP↔agent dependency reads in plain language instead
+   *  of a badge. */
   description: string;
   /** Resource URL the OAuth flow targets — also feeds <McpIcon>'s icon
    *  lookup so each tile shows the brand mark the connections page uses. */
@@ -423,9 +418,8 @@ const RECOMMENDED_TILES: RecommendedTile[] = [
   {
     mcp_key: "notfair-googleads",
     mcp_display_name: "Google Ads MCP",
-    agent_badge: "Google Ads agent",
     description:
-      "Audits campaigns, finds wasted spend, proposes bid changes.",
+      "Gives the Google Ads agent the ability to audit campaigns, find wasted spend, and propose bid changes.",
     resource_url: "https://notfair.co/api/mcp/google_ads",
     account_step: "account",
     account_action_label: "Select Google Ads account",
@@ -433,9 +427,8 @@ const RECOMMENDED_TILES: RecommendedTile[] = [
   {
     mcp_key: "notfair-metaads",
     mcp_display_name: "Meta Ads MCP",
-    agent_badge: "Meta Ads agent",
     description:
-      "Audits ad sets, diagnoses creative fatigue, surfaces ROAS winners.",
+      "Gives the Meta Ads agent the ability to audit ad sets, diagnose creative fatigue, and surface ROAS winners.",
     resource_url: "https://notfair.co/api/mcp/meta_ads",
     account_step: "meta-account",
     account_action_label: "Select Meta ad account",
@@ -445,26 +438,19 @@ const RECOMMENDED_TILES: RecommendedTile[] = [
     mcp_display_name: "Google Search Console MCP",
     // SEO agent owns Search Console — there's no dedicated GSC agent.
     // See SPECIALIST_TEMPLATE_BY_MCP_KEY in agent-templates.ts.
-    agent_badge: "SEO agent",
     description:
-      "Pulls organic performance, surfaces query and page movers, diagnoses indexing.",
+      "Gives the SEO agent the ability to pull organic performance, surface query and page movers, and diagnose indexing.",
     resource_url: "https://notfair.co/api/mcp/google_search_console",
     account_step: "gsc-property",
     account_action_label: "Select GSC property",
   },
-  {
-    mcp_key: "notfair-googleanalytics",
-    mcp_display_name: "Google Analytics MCP",
-    description:
-      "Analyzes GA4 traffic, channels, and conversions; explains what moved and why.",
-    resource_url: "https://notfair.co/api/mcp/google_analytics",
-  },
+  // Google Analytics deliberately lives under "More tools" — it powers
+  // no specialist agent, so it doesn't earn a first-class tile here.
   {
     mcp_key: "notfair-xads",
     mcp_display_name: "X Ads MCP",
-    agent_badge: "X Ads agent",
     description:
-      "Audits X (Twitter) campaigns and line items, tracks spend and engagement.",
+      "Gives the X Ads agent the ability to audit campaigns and line items, and track spend and engagement.",
     resource_url: "https://notfair.co/api/mcp/x_ads",
   },
 ];
@@ -578,14 +564,12 @@ function ConnectStep({ slug }: { slug: string }) {
     "notfair-googleads": state.googleads,
     "notfair-metaads": state.metaads,
     "notfair-googlesearchconsole": state.gsc,
-    "notfair-googleanalytics": state.googleanalytics,
     "notfair-xads": state.xads,
   } as const;
   const anyConnected =
     state.googleads.connected ||
     state.metaads.connected ||
     state.gsc.connected ||
-    state.googleanalytics.connected ||
     state.xads.connected ||
     state.extra_connected_count > 0;
 
@@ -635,10 +619,9 @@ function ConnectStep({ slug }: { slug: string }) {
               ...(state.googleads.connected ? ["notfair-googleads"] : []),
               ...(state.metaads.connected ? ["notfair-metaads"] : []),
               ...(state.gsc.connected ? ["notfair-googlesearchconsole"] : []),
-              ...(state.googleanalytics.connected
-                ? ["notfair-googleanalytics"]
-                : []),
               ...(state.xads.connected ? ["notfair-xads"] : []),
+              // Google Analytics + Stripe/Supabase/etc. arrive here — a
+              // connected GA is an extras row, which also hides it in Browse.
               ...state.extras.map((e) => e.key),
             ]}
             trigger={
@@ -655,7 +638,8 @@ function ConnectStep({ slug }: { slug: string }) {
                     <span className="ns-tile-name">More tools</span>
                   </span>
                   <span className="ns-tile-desc block">
-                    Browse Stripe, Supabase, PostHog, or paste a custom MCP URL.
+                    Browse Google Analytics, Stripe, Supabase, PostHog, or
+                    paste a custom MCP URL.
                   </span>
                 </span>
                 <span className="ns-tile-status">
@@ -725,11 +709,7 @@ function RecommendedConnectorTile({
         type="button"
         onClick={state.connected ? undefined : onConnect}
         disabled={busy || disabled}
-        aria-label={
-          tile.agent_badge
-            ? `${tile.mcp_display_name} — required for ${tile.agent_badge}`
-            : tile.mcp_display_name
-        }
+        aria-label={tile.mcp_display_name}
         className={`ns-tile w-full ${state.connected ? "is-connected" : ""}`}
         // When already connected, the row itself is non-actionable; the
         // sub-action below handles "pick account" and the row would
@@ -742,11 +722,6 @@ function RecommendedConnectorTile({
         <span className="ns-tile-body">
           <span className="ns-tile-name-row">
             <span className="ns-tile-name">{tile.mcp_display_name}</span>
-            {tile.agent_badge && (
-              <span className="ns-tile-badge">
-                Required for {tile.agent_badge}
-              </span>
-            )}
           </span>
           <span className="ns-tile-desc block">{tile.description}</span>
           {tile.account_step && state.connected && !state.account_selected && (

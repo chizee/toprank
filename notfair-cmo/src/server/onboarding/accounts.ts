@@ -706,8 +706,10 @@ export async function setOnboardingGscPropertyAction(
 // ── Onboarding connect-step state ──────────────────────────────────
 //
 // The multi-MCP onboarding step renders one tile per recommended MCP
-// (Google Ads, Meta Ads, GSC, Google Analytics, X Ads) plus a "More"
-// tile. Each tile needs:
+// (Google Ads, Meta Ads, GSC, X Ads — the ones that power a specialist
+// agent) plus a "More" tile. Google Analytics lives under "More": it
+// provisions no specialist, so a connected GA surfaces as an extras
+// row instead of a first-class tile. Each tile needs:
 //
 //   - is the MCP connected? (token row exists)
 //   - is an account/property selected on the project row?
@@ -744,11 +746,10 @@ export type ConnectStepState = {
   metaads: ConnectedMcpState;
   gsc: ConnectedMcpState;
   /**
-   * Google Analytics + X Ads have first-class connect tiles like the trio
-   * above, but no account/property picker sub-flow — `account_selected`
-   * simply mirrors `connected` so the tile shape stays uniform.
+   * X Ads has a first-class connect tile like the trio above, but no
+   * account/property picker sub-flow — `account_selected` simply
+   * mirrors `connected` so the tile shape stays uniform.
    */
-  googleanalytics: ConnectedMcpState;
   xads: ConnectedMcpState;
   /**
    * MCPs the user has connected via the "More tools" overflow dialog —
@@ -791,7 +792,6 @@ export async function getConnectStepStateAction(
     "notfair-googleads",
     "notfair-metaads",
     "notfair-googlesearchconsole",
-    "notfair-googleanalytics",
     "notfair-xads",
   ]);
   const allTokens = listProjectMcpTokens(project_slug);
@@ -830,10 +830,6 @@ export async function getConnectStepStateAction(
         connected: !!findMcpToken(project_slug, "notfair-googlesearchconsole"),
         account_selected: !!project.gsc_property_id,
       },
-      googleanalytics: (() => {
-        const connected = !!findMcpToken(project_slug, "notfair-googleanalytics");
-        return { connected, account_selected: connected };
-      })(),
       xads: (() => {
         const connected = !!findMcpToken(project_slug, "notfair-xads");
         return { connected, account_selected: connected };
