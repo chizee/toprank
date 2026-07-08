@@ -11,13 +11,13 @@ import {
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  ArrowUp,
   CheckCircle2,
   ChevronRight,
   Edit3,
   FileText,
   Globe,
   Loader2,
-  Send,
   StopCircle,
   Terminal,
   Wrench,
@@ -140,6 +140,13 @@ type Props = {
    * Wrench icon.
    */
   mcpCatalog?: McpCatalogEntryLite[];
+  /**
+   * Rendered at the very top of the scrollable log, above the first
+   * event — scrolling the history to the top reveals it. The task
+   * workspace passes the always-expanded brief card here so the brief
+   * scrolls with the conversation instead of eating header space.
+   */
+  leadingContent?: React.ReactNode;
 };
 
 /** Module-level guard so React StrictMode dev double-mounts don't double-fire. */
@@ -160,6 +167,7 @@ export function LiveTranscript({
   kickoffMessage,
   taskId,
   mcpCatalog,
+  leadingContent,
 }: Props) {
   const router = useRouter();
   const [events, setEvents] = useState<TranscriptEvent[]>(initialEvents);
@@ -207,6 +215,16 @@ export function LiveTranscript({
       }
     });
   }
+
+  // Multiline auto-grow: track the content height (capped by max-h-52 via
+  // CSS) so the composer expands as the user types and snaps back when the
+  // input clears (send, escape, slash insert).
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [input]);
 
   // Optimistic state for the active /api/chat send. Rendered after committed
   // events so the user sees their message + the streaming response before
@@ -623,6 +641,7 @@ export function LiveTranscript({
         aria-live="polite"
       >
         <div className="mx-auto w-full max-w-3xl px-6 py-6">
+          {leadingContent}
           {rendered.length === 0 &&
           !pendingUserMsg &&
           !sendingChat &&
@@ -687,8 +706,11 @@ export function LiveTranscript({
               onHover={setSlashIndex}
             />
           )}
+          {/* Codex-style composer: one rounded well, borderless multiline
+              textarea on top, a toolbar row below with only the circular
+              send button. */}
           <form
-            className="flex items-end gap-2"
+            className="rounded-2xl border border-border/60 bg-card shadow-[var(--notfair-shadow)] transition-shadow focus-within:ring-1 focus-within:ring-ring"
             onSubmit={(e) => {
               e.preventDefault();
               void send();
@@ -744,30 +766,32 @@ export function LiveTranscript({
                     : `Message ${agentDisplayName}…  (type / for commands)`
               }
               rows={1}
-              className="flex min-h-[40px] flex-1 resize-none rounded-xl bg-card px-3.5 py-2 text-sm shadow-[var(--notfair-shadow)] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="block max-h-52 w-full resize-none bg-transparent px-4 pt-3.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
-            {sendingChat ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => abortRef.current?.abort()}
-                className="h-10 rounded-xl"
-                aria-label="Stop"
-              >
-                <StopCircle className="size-4" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="sm"
-                disabled={composerDisabled || !input.trim()}
-                className="h-10 rounded-xl"
-                aria-label="Send"
-              >
-                <Send className="size-4" />
-              </Button>
-            )}
+            <div className="flex items-center justify-end px-2.5 pb-2.5 pt-1.5">
+              {sendingChat ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => abortRef.current?.abort()}
+                  className="size-9 rounded-full"
+                  aria-label="Stop"
+                >
+                  <StopCircle className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={composerDisabled || !input.trim()}
+                  className="size-9 rounded-full"
+                  aria-label="Send"
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+              )}
+            </div>
           </form>
           <p className="pt-1.5 text-center text-[10px] text-muted-foreground">
             {sendingChat ? (

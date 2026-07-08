@@ -58,6 +58,9 @@ vi.mock("@/components/live-transcript", () => ({
       data-thread={String(props.threadId)}
       data-disabled={String(props.composerDisabled)}
     >
+      {/* Render the leading slot so brief-card assertions see it the way
+          the real transcript mounts it at the top of the scroll log. */}
+      {props.leadingContent as React.ReactNode}
       LiveTranscript stub
     </div>
   ),
@@ -298,7 +301,7 @@ describe("AgentTaskWorkspace selected-task panel", () => {
     expect(screen.getByText("(untitled task)")).toBeInTheDocument();
   });
 
-  it("expanding the Brief details surfaces brief + success criteria", () => {
+  it("renders the always-expanded brief card (with success criteria) inside the transcript", () => {
     const task = makeTask({
       brief: "Brief body text",
       success_criteria: "Success criteria text",

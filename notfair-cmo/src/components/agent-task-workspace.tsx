@@ -205,23 +205,6 @@ export function AgentTaskWorkspace({
                     </Badge>
                   </div>
                 </div>
-                <details className="group mt-2">
-                  <summary className="flex cursor-pointer select-none items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground">
-                    <span className="transition-transform group-open:rotate-90">›</span>
-                    Brief
-                  </summary>
-                  <div className="mt-2 max-h-[40vh] overflow-y-auto pl-3 text-sm text-muted-foreground">
-                    <Markdown>{selected.task.brief}</Markdown>
-                    {selected.task.success_criteria && (
-                      <div className="mt-4">
-                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          Success criteria
-                        </div>
-                        <Markdown>{selected.task.success_criteria}</Markdown>
-                      </div>
-                    )}
-                  </div>
-                </details>
               </div>
             </header>
 
@@ -386,9 +369,45 @@ function SelectedTaskPanel({
           kickoffMessage={selected.kickoff?.message}
           taskId={selected.kickoff?.taskId}
           mcpCatalog={mcpCatalog}
+          // The brief lives INSIDE the scrollable history: scroll to the
+          // top of the conversation and the full brief card is there,
+          // always expanded — it no longer eats header space.
+          leadingContent={<TaskBriefCard task={selected.task} />}
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Fully-expanded brief card rendered as the first item of the task's
+ * chat history (via LiveTranscript's leadingContent). Scrolling the
+ * conversation to the top reveals the whole brief — no <details>
+ * toggle, no max-height clamp.
+ */
+function TaskBriefCard({ task }: { task: Task }) {
+  return (
+    <section
+      aria-label="Task brief"
+      className="mb-6 rounded-xl border border-border/60 bg-card p-4 shadow-[var(--notfair-shadow-sm)]"
+    >
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        Brief
+      </div>
+      <div className="text-sm text-muted-foreground">
+        <Markdown>{task.brief}</Markdown>
+      </div>
+      {task.success_criteria && (
+        <div className="mt-4">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Success criteria
+          </div>
+          <div className="text-sm text-muted-foreground">
+            <Markdown>{task.success_criteria}</Markdown>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
