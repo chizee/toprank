@@ -395,6 +395,59 @@ describe("LiveTranscript composer", () => {
     expect(screen.queryByText(/^Starting$/)).not.toBeInTheDocument();
   });
 
+  it("model dropdown lists all models next to send and includes the pick in the send body", async () => {
+    window.localStorage.clear();
+    render(
+      <LiveTranscript
+        {...defaultProps({
+          threadId: "t-model",
+          modelOptions: [
+            { value: "opus", label: "Opus" },
+            { value: "sonnet", label: "Sonnet" },
+          ],
+        })}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: /model/i });
+    expect(trigger).toHaveTextContent("Default");
+    // Radix menus open on pointerdown → click.
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    fireEvent.click(trigger);
+    // Every available model + the Default reset are in the dropdown.
+    const items = await screen.findAllByRole("menuitemradio");
+    expect(items.map((i) => i.textContent)).toEqual([
+      "Default",
+      "Opus",
+      "Sonnet",
+    ]);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Opus" }));
+    expect(trigger).toHaveTextContent("Opus");
+    // Persisted per project+agent so the choice sticks across visits.
+    expect(
+      window.localStorage.getItem("notfair-cmo:model:demo:cmo"),
+    ).toBe("opus");
+
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "hi" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await vi.waitFor(() => {
+      const f = global.fetch as ReturnType<typeof vi.fn>;
+      const chatCall = f.mock.calls.find(
+        ([u]) => typeof u === "string" && u.includes("/api/chat"),
+      );
+      expect(chatCall).toBeTruthy();
+      const body = JSON.parse((chatCall![1] as RequestInit).body as string);
+      expect(body.model).toBe("opus");
+    });
+  });
+
+  it("renders no model selector when modelOptions are absent", () => {
+    render(<LiveTranscript {...defaultProps({ threadId: "t-no-model" })} />);
+    expect(
+      screen.queryByRole("button", { name: /model/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("submitting Shift+Enter inserts a newline and does NOT send", () => {
     render(<LiveTranscript {...defaultProps({ threadId: "t-shift" })} />);
     const textarea = screen.getByRole("textbox");

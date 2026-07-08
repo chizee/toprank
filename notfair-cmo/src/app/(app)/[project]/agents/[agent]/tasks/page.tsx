@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { AgentTaskWorkspace } from "@/components/agent-task-workspace";
+import { DEFAULT_HARNESS_ADAPTER, requireAdapter } from "@/server/adapters/registry";
 import { getProject } from "@/server/db/projects";
 import { getMcpCatalog } from "@/server/mcp-catalog";
 import { resolveAgentBySlug } from "@/server/agent-meta";
@@ -83,6 +84,11 @@ export default async function AgentTasksPage({ params, searchParams }: Props) {
   const tasks = listTasksByAgent(agentFullId);
   const proposedCount = tasks.filter((t) => t.status === "proposed").length;
   const attentionByTask = attentionByTaskForAgent(project.slug, agentFullId);
+  // Provider-fed model list for the composer's selector (codex reads its
+  // account-scoped cache; claude uses its documented tier aliases).
+  const modelOptions = await requireAdapter(
+    project.harness_adapter ?? DEFAULT_HARNESS_ADAPTER,
+  ).listModels();
   // Brand-favicon lookup table for MCP tool calls in the transcript.
   const mcpCatalog = getMcpCatalog(project.slug).map((m) => ({
     key: m.key,
@@ -101,6 +107,7 @@ export default async function AgentTasksPage({ params, searchParams }: Props) {
       proposedCount={proposedCount}
       attentionByTask={attentionByTask}
       mcpCatalog={mcpCatalog}
+      modelOptions={modelOptions}
     />
   );
 }

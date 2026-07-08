@@ -40,6 +40,10 @@ export async function* executeCodexLocal(
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
   ];
+  // Composer model override — whitelisted by the chat route.
+  if (ctx.model) {
+    args.push("-m", ctx.model);
+  }
 
   // Resume only when we have a real codex thread id from a prior turn.
   // notfair-cmo's session UUID is not a codex thread id — passing it would

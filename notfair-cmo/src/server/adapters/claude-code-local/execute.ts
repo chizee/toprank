@@ -38,6 +38,10 @@ export async function* executeClaudeCodeLocal(
     "text",
     "--verbose",
   ];
+  // Composer model override — whitelisted by the chat route.
+  if (ctx.model) {
+    args.push("--model", ctx.model);
+  }
   if (identityMd.trim().length > 0) {
     args.push("--append-system-prompt", identityMd);
   }

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getProject } from "@/server/db/projects";
+import { DEFAULT_HARNESS_ADAPTER, requireAdapter } from "@/server/adapters/registry";
 import { resolveAgentBySlug } from "@/server/agent-meta";
 import {
   buildPendingSessionKey,
@@ -92,6 +93,11 @@ export default async function AgentChatThreadPage({
   // render an MCP server's brand favicon next to its tool calls.
   // Mapping is by server key, so the resource_url is the brand domain
   // we feed faviconV2.
+  // Provider-fed model list for the composer's selector (codex reads its
+  // account-scoped cache; claude uses its documented tier aliases).
+  const modelOptions = await requireAdapter(
+    project.harness_adapter ?? DEFAULT_HARNESS_ADAPTER,
+  ).listModels();
   const mcpCatalog = getMcpCatalog(project.slug).map((m) => ({
     key: m.key,
     display_name: m.display_name,
@@ -135,6 +141,7 @@ export default async function AgentChatThreadPage({
           initialByteOffset={initialByteOffset}
           autoKickoff={autoKickoff}
           mcpCatalog={mcpCatalog}
+          modelOptions={modelOptions}
         />
       </div>
     </div>

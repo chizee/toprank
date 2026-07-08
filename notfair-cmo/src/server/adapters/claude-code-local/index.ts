@@ -9,6 +9,7 @@ import type {
   McpUnregistrationSpec,
 } from "../types";
 import { executeClaudeCodeLocal } from "./execute";
+import { listClaudeCodeModels } from "./models";
 import { provisionClaudeCodeAgent } from "./provision";
 import { testClaudeCodeLocalEnvironment } from "./test";
 import { registerClaudeCodeMcp, unregisterClaudeCodeMcp } from "./mcp";
@@ -24,6 +25,7 @@ function workspaceDirFor(agentId: string): string {
 export const claudeCodeLocalAdapter: HarnessAdapter = {
   id: "claude-code-local",
   testEnvironment: testClaudeCodeLocalEnvironment,
+  listModels: listClaudeCodeModels,
   execute(ctx: HarnessExecuteContext): AsyncGenerator<HarnessEvent, void, void> {
     return executeClaudeCodeLocal(ctx);
   },

@@ -84,6 +84,9 @@ type Props = {
   /** task_id → count of pending questions/approvals waiting on the user.
    *  Rows in the rail show the Slack-style red badge when > 0. */
   attentionByTask?: Record<string, number>;
+  /** Composer model choices for this project's harness — forwarded to
+   *  LiveTranscript's selector. */
+  modelOptions?: Array<{ value: string; label: string }>;
   /** MCP catalog forwarded to the per-task LiveTranscript so tool calls
    *  that resolve to an MCP server render the server's brand favicon. */
   mcpCatalog?: McpCatalogEntryLite[];
@@ -99,6 +102,7 @@ export function AgentTaskWorkspace({
   proposedCount,
   attentionByTask = {},
   mcpCatalog,
+  modelOptions,
 }: Props) {
   const router = useRouter();
   const search = useSearchParams();
@@ -216,6 +220,7 @@ export function AgentTaskWorkspace({
                 agentDisplayName={agentDisplayName}
                 taskById={taskById}
                 mcpCatalog={mcpCatalog}
+                modelOptions={modelOptions}
               />
             </div>
           </>
@@ -237,6 +242,7 @@ function SelectedTaskPanel({
   agentDisplayName,
   taskById,
   mcpCatalog,
+  modelOptions,
 }: {
   selected: SelectedTaskBundle;
   projectSlug: string;
@@ -244,6 +250,7 @@ function SelectedTaskPanel({
   agentDisplayName: string;
   taskById: Map<string, Task>;
   mcpCatalog?: McpCatalogEntryLite[];
+  modelOptions?: Array<{ value: string; label: string }>;
 }) {
   const router = useRouter();
   const isInFlight = TASK_IN_FLIGHT.includes(selected.task.status);
@@ -369,6 +376,7 @@ function SelectedTaskPanel({
           kickoffMessage={selected.kickoff?.message}
           taskId={selected.kickoff?.taskId}
           mcpCatalog={mcpCatalog}
+          modelOptions={modelOptions}
           // The brief lives INSIDE the scrollable history: scroll to the
           // top of the conversation and the full brief card is there,
           // always expanded — it no longer eats header space.

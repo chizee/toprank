@@ -7,6 +7,7 @@ import type {
   McpUnregistrationSpec,
 } from "../types";
 import { executeCodexLocal } from "./execute";
+import { listCodexModels } from "./models";
 import { provisionCodexAgent } from "./provision";
 import { testCodexLocalEnvironment } from "./test";
 import { registerCodexMcp, unregisterCodexMcp } from "./mcp";
@@ -14,6 +15,7 @@ import { registerCodexMcp, unregisterCodexMcp } from "./mcp";
 export const codexLocalAdapter: HarnessAdapter = {
   id: "codex-local",
   testEnvironment: testCodexLocalEnvironment,
+  listModels: listCodexModels,
   execute(ctx: HarnessExecuteContext): AsyncGenerator<HarnessEvent, void, void> {
     return executeCodexLocal(ctx);
   },

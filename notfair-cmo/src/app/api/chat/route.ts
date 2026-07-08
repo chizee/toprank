@@ -36,6 +36,12 @@ type ChatPostBody = {
    * mid-run are rejected with 409.
    */
   task_id?: string;
+  /**
+   * Per-turn model override from the composer's model selector. Must be
+   * one of HARNESS_MODEL_OPTIONS for the project's adapter — anything
+   * else is a 400 (values become CLI spawn args, so no passthrough).
+   */
+  model?: string;
 };
 
 export async function POST(request: Request) {
@@ -64,6 +70,20 @@ export async function POST(request: Request) {
       { error: `Unknown agent: '${requestedSlug}'` },
       { status: 404 },
     );
+  }
+
+  // Whitelist the model against the adapter's provider-fed list — the
+  // value becomes a CLI spawn arg, so arbitrary client strings never
+  // pass through unchecked.
+  const model = body.model?.trim() || null;
+  if (model) {
+    const available = await requireAdapter(project.harness_adapter).listModels();
+    if (!available.some((m) => m.value === model)) {
+      return NextResponse.json(
+        { error: `Unknown model '${model}' for adapter '${project.harness_adapter}'` },
+        { status: 400 },
+      );
+    }
   }
 
   const taskId = body.task_id?.trim();
@@ -138,6 +158,7 @@ export async function POST(request: Request) {
           message: body.message,
           threadId: session.id,
           harnessSessionId: session.harness_session_id,
+          model,
           signal: noAbort.signal,
         })) {
           if (evt.kind === "session") {

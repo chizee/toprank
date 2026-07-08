@@ -84,6 +84,14 @@ export interface HarnessExecuteContext {
    * `--resume`, codex `exec resume`). Null on the first turn of a thread.
    */
   harnessSessionId?: string | null;
+  /**
+   * Per-turn model override from the composer's model selector. When set,
+   * adapters pass it to their CLI's model flag (`claude --model`,
+   * `codex exec -m`). Absent/null = the CLI's own default. Values are
+   * whitelisted against HARNESS_MODEL_OPTIONS by the chat route before
+   * they reach the adapter.
+   */
+  model?: string | null;
   /** Optional cancellation. When aborted the adapter kills its subprocess. */
   signal?: AbortSignal;
 }
@@ -118,10 +126,26 @@ export type HarnessEvent =
    */
   | { kind: "session"; harnessSessionId: string };
 
+/** One selectable model for the composer's model dropdown. */
+export interface HarnessModelOption {
+  /** Identifier passed verbatim to the CLI's model flag. */
+  value: string;
+  /** Human label for the dropdown. */
+  label: string;
+}
+
 export interface HarnessAdapter {
   readonly id: HarnessAdapterId;
 
   testEnvironment(): Promise<HarnessEnvironmentHealth>;
+
+  /**
+   * Models the user can pick for a turn. Sourced from the provider where
+   * the harness exposes one (codex caches its account-scoped list in
+   * ~/.codex/models_cache.json); falls back to a small static list when
+   * discovery fails. Never throws.
+   */
+  listModels(): Promise<HarnessModelOption[]>;
 
   execute(ctx: HarnessExecuteContext): AsyncGenerator<HarnessEvent, void, void>;
 

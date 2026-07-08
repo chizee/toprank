@@ -28,7 +28,7 @@ import type { McpRegistrationSpec } from "../types";
  * We rewrite the [mcp_servers.*] sections under our namespace prefix; we
  * never touch user-installed servers outside our prefix.
  */
-function codexConfigDir(): string {
+export function codexConfigDir(): string {
   return process.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
 }
 

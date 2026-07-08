@@ -13,6 +13,7 @@ import {
   AlertCircle,
   ArrowUp,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Edit3,
   FileText,
@@ -26,6 +27,13 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Markdown } from "@/components/markdown";
 import { brandDomain } from "@/components/mcp-icon";
 import { RunningDot } from "@/components/running-dot";
@@ -147,6 +155,13 @@ type Props = {
    * scrolls with the conversation instead of eating header space.
    */
   leadingContent?: React.ReactNode;
+  /**
+   * Models the composer's selector offers for this project's harness
+   * (from HARNESS_MODEL_OPTIONS, passed down by the server page). A
+   * "Default" choice (no override) is always prepended. Omitted/empty =
+   * no selector rendered.
+   */
+  modelOptions?: Array<{ value: string; label: string }>;
 };
 
 /** Module-level guard so React StrictMode dev double-mounts don't double-fire. */
@@ -168,9 +183,30 @@ export function LiveTranscript({
   taskId,
   mcpCatalog,
   leadingContent,
+  modelOptions = [],
 }: Props) {
   const router = useRouter();
   const [events, setEvents] = useState<TranscriptEvent[]>(initialEvents);
+
+  // Composer model override. "" = harness default (no flag). Persisted
+  // per project+agent in localStorage; loaded after mount so SSR and the
+  // first client render agree (no hydration mismatch).
+  const modelStorageKey = `notfair-cmo:model:${projectSlug}:${agentSlug}`;
+  const [model, setModel] = useState("");
+  useEffect(() => {
+    const stored = window.localStorage.getItem(modelStorageKey);
+    if (stored && modelOptions.some((m) => m.value === stored)) {
+      setModel(stored);
+    }
+    // modelOptions is a fresh array per render from the server page —
+    // key its identity by content to avoid effect churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelStorageKey, JSON.stringify(modelOptions)]);
+  function onPickModel(value: string) {
+    setModel(value);
+    if (value) window.localStorage.setItem(modelStorageKey, value);
+    else window.localStorage.removeItem(modelStorageKey);
+  }
   const [byteOffset, setByteOffset] = useState(initialByteOffset);
   const [input, setInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
@@ -510,6 +546,7 @@ export function LiveTranscript({
             sessionId: threadId,
             sessionKey,
             ...(includeTaskId ? { task_id: taskId } : {}),
+            ...(model ? { model } : {}),
           }),
           signal: ctrl.signal,
         });
@@ -599,7 +636,7 @@ export function LiveTranscript({
         abortRef.current = null;
       }
     },
-    [agentSlug, input, pollOnce, projectSlug, router, sendingChat, sessionKey, taskId, threadId],
+    [agentSlug, input, model, pollOnce, projectSlug, router, sendingChat, sessionKey, taskId, threadId],
   );
 
   // ── Auto-kickoff for FIRST_TURN-style flows. ────────────────────────
@@ -768,7 +805,43 @@ export function LiveTranscript({
               rows={1}
               className="block max-h-52 w-full resize-none bg-transparent px-4 pt-3.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <div className="flex items-center justify-end px-2.5 pb-2.5 pt-1.5">
+            <div className="flex items-center justify-end gap-1.5 px-2.5 pb-2.5 pt-1.5">
+              {/* Model picker sits right next to the send button (Codex
+                  placement): quiet "<model> ⌄" text trigger, dropdown of
+                  every available model opening above the composer. */}
+              {modelOptions.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Model"
+                      disabled={composerDisabled || sendingChat}
+                      className="inline-flex max-w-44 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="truncate">
+                        {modelOptions.find((m) => m.value === model)?.label ??
+                          "Default"}
+                      </span>
+                      <ChevronDown className="size-3 shrink-0" aria-hidden />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" side="top">
+                    <DropdownMenuRadioGroup
+                      value={model}
+                      onValueChange={onPickModel}
+                    >
+                      <DropdownMenuRadioItem value="">
+                        Default
+                      </DropdownMenuRadioItem>
+                      {modelOptions.map((m) => (
+                        <DropdownMenuRadioItem key={m.value} value={m.value}>
+                          {m.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {sendingChat ? (
                 <Button
                   type="button"
