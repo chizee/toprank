@@ -14,8 +14,7 @@ import { readTranscriptTail } from "@/server/sessions/transcript-tail";
 import { LiveTranscript } from "@/components/live-transcript";
 import { GoogleAdsMcpBanner } from "@/components/google-ads-mcp-banner";
 import { McpFlashBanner } from "@/components/mcp-flash-banner";
-import { ThreadSelector, type SessionLite } from "@/components/thread-selector";
-import { NewChatButton } from "@/components/new-chat-button";
+import { ChatThreadRail, type SessionLite } from "@/components/chat-thread-rail";
 
 type Params = { agent: string; thread: string; project: string };
 type Search = { mcp_connected?: string; mcp_error?: string };
@@ -56,12 +55,14 @@ export default async function AgentChatThreadPage({
     sessionKey: s.sessionKey,
     lastInteractionAt: s.lastInteractionAt,
     pending: s.pending,
+    title: s.title,
+    pinned: s.pinned,
     origin: origins.get(s.label),
   }));
 
-  // For the dropdown: surface the pending thread at the top so the user sees
+  // For the rail: surface the pending thread at the top so the user sees
   // it's "selected" even before sending the first message.
-  const sessionsForDropdown: SessionLite[] = existing
+  const sessionsForRail: SessionLite[] = existing
     ? enriched
     : [
         {
@@ -112,37 +113,30 @@ export default async function AgentChatThreadPage({
         <GoogleAdsMcpBanner status={googleAdsMcpStatus} projectSlug={projectSlug} />
       )}
 
-      <div className="flex items-center justify-between bg-background/80 px-6 py-2 backdrop-blur">
-        <div className="text-xs text-muted-foreground">
-          {sessionsForDropdown.length === 0
-            ? "No threads yet"
-            : `${sessionsForDropdown.length} thread${sessionsForDropdown.length === 1 ? "" : "s"}`}
-        </div>
-        <div className="flex items-center gap-2">
-          <ThreadSelector
-            projectSlug={projectSlug}
-            agentSlug={agentSlug}
-            sessions={sessionsForDropdown}
-            activeSessionId={threadId}
-          />
-          <NewChatButton projectSlug={projectSlug} agentSlug={agentSlug} />
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1">
-        <LiveTranscript
-          key={threadId}
+      {/* Same two-pane shape as the task workspace: thread rail on the
+          left (New chat on top), live transcript on the right. */}
+      <div className="flex min-h-0 flex-1">
+        <ChatThreadRail
           projectSlug={projectSlug}
           agentSlug={agentSlug}
-          agentDisplayName={resolved.name}
-          threadId={threadId}
-          sessionKey={sessionKey}
-          initialEvents={initialEvents}
-          initialByteOffset={initialByteOffset}
-          autoKickoff={autoKickoff}
-          mcpCatalog={mcpCatalog}
-          modelOptions={modelOptions}
+          sessions={sessionsForRail}
+          activeSessionId={threadId}
         />
+        <section className="flex min-w-0 flex-1 flex-col">
+          <LiveTranscript
+            key={threadId}
+            projectSlug={projectSlug}
+            agentSlug={agentSlug}
+            agentDisplayName={resolved.name}
+            threadId={threadId}
+            sessionKey={sessionKey}
+            initialEvents={initialEvents}
+            initialByteOffset={initialByteOffset}
+            autoKickoff={autoKickoff}
+            mcpCatalog={mcpCatalog}
+            modelOptions={modelOptions}
+          />
+        </section>
       </div>
     </div>
   );

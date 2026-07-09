@@ -297,7 +297,10 @@
     width: 100%;
   }
   .ns-tile:hover { background: hsl(var(--notfair-hover)); }
-  .ns-tile:disabled { cursor: not-allowed; opacity: 0.6; }
+  /* [aria-disabled] variant: the connect tile is a div[role=button] now
+     (a real <button> can't legally contain the "Select account"
+     sub-action button), so :disabled never matches it. */
+  .ns-tile:disabled, .ns-tile[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
   .ns-tile-glyph {
     @apply grid place-items-center flex-shrink-0 font-semibold uppercase;
     width: 32px; height: 32px; border-radius: 8px;
@@ -633,6 +636,27 @@
   .ns-dot-warn  { background: hsl(38 92% 50%); }
   .ns-dot-err   { background: hsl(0 72% 51%); }
   .ns-dot-mute  { background: hsl(var(--notfair-border-strong)); }
+
+  /* Thread-rail marquee — single-line title that slides horizontally on
+     row hover to reveal overflow. The row's mouseenter handler measures
+     the overflow and sets --ns-marquee-shift in px (0 when the title
+     fits); CSS only animates it: slow reveal on hover, quick snap-back
+     on leave. (Kept JS-measured: container-query units in transform got
+     silently dropped by the CSS pipeline.) */
+  .ns-marquee {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .ns-marquee > span {
+    display: inline-block;
+    min-width: 100%;
+    transform: translateX(0);
+    transition: transform 0.25s ease-out;
+  }
+  .ns-thread-row:hover .ns-marquee > span {
+    transform: translateX(var(--ns-marquee-shift, 0px));
+    transition: transform var(--ns-marquee-duration, 2s) linear 0.35s;
+  }
 
   /* Pulsing live dot — for "running" / "live" indicators. */
   .ns-dot-live {

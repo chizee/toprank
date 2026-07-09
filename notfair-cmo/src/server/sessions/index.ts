@@ -20,6 +20,10 @@ export interface Session {
   harness_adapter: HarnessAdapterId;
   harness_session_id: string | null;
   task_id: string | null;
+  /** User-set display title (thread rename). Null = derive from content. */
+  title: string | null;
+  /** Set when the user pins the thread; doubles as pin-order tiebreaker. */
+  pinned_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +45,8 @@ interface SessionRow {
   harness_adapter: string;
   harness_session_id: string | null;
   task_id: string | null;
+  title: string | null;
+  pinned_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +78,8 @@ export function getOrCreateSession(input: {
     harness_adapter: input.harness_adapter,
     harness_session_id: null,
     task_id: input.task_id ?? null,
+    title: null,
+    pinned_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -91,6 +99,28 @@ export function getOrCreateSession(input: {
   return session;
 }
 
+/** Set / clear the user-facing display title (thread rename). */
+export function setSessionTitle(id: string, title: string | null): void {
+  getDb()
+    .prepare("UPDATE sessions SET title = ? WHERE id = ?")
+    .run(title?.trim() || null, id);
+}
+
+/** Pin or unpin a thread. */
+export function setSessionPinned(id: string, pinned: boolean): void {
+  getDb()
+    .prepare("UPDATE sessions SET pinned_at = ? WHERE id = ?")
+    .run(pinned ? new Date().toISOString() : null, id);
+}
+
+/**
+ * Permanently delete a thread. transcript_events cascades on the FK, so
+ * the whole conversation history goes with it.
+ */
+export function deleteSession(id: string): void {
+  getDb().prepare("DELETE FROM sessions WHERE id = ?").run(id);
+}
+
 export function getSession(id: string): Session | null {
   const row = getDb()
     .prepare("SELECT * FROM sessions WHERE id = ?")
@@ -101,7 +131,9 @@ export function getSession(id: string): Session | null {
 export function listAgentSessions(project_slug: string, agent_id: string): Session[] {
   const rows = getDb()
     .prepare(
-      "SELECT * FROM sessions WHERE project_slug = ? AND agent_id = ? ORDER BY updated_at DESC",
+      // Pinned threads first (most recently pinned on top), then by
+      // recency — the thread rail renders this order verbatim.
+      "SELECT * FROM sessions WHERE project_slug = ? AND agent_id = ? ORDER BY (pinned_at IS NULL) ASC, pinned_at DESC, updated_at DESC",
     )
     .all(project_slug, agent_id) as SessionRow[];
   return rows.map(rowToSession);

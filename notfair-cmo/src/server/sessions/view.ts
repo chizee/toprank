@@ -24,6 +24,10 @@ export interface SessionView {
   lastInteractionAt: number;
   /** True when the row exists only in our cookie (no turns yet). */
   pending: boolean;
+  /** User-set display title (thread rename). Null = derive from content. */
+  title: string | null;
+  /** True when the user pinned this thread to the top of the rail. */
+  pinned: boolean;
 }
 
 function cookieName(project_slug: string, agent_template_key: string): string {
@@ -37,6 +41,8 @@ function sessionRowToView(s: Session): SessionView {
     sessionKey: s.id,
     lastInteractionAt: Date.parse(s.updated_at) || 0,
     pending: false,
+    title: s.title,
+    pinned: s.pinned_at !== null,
   };
 }
 
@@ -98,6 +104,8 @@ export async function getSessionsView(
         sessionKey: cookieLabel,
         lastInteractionAt: 0,
         pending: true,
+        title: null,
+        pinned: false,
       };
     }
   }
@@ -113,6 +121,8 @@ export async function getSessionsView(
         sessionKey: newLabel,
         lastInteractionAt: 0,
         pending: true,
+        title: null,
+        pinned: false,
       };
     }
   }
@@ -183,7 +193,10 @@ export function pickLatestChatSession<S extends { label: string }>(
   return sessions.find((s) => !isTaskOrCronSession(s.label, taskThreadIds));
 }
 
-const PREVIEW_MAX_CHARS = 40;
+// Generous cap: the rail shows ~40 chars at rest and reveals the rest by
+// scrolling the text horizontally on hover — a 40-char preview would give
+// the marquee nothing to reveal.
+const PREVIEW_MAX_CHARS = 140;
 
 /**
  * Classify each session by origin so the dropdown can show meaningful labels.

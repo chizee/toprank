@@ -134,7 +134,7 @@ export function AgentTaskWorkspace({
           workspace. The per-thread LiveTranscript polling still handles
           the open transcript. */}
       {/* ── Left pane: task list ─────────────────────────────────────── */}
-      <aside className="flex w-80 shrink-0 flex-col bg-[hsl(var(--notfair-sidebar))]">
+      <aside className="flex w-72 shrink-0 flex-col bg-[hsl(var(--notfair-sidebar))]">
         {proposedCount > 0 && (
           <div className="px-4 py-3">
             <StartAllTasksButton
@@ -480,10 +480,6 @@ function TaskRow({
   onSelect: () => void;
 }) {
   const isRunning = task.status === "working";
-  const isInFlight =
-    task.status === "working" ||
-    task.status === "proposed" ||
-    task.status === "approved";
   return (
     <button
       type="button"
@@ -525,9 +521,10 @@ function TaskRow({
         className={cn(
           // leading-4 (1rem) × 2 lines = min-h-8: one-line titles reserve
           // the second line's space so every row is the same height.
+          // Unselected rows use the same text tone as chat-rail rows —
+          // terminal tasks are no longer dimmed (the glyph carries status).
           "ml-6 mt-0.5 line-clamp-2 min-h-8 text-xs leading-4",
           selected ? "font-medium text-foreground" : "text-foreground/90",
-          !isInFlight && task.status !== "working" && "text-muted-foreground",
         )}
       >
         {task.title ?? task.brief.slice(0, 160)}
