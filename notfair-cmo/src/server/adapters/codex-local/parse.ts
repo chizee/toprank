@@ -119,6 +119,15 @@ export function parseCodexLine(
         toolCallId: item.id ?? "",
         name: nameForToolishItem(item),
       });
+    } else if (item.type === "error" && typeof item.message === "string") {
+      // Non-fatal, item-level errors (fatal ones arrive as turn.failed).
+      // Surface them — silently dropping used to hide real failures —
+      // EXCEPT known advisories that codex prints on every run for
+      // plugin-heavy installs; those would render as a scary red row on
+      // every single turn.
+      if (!isAdvisoryCodexItemError(item.message)) {
+        events.push({ kind: "error", message: item.message, transient: true });
+      }
     }
     return events;
   }
@@ -172,6 +181,22 @@ const TRANSIENT_CODEX_ERROR_PATTERNS: RegExp[] = [
 export function isTransientCodexError(message: string): boolean {
   const trimmed = message.trim();
   return TRANSIENT_CODEX_ERROR_PATTERNS.some((re) => re.test(trimmed));
+}
+
+/**
+ * Advisory `error` items codex (0.144+) emits on EVERY run in some
+ * configurations — informational config nudges, not turn failures.
+ * Rendering them would put a red error row on every single chat turn.
+ */
+const ADVISORY_CODEX_ITEM_ERROR_PATTERNS: RegExp[] = [
+  // Plugin-heavy installs: "Skill descriptions were shortened to fit the
+  // 2% skills context budget. Codex can still see every skill, …"
+  /^Skill descriptions were shortened/i,
+];
+
+export function isAdvisoryCodexItemError(message: string): boolean {
+  const trimmed = message.trim();
+  return ADVISORY_CODEX_ITEM_ERROR_PATTERNS.some((re) => re.test(trimmed));
 }
 
 /**

@@ -18,17 +18,19 @@ describe("SLASH_COMMANDS catalog", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("marks clear/new/stop/help as executeLocal", () => {
-    for (const name of ["clear", "new", "stop", "help"]) {
-      const cmd = findCommand(name);
-      expect(cmd?.executeLocal).toBe(true);
+  it("marks every command as executeLocal — no dead OpenClaw passthroughs", () => {
+    // The catalog used to carry ~17 OpenClaw gateway directives
+    // (/compact, /status, /elevated, …) that were sent to the agent as
+    // literal text. notfair-cmo has no gateway; only commands the client
+    // itself handles belong here.
+    for (const cmd of SLASH_COMMANDS) {
+      expect(cmd.executeLocal).toBe(true);
     }
-  });
-
-  it("does not mark pass-through commands as executeLocal", () => {
-    for (const name of ["status", "compact", "model", "think", "elevated"]) {
-      const cmd = findCommand(name);
-      expect(cmd?.executeLocal).toBeFalsy();
+    for (const name of ["clear", "new", "stop", "model", "help"]) {
+      expect(findCommand(name)).toBeDefined();
+    }
+    for (const gone of ["status", "compact", "think", "elevated", "skill", "queue"]) {
+      expect(findCommand(gone)).toBeUndefined();
     }
   });
 });
@@ -56,12 +58,12 @@ describe("filterSlashCommands", () => {
   });
 
   it("falls back to substring match when no prefix hits", () => {
-    // "mp" does not prefix any command name, but `compact` contains it,
+    // "od" does not prefix any command name, but `model` contains it,
     // so the substring fallback should surface it.
-    const r = filterSlashCommands("mp");
+    const r = filterSlashCommands("od");
     const names = r.map((c) => c.name);
-    expect(names).toContain("compact");
-    expect(names.every((n) => n.toLowerCase().startsWith("mp"))).toBe(false);
+    expect(names).toContain("model");
+    expect(names.every((n) => n.toLowerCase().startsWith("od"))).toBe(false);
   });
 
   it("returns empty list when nothing matches", () => {
@@ -69,11 +71,10 @@ describe("filterSlashCommands", () => {
   });
 
   it("prefers prefix matches over substring matches", () => {
-    // "co" prefix-matches commands starting with co (`compact`, `commands`).
-    // It should NOT fall back to substring, so e.g. `reasoning` (no "co") is
-    // excluded — and the result must contain only prefix hits.
-    const r = filterSlashCommands("co");
-    expect(r.every((c) => c.name.toLowerCase().startsWith("co"))).toBe(true);
+    // "cl" prefix-matches `clear`. It should NOT fall back to substring,
+    // and the result must contain only prefix hits.
+    const r = filterSlashCommands("cl");
+    expect(r.every((c) => c.name.toLowerCase().startsWith("cl"))).toBe(true);
     expect(r.length).toBeGreaterThan(0);
   });
 });
@@ -93,9 +94,9 @@ describe("parseSlashMessage", () => {
   });
 
   it("parses a slash command with args", () => {
-    expect(parseSlashMessage("/skill audit ads")).toEqual({
-      command: "skill",
-      args: "audit ads",
+    expect(parseSlashMessage("/model gpt-5.5 codex")).toEqual({
+      command: "model",
+      args: "gpt-5.5 codex",
     });
   });
 
@@ -117,9 +118,9 @@ describe("parseSlashMessage", () => {
 
 describe("findCommand", () => {
   it("finds a known command by name", () => {
-    const cmd = findCommand("status");
+    const cmd = findCommand("model");
     expect(cmd).toBeDefined();
-    expect(cmd?.key).toBe("status");
+    expect(cmd?.key).toBe("model");
   });
 
   it("returns undefined for an unknown command", () => {
@@ -144,21 +145,29 @@ describe("executeLocalSlashCommand", () => {
     expect(executeLocalSlashCommand("stop")).toEqual({ kind: "stop" });
   });
 
+  it("returns a set-model action for /model, carrying the argument", () => {
+    expect(executeLocalSlashCommand("model", "gpt-5.5")).toEqual({
+      kind: "set-model",
+      value: "gpt-5.5",
+    });
+    // No argument → empty value; the composer shows current + options.
+    expect(executeLocalSlashCommand("model")).toEqual({
+      kind: "set-model",
+      value: "",
+    });
+  });
+
   it("returns a help action with rendered markdown content", () => {
     const r = executeLocalSlashCommand("help");
     expect(r?.kind).toBe("help");
     if (r?.kind !== "help") return;
     expect(r.content).toContain("Available commands");
     expect(r.content).toContain("/clear");
-    expect(r.content).toContain("/status");
-    // Local commands marked, pass-through commands marked differently.
-    expect(r.content).toContain("local");
-    expect(r.content).toContain("sent to agent");
     // Commands that declare args render them.
-    expect(r.content).toContain("/skill <name>");
+    expect(r.content).toContain("/model <model>");
   });
 
-  it("returns null for a pass-through command", () => {
+  it("returns null for removed OpenClaw passthrough commands", () => {
     expect(executeLocalSlashCommand("status")).toBeNull();
     expect(executeLocalSlashCommand("compact")).toBeNull();
   });

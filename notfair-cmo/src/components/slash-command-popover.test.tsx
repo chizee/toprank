@@ -103,19 +103,17 @@ describe("SlashCommandPopover", () => {
     expect(onHover).toHaveBeenCalledWith(2);
   });
 
-  it("renders a 'local' badge for executeLocal commands and omits it otherwise", () => {
-    const local = SLASH_COMMANDS.find((c) => c.executeLocal)!;
-    const remote = SLASH_COMMANDS.find((c) => !c.executeLocal)!;
+  it("renders a 'local' badge on every command — the catalog is all-local now", () => {
     render(
       <SlashCommandPopover
-        commands={[local, remote]}
+        commands={SLASH_COMMANDS}
         selectedIndex={0}
         onSelect={() => {}}
         onHover={() => {}}
       />,
     );
     const localBadges = screen.getAllByText("local");
-    expect(localBadges).toHaveLength(1);
+    expect(localBadges).toHaveLength(SLASH_COMMANDS.length);
   });
 
   it("shows the args hint next to commands that declare one", () => {
@@ -138,8 +136,8 @@ describe("SlashCommandPopover", () => {
   });
 
   it("filterSlashCommands falls back to substring match", () => {
-    const filtered = filterSlashCommands("/ace"); // no prefix; substring "ace" → trace
-    expect(filtered.map((c) => c.name)).toContain("trace");
+    const filtered = filterSlashCommands("/ode"); // no prefix; substring "ode" → model
+    expect(filtered.map((c) => c.name)).toContain("model");
   });
 
   it("calls scrollIntoView on the selected row after mount", () => {

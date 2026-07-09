@@ -140,6 +140,39 @@ describe("parseCodexLine", () => {
     expect(state.assistantText).toBe("Sure thing.");
   });
 
+  it("surfaces item-level error items as transient errors (codex 0.144+)", () => {
+    const state = makeCodexStreamState();
+    const out = parseCodexLine(
+      JSON.stringify({
+        type: "item.completed",
+        item: { id: "item_3", type: "error", message: "MCP call blew up" },
+      }),
+      state,
+    );
+    expect(out).toEqual([
+      { kind: "error", message: "MCP call blew up", transient: true },
+    ]);
+    // Item errors are non-fatal — the turn keeps going.
+    expect(state.finalized).toBe(false);
+  });
+
+  it("drops known advisory error items (skills-budget nudge on every run)", () => {
+    const state = makeCodexStreamState();
+    const out = parseCodexLine(
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "item_0",
+          type: "error",
+          message:
+            "Skill descriptions were shortened to fit the 2% skills context budget. Codex can still see every skill, but some descriptions are shorter.",
+        },
+      }),
+      state,
+    );
+    expect(out).toEqual([]);
+  });
+
   it("marks the turn finalized on turn.completed", () => {
     const state = makeCodexStreamState();
     state.assistantText = "Done";

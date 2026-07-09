@@ -491,7 +491,7 @@ export function LiveTranscript({
       // was sent programmatically (overrides are always real prompts).
       const parsed = usingOverride ? null : parseSlashMessage(text);
       if (parsed) {
-        const action = executeLocalSlashCommand(parsed.command);
+        const action = executeLocalSlashCommand(parsed.command, parsed.args);
         if (action) {
           setInput("");
           switch (action.kind) {
@@ -512,6 +512,40 @@ export function LiveTranscript({
             case "stop":
               abortRef.current?.abort();
               return;
+            case "set-model": {
+              // Same store the selector next to Send uses.
+              const wanted = action.value.toLowerCase();
+              const names = [
+                "default",
+                ...modelOptions.map((m) => m.label),
+              ].join(", ");
+              if (!wanted) {
+                toast.message("Model", {
+                  description: `Current: ${
+                    modelOptions.find((m) => m.value === model)?.label ??
+                    "Default"
+                  }. Options: ${names}.`,
+                });
+                return;
+              }
+              if (wanted === "default") {
+                onPickModel("");
+                toast.success("Model reset to default.");
+                return;
+              }
+              const match = modelOptions.find(
+                (m) =>
+                  m.value.toLowerCase() === wanted ||
+                  m.label.toLowerCase() === wanted,
+              );
+              if (!match) {
+                toast.error(`Unknown model '${action.value}'. Options: ${names}.`);
+                return;
+              }
+              onPickModel(match.value);
+              toast.success(`Model set to ${match.label}.`);
+              return;
+            }
             case "help":
               toast.message("Slash commands", { description: action.content });
               return;
@@ -636,7 +670,10 @@ export function LiveTranscript({
         abortRef.current = null;
       }
     },
-    [agentSlug, input, model, pollOnce, projectSlug, router, sendingChat, sessionKey, taskId, threadId],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onPickModel is
+    // stable in behavior (writes localStorage + state); modelOptions is a
+    // fresh array from the server component each render.
+    [agentSlug, input, model, modelOptions, pollOnce, projectSlug, router, sendingChat, sessionKey, taskId, threadId],
   );
 
   // ── Auto-kickoff for FIRST_TURN-style flows. ────────────────────────

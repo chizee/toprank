@@ -15,18 +15,12 @@ const CATEGORY_LABEL: Record<SlashCommand["category"], string> = {
   session: "Session",
   model: "Model",
   status: "Status",
-  agents: "Agents",
-  tools: "Tools",
-  advanced: "Advanced",
 };
 
 const CATEGORY_ACCENT: Record<SlashCommand["category"], string> = {
   session: "text-[hsl(var(--notfair-ink-4))]",
   model: "text-[hsl(var(--notfair-ink-4))]",
   status: "text-[hsl(var(--notfair-ink-4))]",
-  agents: "text-violet-600 dark:text-violet-400",
-  tools: "text-cyan-600 dark:text-cyan-400",
-  advanced: "text-[hsl(var(--notfair-ink-4))]",
 };
 
 export function SlashCommandPopover({
