@@ -31,6 +31,18 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
+// getOnboardingTaskForSkipAction awaits provisioning + reads the token
+// table to decide whether to mint the audit task.
+vi.mock("./provisioning-state", () => ({
+  awaitProvisioning: async () => ({ kind: "done" }),
+}));
+const listTokensMock = vi.fn<(slug: string) => Array<{ server_name: string }>>(
+  () => [],
+);
+vi.mock("@/server/mcp/tokens", () => ({
+  listProjectMcpTokens: (slug: string) => listTokensMock(slug),
+}));
+
 // Dynamic imports inside setOnboardingAccountAction need mocks too — it
 // auto-creates the CMO's onboarding task as the final step of the action.
 const createTaskMock = vi.fn();
@@ -88,6 +100,7 @@ vi.mock("@/server/agent-meta", () => ({
 }));
 
 import {
+  getOnboardingTaskForSkipAction,
   listGoogleAdsAccounts,
   setOnboardingAccountAction,
   listMetaAdsAccounts,
@@ -497,4 +510,71 @@ describe("setOnboardingGscPropertyAction", () => {
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+describe("getOnboardingTaskForSkipAction", () => {
+  const ONBOARDING_TASK = {
+    id: "onboarding-uuid",
+    display_id: "acme-0",
+    project_slug: "acme",
+    agent_id: "acme-cmo-greg",
+    title: "Learn the project and write PROJECT.md",
+    status: "done",
+  };
+
+  beforeEach(() => {
+    getProjectMock.mockReturnValue({
+      id: "p1",
+      slug: "acme",
+      display_name: "Acme",
+      archived_at: null,
+      google_ads_account_id: null,
+      website_url: null,
+      codebase_path: null,
+      harness_adapter: "codex-local",
+    });
+    listTasksMock.mockReturnValue([ONBOARDING_TASK]);
+    listTokensMock.mockReturnValue([]);
+    createTaskMock.mockClear();
+  });
+
+  it("mints the audit for an X-Ads-only connect (no account picker on that path)", async () => {
+    listTokensMock.mockReturnValue([{ server_name: "notfair-xads" }]);
+    const r = await getOnboardingTaskForSkipAction("acme");
+    expect(r.ok).toBe(true);
+    expect(createTaskMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent_id: "acme-cmo-greg",
+        title: expect.stringContaining("Audit the connected ad platforms"),
+      }),
+    );
+    // Onboarding task is terminal → the freshly minted audit is surfaced.
+    if (r.ok) expect(r.task_display_id).toBe("acme-1");
+  });
+
+  it("creates no audit on a true skip (nothing connected)", async () => {
+    const r = await getOnboardingTaskForSkipAction("acme");
+    expect(r.ok).toBe(true);
+    expect(createTaskMock).not.toHaveBeenCalled();
+    if (r.ok) expect(r.task_display_id).toBe("acme-0");
+  });
+
+  it("does not double-create when an audit already exists", async () => {
+    listTokensMock.mockReturnValue([{ server_name: "notfair-googleads" }]);
+    listTasksMock.mockReturnValue([
+      ONBOARDING_TASK,
+      {
+        id: "audit-uuid",
+        display_id: "acme-9",
+        project_slug: "acme",
+        agent_id: "acme-cmo-greg",
+        title: "Audit the connected ad platforms and propose a starter playbook",
+        status: "proposed",
+      },
+    ]);
+    const r = await getOnboardingTaskForSkipAction("acme");
+    expect(r.ok).toBe(true);
+    expect(createTaskMock).not.toHaveBeenCalled();
+    if (r.ok) expect(r.task_display_id).toBe("acme-9");
+  });
 });

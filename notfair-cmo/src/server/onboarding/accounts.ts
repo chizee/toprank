@@ -188,8 +188,7 @@ export async function setOnboardingAccountAction(
   //
   // Avoid duplicates if the user navigates back and resubmits — reuse
   // the existing one when a CMO audit task is already present.
-  const { buildOnboardingBrief } = await import("./cmo-task-brief");
-  const { listTasks, createTask } = await import("@/server/db/tasks");
+  const { listTasks } = await import("@/server/db/tasks");
   const { listProjectAgents } = await import("@/server/agent-meta");
   // Resolve the CMO agent by template_key — agent_ids now encode the
   // personal name, so we can't synthesize one from project_slug alone.
@@ -199,39 +198,17 @@ export async function setOnboardingAccountAction(
     return { ok: false, error: "CMO agent has not been provisioned yet." };
   }
   const cmoAgentId = cmo.agent_id;
-  const allTasks = listTasks(project_slug);
-  const existingAudit = allTasks.find(
-    (t) => t.agent_id === cmoAgentId && t.title?.startsWith("Audit the account"),
-  );
-  // Find the project-onboarding task. Created synchronously by
-  // createProjectForOnboardingAction; should always exist by the time
-  // the user gets here.
-  const onboardingTask = allTasks.find(
+  const audit = await ensureAuditTask({
+    project_slug,
+    project_display_name: updated.display_name,
+    google_ads_account_id: match.id,
+    cmoAgentId,
+  });
+  const onboardingTask = listTasks(project_slug).find(
     (t) =>
       t.agent_id === cmoAgentId &&
       t.title === "Learn the project and write PROJECT.md",
   );
-
-  let audit = existingAudit;
-  if (!audit) {
-    // When the onboarding task is missing or already terminal, createTask
-    // drops the blocker automatically — the audit runs immediately.
-    const { title, brief, success_criteria } = buildOnboardingBrief({
-      project_slug,
-      project_display_name: updated.display_name,
-      google_ads_account_id: match.id,
-    });
-    audit = createTask({
-      project_slug,
-      agent_id: cmoAgentId,
-      title,
-      brief,
-      success_criteria,
-      assigner_agent_id: null,
-      status: "proposed",
-      blocked_by_task_id: onboardingTask?.id ?? null,
-    });
-  }
 
   // Pick the task to surface in the redirect:
   //   - Prefer the onboarding task while it's still non-terminal — that's
@@ -242,7 +219,10 @@ export async function setOnboardingAccountAction(
   const surfaceTask =
     onboardingTask && !TERMINAL.has(onboardingTask.status)
       ? onboardingTask
-      : audit;
+      : (audit ?? onboardingTask);
+  if (!surfaceTask) {
+    return { ok: false, error: "Onboarding task not found." };
+  }
 
   revalidatePath("/", "layout");
   return {
@@ -251,6 +231,63 @@ export async function setOnboardingAccountAction(
     task_display_id: surfaceTask.display_id,
     cmo_agent_slug: cmo.slug,
   };
+}
+
+/** Ads platforms whose connection makes the CMO audit meaningful. */
+const ADS_PLATFORM_KEYS = [
+  "notfair-googleads",
+  "notfair-metaads",
+  "notfair-xads",
+] as const;
+
+/**
+ * Mint the CMO's multi-platform audit task — shared by the Google Ads
+ * account-pick path and the setup step (which covers X-Ads-only /
+ * Meta-Ads-only connects that never pass through an account picker;
+ * without the setup-step hook those projects got NO audit at all and
+ * their specialists sat idle forever).
+ *
+ * Callers are responsible for only invoking this when at least one ads
+ * platform is connected (the account-pick path just validated Google
+ * Ads; the setup path checks the token table). Dedupes by title prefix
+ * so back-navigation / both paths firing can't create two audits. Gated
+ * on the PROJECT.md onboarding task while that's in flight; createTask
+ * drops the blocker automatically when it's already terminal.
+ */
+async function ensureAuditTask(input: {
+  project_slug: string;
+  project_display_name: string;
+  google_ads_account_id: string | null;
+  cmoAgentId: string;
+}): Promise<import("@/types").Task | null> {
+  const { listTasks, createTask } = await import("@/server/db/tasks");
+  const allTasks = listTasks(input.project_slug);
+  const existing = allTasks.find(
+    (t) => t.agent_id === input.cmoAgentId && t.title?.startsWith("Audit the"),
+  );
+  if (existing) return existing;
+
+  const onboardingTask = allTasks.find(
+    (t) =>
+      t.agent_id === input.cmoAgentId &&
+      t.title === "Learn the project and write PROJECT.md",
+  );
+  const { buildOnboardingBrief } = await import("./cmo-task-brief");
+  const { title, brief, success_criteria } = buildOnboardingBrief({
+    project_slug: input.project_slug,
+    project_display_name: input.project_display_name,
+    google_ads_account_id: input.google_ads_account_id,
+  });
+  return createTask({
+    project_slug: input.project_slug,
+    agent_id: input.cmoAgentId,
+    title,
+    brief,
+    success_criteria,
+    assigner_agent_id: null,
+    status: "proposed",
+    blocked_by_task_id: onboardingTask?.id ?? null,
+  });
 }
 
 export type ProvisioningProgressResult =
@@ -344,12 +381,14 @@ export type SkipAccountResult =
   | { ok: false; error: string };
 
 /**
- * Skip-Google-Ads variant of the onboarding finish. Resolves the CMO agent
- * and its already-created "Learn the project and write PROJECT.md" task so
- * the client can land the user on the same task workspace the connect path
- * lands on. No account is persisted, no audit task is minted — the audit
- * task is only meaningful once Google Ads is wired up, and the user can
- * always reach the connect screen later from /connections.
+ * Resolve where the setup step lands the user (both the connect and the
+ * skip paths route through here). Resolves the CMO agent + its
+ * "Learn the project and write PROJECT.md" task, and — when at least one
+ * ads platform is connected — ensures the multi-platform audit task
+ * exists. This is what covers X-Ads-only / Meta-Ads-only connects: they
+ * never pass through the Google Ads account picker, which used to be the
+ * only place the audit was minted. With nothing connected (true skip) no
+ * audit is created — the user can connect later from /connections.
  *
  * Blocks until provisioning has fully resolved — `ensureProjectAgents`
  * itself waits for the gateway's runtime config to surface the new agent
@@ -395,12 +434,34 @@ export async function getOnboardingTaskForSkipAction(
       t.agent_id === cmo.agent_id &&
       t.title === "Learn the project and write PROJECT.md",
   );
-  if (!onboardingTask) {
+  // Only mint the audit when an ads platform is actually connected — a
+  // true skip (nothing connected) lands on the PROJECT.md task alone.
+  const { listProjectMcpTokens } = await import("@/server/mcp/tokens");
+  const connected = new Set(
+    listProjectMcpTokens(project_slug).map((t) => t.server_name),
+  );
+  const audit = ADS_PLATFORM_KEYS.some((k) => connected.has(k))
+    ? await ensureAuditTask({
+        project_slug,
+        project_display_name: project.display_name,
+        google_ads_account_id: project.google_ads_account_id,
+        cmoAgentId: cmo.agent_id,
+      })
+    : null;
+  // Land on whatever is actually executing: the onboarding task while
+  // it's in flight, else the audit (which auto-kicks off on page open),
+  // else the onboarding task as the terminal-state fallback.
+  const TERMINAL = new Set(["done", "failed", "cancelled"]);
+  const surfaceTask =
+    onboardingTask && !TERMINAL.has(onboardingTask.status)
+      ? onboardingTask
+      : (audit ?? onboardingTask);
+  if (!surfaceTask) {
     return { ok: false, error: "Onboarding task not found." };
   }
   return {
     ok: true,
-    task_display_id: onboardingTask.display_id,
+    task_display_id: surfaceTask.display_id,
     cmo_agent_slug: cmo.slug,
   };
 }

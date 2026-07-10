@@ -57,6 +57,12 @@ export function buildProjectOnboardingBrief(args: {
     "understand it in 90 seconds of reading. Quote specifics from the",
     "site/codebase rather than handwaving.",
     "",
+    "Do NOT write anything about which ad platforms / accounts are",
+    "connected — this task runs while the user is still connecting them,",
+    "so any claim you make goes stale immediately. The platform injects",
+    "live connection facts into every task assignment; PROJECT.md is for",
+    "the business, not the plumbing.",
+    "",
     "## 3. Close the task",
     "",
     "After `set_project_brief` returns ok, call `submit_task_status` with",
@@ -75,10 +81,12 @@ export function buildProjectOnboardingBrief(args: {
 /**
  * Build the brief for the CMO's first task — the audit that used to be its
  * own special-purpose code path in src/server/onboarding/audit.ts. Now the
- * audit IS a task: the CMO does the GAQL probes itself via the Google Ads
- * MCP, writes findings inline, and delegates ongoing work via the
- * notfair-orchestration MCP tools (the same surface the CMO uses for every
- * other planning turn — see agent-templates.ts for the full teaching).
+ * audit IS a task, and it covers EVERY connected ads platform (Google,
+ * Meta, X) — the kickoff message's platform-connections facts block tells
+ * the CMO which ones are live. The CMO runs the probes itself via each
+ * platform's MCP, writes findings inline, and delegates ongoing work via
+ * the notfair-orchestration MCP tools (the same surface the CMO uses for
+ * every other planning turn — see agent-templates.ts for the full teaching).
  *
  * Keeping this server-side so the wording stays in lockstep with the CMO
  * system prompt; templated rather than free-form so each new project
@@ -91,20 +99,22 @@ export function buildOnboardingBrief(args: {
 }): { title: string; brief: string; success_criteria: string } {
   const account = args.google_ads_account_id ?? "(none picked — ask the user)";
 
-  const title = "Audit the account and propose a starter playbook";
+  const title = "Audit the connected ad platforms and propose a starter playbook";
 
   const brief = [
     `Project: ${args.project_display_name} (${args.project_slug})`,
     `Google Ads account: ${account}`,
     "",
-    "This is your first turn as CMO for this project. Audit the connected",
-    "Google Ads account, present findings, then delegate ongoing work to",
-    "the google-ads specialist.",
+    "This is your first turn as CMO for this project. Audit EVERY",
+    "connected ads platform — the \"Platform connections\" list in this",
+    "assignment is ground truth: audit each ads platform it shows as",
+    "connected, skip the rest. Present findings per platform, then",
+    "delegate ongoing work to each platform's specialist.",
     "",
-    "## 1. Probe the account",
+    "## 1. Probe each connected platform",
     "",
-    "Use the notfair-googleads MCP `runScript` tool to gather (GAQL via",
-    "`ads.gaql`, fan out with `ads.gaqlParallel`):",
+    "**Google Ads** — use the notfair-googleads MCP `runScript` tool",
+    "(GAQL via `ads.gaql`, fan out with `ads.gaqlParallel`):",
     "- Customer info: status, currency, time zone",
     "- Last 30 days per enabled campaign: cost, impressions, clicks,",
     "  conversions, conversion_value",
@@ -113,40 +123,60 @@ export function buildOnboardingBrief(args: {
     "- Keywords with quality_score < 5",
     "- Campaigns within $5 of their daily budget cap",
     "",
-    "## 2. Classify the archetype",
+    "**Meta Ads** — use the notfair-metaads MCP `runScript` tool",
+    "(`ads.graphParallel`): campaign / ad set / ad listings with 30-day",
+    "insights (spend, ROAS, CPM, CTR, frequency); flag learning-limited",
+    "ad sets, creative fatigue (rising frequency + falling CTR), and",
+    "audience overlap.",
     "",
-    "One of:",
-    "- empty — no enabled campaigns",
-    "- no_tracking — campaigns but zero conversion_actions",
-    "- low_volume — < 50 clicks / month or < $200 spend",
+    "**X Ads** — use the notfair-xads MCP tools: campaigns + line items",
+    "with 30-day spend / impressions / engagement, promoted posts, and",
+    "funding instruments; flag zero-spend or fully-paused accounts.",
+    "",
+    "## 2. Classify each platform's archetype",
+    "",
+    "One per audited platform:",
+    "- empty — no enabled/serving campaigns",
+    "- no_tracking — campaigns but no conversion tracking",
+    "- low_volume — too little traffic/spend to optimize (< ~50 clicks or",
+    "  < ~$200 / month)",
     "- active — meaningful data to optimize on",
     "",
     "## 3. Report findings to the user (in this reply)",
     "",
-    "Markdown, scannable. Sections (skip any with no findings, don't pad):",
-    "- **Account snapshot** — 1-2 sentences naming the archetype + spend",
-    "- **Wasted spend** — top 3 search-term gaps with $ amounts",
-    "- **Low quality scores** — top 3 keywords + their QS",
+    "Markdown, scannable, one section per audited platform (skip findings",
+    "that don't exist, don't pad):",
+    "- **Snapshot** — 1-2 sentences naming the archetype + spend",
+    "- **Wasted spend** — top gaps with $ amounts (search terms on Google;",
+    "  fatigued creatives / overlapping audiences on Meta; dead line items on X)",
+    "- **Quality issues** — low QS keywords, learning-limited ad sets, etc.",
     "- **Budget pacing** — campaigns hitting cap",
-    "- **Next steps** — 3 concrete actions tailored to the archetype",
+    "- **Next steps** — up to 3 concrete actions per platform, tailored to",
+    "  its archetype",
     "",
     "Lead with the dollar figure or the most actionable finding. Don't ask",
     '"want me to..." — you\'re an orchestrator; delegate, don\'t advise.',
     "",
     "## 4. Delegate the ongoing work",
     "",
-    "For each Next Step that's actionable + repeatable, delegate it to the",
-    "google_ads specialist. Include the cadence in the brief itself (\"daily",
-    "9am Pacific anomaly check on enabled campaigns\", \"weekly Monday",
-    "search-term review\", etc.) — the specialist will schedule its own cron.",
+    "For each Next Step that's actionable + repeatable, delegate it to",
+    "THAT platform's specialist (google_ads / meta_ads / x_ads — use",
+    "`list_project_agents` to get exact agent ids). Include the cadence in",
+    "the brief itself (\"daily 9am Pacific anomaly check on enabled",
+    "campaigns\", \"weekly Monday search-term review\", etc.) — the",
+    "specialist will schedule its own cron.",
     "",
-    "Tight one-line tail after delegating: \"Handed these to your Google Ads",
-    'specialist — open the agent\'s Tasks tab to follow along."',
+    "ONLY IF you actually delegated tasks, close with a one-line tail",
+    "naming which specialists got work (\"Handed these to your Google Ads",
+    'and X Ads specialists — open their Tasks tabs to follow along.").',
+    "When you skipped delegation for a platform (e.g. empty account), say",
+    "what would unlock it instead — don't claim a handoff that didn't happen.",
   ].join("\n");
 
   const success_criteria = [
-    "Findings reported as inline markdown; ongoing work delegated to",
-    "google_ads (skip delegation when archetype = empty); this audit task",
+    "Findings reported per connected ads platform as inline markdown;",
+    "ongoing work delegated to each platform's specialist (skip a",
+    "platform's delegation when its archetype = empty); this audit task",
     "marked done.",
   ].join(" ");
 
