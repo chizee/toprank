@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { Task } from "@/types";
 
-import { buildTaskKickoffMessage } from "./task-kickoff";
+import {
+  buildTaskKickoffMessage,
+  formatPlatformFacts,
+  type ProjectPlatformFacts,
+} from "./task-kickoff";
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -88,5 +92,45 @@ describe("buildTaskKickoffMessage", () => {
     const brief = "Step 1: import GA4.\nStep 2: map conv to lead.\nStep 3: verify.";
     const msg = buildTaskKickoffMessage(makeTask({ brief }));
     expect(msg).toContain(brief);
+  });
+});
+
+describe("platform facts block", () => {
+  const facts: ProjectPlatformFacts = {
+    website_url: "https://example.com",
+    codebase_path: null,
+    connected: [
+      { label: "Google Ads", detail: "account 7384288909" },
+      { label: "X Ads", detail: null },
+    ],
+    notConnected: ["Meta Ads", "Google Search Console", "Google Analytics"],
+  };
+
+  it("renders connected platforms with details and NOT-connected ones explicitly", () => {
+    const lines = formatPlatformFacts(facts).join("\n");
+    expect(lines).toContain("ground truth from the platform database");
+    expect(lines).toContain("- Google Ads: connected — account 7384288909");
+    expect(lines).toContain("- X Ads: connected");
+    expect(lines).toContain("- Meta Ads: NOT connected");
+    expect(lines).toContain("- Website: https://example.com");
+    expect(lines).not.toContain("Local codebase");
+  });
+
+  it("kickoff message embeds the facts block between brief and success criteria", () => {
+    const msg = buildTaskKickoffMessage(makeTask(), facts);
+    expect(msg).toContain("- Google Ads: connected — account 7384288909");
+    expect(msg.indexOf("Brief:")).toBeLessThan(msg.indexOf("Google Ads: connected"));
+    expect(msg.indexOf("Google Ads: connected")).toBeLessThan(
+      msg.indexOf("Success criteria:"),
+    );
+  });
+
+  it("kickoff message omits the block when facts are null/undefined", () => {
+    expect(buildTaskKickoffMessage(makeTask(), null)).not.toContain(
+      "Platform connections",
+    );
+    expect(buildTaskKickoffMessage(makeTask())).not.toContain(
+      "Platform connections",
+    );
   });
 });

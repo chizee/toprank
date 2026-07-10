@@ -17,6 +17,7 @@ import {
 import {
   buildTaskKickoffMessage,
   generateTaskThreadId,
+  getProjectPlatformFacts,
 } from "@/server/orchestration/task-kickoff";
 import type { Approval, Question, Task } from "@/types";
 
@@ -145,7 +146,13 @@ async function loadSelectedBundle(
   // — so reloads / concurrent tabs can't double-fire the agent.
   const kickoff =
     task.status === "proposed"
-      ? { taskId: task.id, message: buildTaskKickoffMessage(task) }
+      ? {
+          taskId: task.id,
+          message: buildTaskKickoffMessage(
+            task,
+            getProjectPlatformFacts(projectSlug),
+          ),
+        }
       : null;
 
   return {

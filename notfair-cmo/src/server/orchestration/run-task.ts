@@ -11,6 +11,7 @@ import type { Task } from "@/types";
 
 import {
   buildTaskKickoffMessage,
+  getProjectPlatformFacts,
   generateTaskThreadId,
 } from "./task-kickoff";
 
@@ -62,7 +63,10 @@ export async function runTaskKickoffServerSide(task: Task): Promise<void> {
     task_id: finalTask.id,
   });
 
-  const kickoffMessage = buildTaskKickoffMessage(finalTask);
+  const kickoffMessage = buildTaskKickoffMessage(
+    finalTask,
+    getProjectPlatformFacts(finalTask.project_slug),
+  );
   appendTranscriptEvent(session.id, "user", { text: kickoffMessage, source: "kickoff" });
 
   console.log(
