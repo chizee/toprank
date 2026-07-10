@@ -45,6 +45,8 @@ interface CodexEvent {
     server?: string;
     tool?: string;
     tool_name?: string;
+    /** `error`-type items (codex 0.144+) carry their text here. */
+    message?: string;
   };
   error?: { message?: string };
 }
