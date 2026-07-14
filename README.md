@@ -166,13 +166,13 @@ Your data is preserved — the runtime state directory (`~/.toprank/`, holding p
 
 ## The NotFair app — goal-driven marketing agents in your browser
 
-[NotFair](notfair/) is a local web portal built around one idea: state a goal, get a loop. A dedicated agent turns your ambition into a server-verified metric with a measured baseline, you confirm the target, and the agent runs a disciplined improvement cycle on your cadence — the platform measures the number mechanically each tick, the agent scores its past moves against their predictions, makes at most one new move, and every governed action (spend, publishes, bid changes) parks in an approvals inbox until you decide. The Goal page shows the whole loop: metric sparkline vs. target, tick diary, open actions with review dates, and the learnings the agent accumulates.
+[NotFair](notfair/) is a local web portal built around one idea: state a goal, get a loop. A dedicated agent turns your ambition into a server-verified metric with a measured baseline, you confirm the target, and the agent runs a disciplined improvement cycle on your cadence — the platform measures the number mechanically each tick, the agent scores its past moves against their predictions, and the goal protocol limits it to one new move. The protocol requires mutations to be logged with observation windows that gate affected resources in future turns; code changes go through a branch and a GitHub pull request for you to review and merge. These are behavioral guardrails for trusted local automation, not an OS-level security sandbox. The Goal page shows the whole loop: metric sparkline vs. target, tick diary, open actions with review dates, and the learnings the agent accumulates.
 
 Open source, runs entirely on your machine, published to npm as [`notfair`](https://www.npmjs.com/package/notfair).
 
 ### Get started
 
-**Prerequisites:** Node 20+ and at least one harness installed and authenticated — [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview) (recommended) or [Codex CLI](https://github.com/openai/codex).
+**Prerequisites:** An Apple Silicon Mac, Node 20+, and at least one harness installed and authenticated — [Codex CLI](https://github.com/openai/codex) (recommended) or [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview). The published npm package currently declares support for macOS on ARM64 only.
 
 ```bash
 npx notfair@latest doctor   # preflight: Node, harnesses, data dir, port
@@ -181,7 +181,9 @@ npx notfair@latest          # launch the UI at http://127.0.0.1:3327
 
 Or install globally with `npm install -g notfair`, then run `notfair`.
 
-Create a project, pick your harness, connect platforms during onboarding, then open **Goal** and state an ambition — the agent works out how to measure it and shows you the baseline before anything runs. Already using the plugin? `/notfair:cmo` launches the portal straight from Claude Code.
+The current `doctor` command reports each harness separately and exits non-zero when either Claude Code or Codex is absent, even though the app itself only requires the harness selected for that project.
+
+Create a project, optionally attach a codebase, pick your harness, connect platforms and choose the relevant account during onboarding, then state your first ambition. NotFair creates the goal's agent internally, works out how to measure the goal, and shows you the baseline and target before anything runs. The Codex sidebar reports the signed-in account's plan and usage, while model selectors show the configured model name instead of a generic default label.
 
 Full docs, CLI reference, and architecture notes: [`notfair/README.md`](notfair/README.md).
 
@@ -209,6 +211,7 @@ Full docs, CLI reference, and architecture notes: [`notfair/README.md`](notfair/
 |-------|-------------|
 | [`seo-analysis`](seo/seo-analysis/) | Full SEO audit with GSC data. Quick wins, traffic drops, technical issues, 30-day action plan. |
 | [`content-writer`](seo/content-writer/) | SEO content creation following E-E-A-T guidelines. Blog posts, landing pages, content improvements. |
+| [`content-planner`](seo/content-planner/) | Builds a dated editorial calendar from real Search Console opportunities, prioritized by click potential and ready to hand to `content-writer`. |
 | [`keyword-research`](seo/keyword-research/) | Keyword discovery, intent classification, topic clusters, prioritized content calendar. |
 | [`meta-tags-optimizer`](seo/meta-tags-optimizer/) | Title tags, meta descriptions, OG/Twitter cards with A/B variations and CTR estimates. |
 | [`schema-markup-generator`](seo/schema-markup-generator/) | JSON-LD structured data for rich results. FAQ, HowTo, Article, Product, LocalBusiness. |
@@ -223,20 +226,26 @@ Full docs, CLI reference, and architecture notes: [`notfair/README.md`](notfair/
 |-------|-------------|
 | [`gemini`](gemini/) | Second opinion from Google Gemini. Review (pass/fail gate), challenge (adversarial stress test), or consult (open Q&A). Especially strong on Google Ads and SEO decisions — Gemini has native Google ecosystem knowledge. |
 
+### Maintenance
+
+| Skill | What it does |
+|-------|-------------|
+| [`upgrade`](notfair-upgrade-skill/) | Updates an installed NotFair plugin to the latest marketplace release and summarizes what changed. |
+
 All skills are namespaced: `/notfair:google-ads`, `/notfair:seo-analysis`, `/notfair:gemini`, etc.
 
 ---
 
 ## How It Works
 
-NotFair is a Claude Code plugin. Each skill is a `SKILL.md` file with supporting reference documents, scripts, and eval tests.
+NotFair ships as a Claude Code plugin, while the skill directories themselves are host-agnostic and discoverable by compatible coding agents through [`AGENTS.md`](AGENTS.md). Each skill is a `SKILL.md` file with supporting reference documents, scripts, and eval tests.
 
 ```
 notfair/
 ├── .claude-plugin/
 │   ├── plugin.json              <- plugin metadata (explicit skill paths)
 │   └── marketplace.json         <- registry entry
-├── .mcp.json                    <- NotFair MCP servers (Google Ads + Meta Ads, auto-configured)
+├── .mcp.json                    <- NotFair MCP servers (Google Ads + Meta Ads + Search Console)
 ├── google-ads/
 │   ├── manage/                  <- campaign management (skill: google-ads)
 │   ├── audit/                   <- account audit + business context
@@ -249,6 +258,7 @@ notfair/
 ├── seo/
 │   ├── seo-analysis/            <- full SEO audit with GSC data
 │   ├── content-writer/          <- E-E-A-T content creation
+│   ├── content-planner/         <- GSC-driven editorial calendar
 │   ├── keyword-research/        <- keyword discovery + topic clusters
 │   ├── meta-tags-optimizer/     <- title tags, meta descriptions, OG
 │   ├── schema-markup-generator/ <- JSON-LD structured data
