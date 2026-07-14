@@ -1154,6 +1154,9 @@ function ToolGroup({
     : { verb: "Tool call" };
   const headMcp = headline ? matchMcpServerKey(headline.name, mcpCatalog) : null;
   const HeadIcon = headline ? iconForTool(headline.name) : Wrench;
+  const mcpCount = tools.filter((tool) =>
+    matchMcpServerKey(tool.name, mcpCatalog),
+  ).length;
   const StatusIcon = isLive
     ? Loader2
     : hasError
@@ -1163,26 +1166,26 @@ function ToolGroup({
     ? "text-muted-foreground motion-safe:animate-spin"
     : hasError
       ? "text-destructive"
-      : "text-[hsl(var(--notfair-accent))]";
-  const callLabel = `${tools.length} ${tools.length === 1 ? "call" : "calls"}`;
+      : "text-muted-foreground/60";
+  const summaryLabel =
+    tools.length === 1
+      ? intent.verb
+      : `${isLive ? "Using" : "Used"} ${tools.length} tools`;
 
   return (
     <details
       key={isLive ? "live" : "done"}
       open={isLive}
       data-activity-kind={headMcp ? "mcp" : "tool"}
-      className="group ml-1 border-l border-border/70 pl-4"
+      className="group"
     >
       <summary
         className={cn(
-          "-ml-[25px] flex min-h-8 cursor-pointer select-none items-center gap-2 rounded-md py-1 pr-2 pl-1 text-xs",
+          "-mx-1 flex min-h-8 cursor-pointer select-none items-center gap-2 rounded-md px-1 py-1 text-xs",
           "hover:bg-[hsl(var(--notfair-hover))] [&::-webkit-details-marker]:hidden",
         )}
       >
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-sm">
-          <ChevronRight className="size-3 text-muted-foreground transition-transform group-open:rotate-90" />
-        </span>
-        <StatusIcon className={cn("size-3.5 shrink-0", statusClass)} />
+        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-open:rotate-90" />
         {headMcp ? (
           <ToolBrandFavicon
             resourceUrl={headMcp.resource_url}
@@ -1191,41 +1194,25 @@ function ToolGroup({
         ) : (
           <HeadIcon className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <span
-          className={cn(
-            "rounded px-1.5 py-0.5 font-mono text-[9px] font-semibold tracking-[0.12em] uppercase",
-            headMcp
-              ? "bg-violet-500/10 text-violet-700 dark:text-violet-300"
-              : "bg-muted text-muted-foreground",
-          )}
-        >
-          {headMcp ? "MCP" : "Tool"}
-        </span>
-        {headMcp && (
-          <span className="max-w-28 truncate text-[11px] font-medium text-muted-foreground">
-            {headMcp.display_name}
-          </span>
-        )}
-        <span className="font-medium text-foreground/90">
-          {intent.verb}
-        </span>
-        {intent.target && (
+        <span className="font-medium text-foreground/85">{summaryLabel}</span>
+        {tools.length === 1 && intent.target && (
           <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-muted-foreground">
             {intent.target}
           </span>
         )}
-        <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-          {isLive ? (
-            <span className="inline-flex items-center gap-1.5">
-              <RunningDot size="sm" aria-label="" />
-              {tools.length === 1 ? "running" : `${inFlightCount} running`}
-            </span>
-          ) : (
-            <>{callLabel}</>
-          )}
-        </span>
+        {tools.length === 1 && headMcp && (
+          <span className="truncate text-[10.5px] text-muted-foreground">
+            {headMcp.display_name} MCP
+          </span>
+        )}
+        {tools.length > 1 && mcpCount > 0 && (
+          <span className="text-[10.5px] text-muted-foreground">
+            {mcpCount} MCP {mcpCount === 1 ? "call" : "calls"}
+          </span>
+        )}
+        <StatusIcon className={cn("ml-auto size-3.5 shrink-0", statusClass)} />
       </summary>
-      <div className="divide-y divide-border/50 pb-1 pl-1">
+      <div className="mt-1 divide-y divide-border/40 rounded-lg bg-muted/30 px-3 py-0.5">
         {tools.map((t) => (
           <ToolRow key={t.toolCallId} entry={t} mcpCatalog={mcpCatalog} />
         ))}
@@ -1251,7 +1238,7 @@ function ToolRow({
     : Loader2;
   const statusClass = entry.done
     ? entry.ok
-      ? "text-[hsl(var(--notfair-accent))]"
+      ? "text-muted-foreground/60"
       : "text-destructive"
     : "text-muted-foreground motion-safe:animate-spin";
   // Show the raw command/label only when it actually adds information —
@@ -1263,32 +1250,9 @@ function ToolRow({
     entry.label.trim() !== "" &&
     entry.label.trim() !== intent.target?.trim();
   return (
-    <div className="space-y-1.5 py-2.5 first:pt-1.5">
+    <div className="space-y-1.5 py-2.5">
       <div className="flex items-center gap-2 text-xs">
         <StatusIcon className={cn("size-3.5 shrink-0", statusClass)} />
-        {mcp ? (
-          <ToolBrandFavicon
-            resourceUrl={mcp.resource_url}
-            alt={mcp.display_name}
-          />
-        ) : (
-          <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <span
-          className={cn(
-            "rounded px-1 py-0.5 font-mono text-[8.5px] font-semibold tracking-[0.1em] uppercase",
-            mcp
-              ? "bg-violet-500/10 text-violet-700 dark:text-violet-300"
-              : "bg-muted text-muted-foreground",
-          )}
-        >
-          {mcp ? "MCP" : "Tool"}
-        </span>
-        {mcp && (
-          <span className="max-w-28 truncate text-[10.5px] text-muted-foreground">
-            {mcp.display_name}
-          </span>
-        )}
         <span className="font-medium text-foreground/90">
           {intent.verb}
         </span>
@@ -1297,9 +1261,20 @@ function ToolRow({
             {intent.target}
           </span>
         )}
-        <span className="ml-auto shrink-0 rounded bg-muted/70 px-1.5 py-0.5 font-mono text-[9.5px] text-muted-foreground/80">
-          {formatToolName(entry.name)}
+        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/80">
+          {mcp ? `${mcp.display_name} MCP` : "Local tool"}
         </span>
+      </div>
+      <div className="ml-5 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground/70">
+        {mcp ? (
+          <ToolBrandFavicon
+            resourceUrl={mcp.resource_url}
+            alt={mcp.display_name}
+          />
+        ) : (
+          <Icon className="size-3 shrink-0" />
+        )}
+        <span>{formatToolName(entry.name)}</span>
       </div>
       {showRawLabel && (
         <pre className="ml-5 max-h-40 overflow-auto rounded-md border border-border/50 bg-muted/40 px-2.5 py-2 font-mono text-[10.5px] leading-relaxed text-foreground/80 whitespace-pre-wrap break-all">
@@ -1307,10 +1282,7 @@ function ToolRow({
         </pre>
       )}
       {entry.done && entry.result && (
-        <div className="ml-5 font-mono text-[10.5px] leading-relaxed text-muted-foreground/90">
-          <span className="mr-1.5 text-[9px] font-semibold uppercase tracking-[0.14em]">
-            {entry.ok ? "Result" : "Error"}
-          </span>
+        <div className="ml-5 text-[11px] leading-relaxed text-muted-foreground/90">
           <span className="break-words">{entry.result}</span>
         </div>
       )}
