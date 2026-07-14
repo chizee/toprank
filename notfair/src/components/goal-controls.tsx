@@ -54,20 +54,22 @@ export function GoalControls({
           <Button
             variant="outline"
             size="sm"
+            aria-label="Run tick now"
             disabled={pending}
             onClick={() => run(() => runTickNowAction(goalId), "Tick started — watch the diary.")}
           >
             <Zap className="size-3.5" />
-            Run tick now
+            <span className="hidden sm:inline">Run tick now</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
+            aria-label="Pause goal"
             disabled={pending}
             onClick={() => run(() => pauseGoalAction(goalId), "Goal paused.")}
           >
             <Pause className="size-3.5" />
-            Pause
+            <span className="hidden sm:inline">Pause</span>
           </Button>
         </>
       )}
@@ -75,22 +77,24 @@ export function GoalControls({
         <Button
           variant="outline"
           size="sm"
+          aria-label="Resume goal"
           disabled={pending}
           onClick={() => run(() => resumeGoalAction(goalId), "Goal resumed — heartbeat restarted.")}
         >
           <Play className="size-3.5" />
-          Resume
+          <span className="hidden sm:inline">Resume</span>
         </Button>
       )}
       <Button
         variant="outline"
         size="sm"
+        aria-label="Close goal"
         disabled={pending}
         onClick={() => setKillOpen(true)}
         className="text-[hsl(0_72%_51%)]"
       >
         <Square className="size-3.5" />
-        Close goal
+        <span className="hidden sm:inline">Close goal</span>
       </Button>
 
       <Dialog open={killOpen} onOpenChange={setKillOpen}>
