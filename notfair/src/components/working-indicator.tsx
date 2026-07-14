@@ -42,10 +42,7 @@ export function WorkingIndicator({
       aria-live="polite"
       aria-label={`${agentDisplayName} ${headline}`}
       data-run-state={ended ? "complete" : "running"}
-      className={cn(
-        "border-l-2 py-1.5 pl-3",
-        ended ? "border-muted-foreground/35" : "border-violet-500/55",
-      )}
+      className="py-1.5"
     >
       <div className="flex min-w-0 items-center gap-2 text-xs">
         {ended ? (
@@ -55,7 +52,7 @@ export function WorkingIndicator({
           />
         ) : (
           <Loader2
-            className="size-3.5 shrink-0 animate-spin text-violet-500"
+            className="size-3.5 shrink-0 animate-spin text-muted-foreground"
             aria-hidden
           />
         )}
@@ -112,8 +109,8 @@ function PhaseIcon({
   return (
     <Wrench
       className={cn(
-        "size-3 shrink-0 text-violet-500",
-        animate && "animate-pulse",
+        "size-3 shrink-0 text-muted-foreground",
+        animate && "opacity-80",
       )}
       aria-hidden
     />
