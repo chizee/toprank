@@ -262,6 +262,24 @@ export function LiveTranscript({
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickyBottomRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+
+  // The stop click must reach the server: aborting the local fetch alone
+  // never stops the harness turn (disconnect != cancel), so the transcript
+  // would keep streaming the still-running reply via the poll.
+  const stopTurn = useCallback(() => {
+    abortRef.current?.abort();
+    void fetch("/api/chat/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project: projectSlug,
+        agent: agentSlug,
+        thread: threadId,
+      }),
+    }).catch(() => {
+      // Best-effort: the local abort already froze the composer's stream.
+    });
+  }, [agentSlug, projectSlug, threadId]);
   /**
    * Ids of every transcript event we've already committed to state. Acts as
    * a dedupe set for poll-result merging: two `pollOnce` calls can fire
@@ -473,7 +491,7 @@ export function LiveTranscript({
               );
               return;
             case "stop":
-              abortRef.current?.abort();
+              stopTurn();
               return;
             case "set-model": {
               // Same store the selector next to Send uses.
@@ -820,7 +838,7 @@ export function LiveTranscript({
                   type="button"
                   variant="outline"
                   size="icon"
-                  onClick={() => abortRef.current?.abort()}
+                  onClick={stopTurn}
                   className="size-9 rounded-full"
                   aria-label="Stop"
                 >

@@ -9,6 +9,10 @@ import {
   appendTranscriptEvent,
   touchSession,
 } from "@/server/sessions";
+import {
+  registerLiveTurn,
+  releaseLiveTurn,
+} from "@/server/sessions/live-turns";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -104,9 +108,11 @@ export async function POST(request: Request) {
         }
       };
 
-      // Disconnect != cancel: the harness keeps running and persisting events
-      // to the transcript. The user sees them on next attach.
-      const noAbort = new AbortController();
+      // Disconnect != cancel: the harness keeps running and persisting
+      // events to the transcript; the user sees them on next attach. Only
+      // the explicit stop endpoint (POST /api/chat/stop) aborts this
+      // controller, which SIGTERMs the harness subprocess.
+      const ctrl = registerLiveTurn(session.id);
 
       try {
         send("meta", {
@@ -125,7 +131,7 @@ export async function POST(request: Request) {
           threadId: session.id,
           harnessSessionId: session.harness_session_id,
           model,
-          signal: noAbort.signal,
+          signal: ctrl.signal,
         })) {
           if (evt.kind === "session") {
             // Remember the harness's own session id so the next turn can
@@ -134,6 +140,10 @@ export async function POST(request: Request) {
             touchSession(session.id, evt.harnessSessionId);
             continue;
           }
+          // A user-requested stop SIGTERMs the harness, which surfaces as a
+          // nonzero-exit error from the adapter. That's the stop working,
+          // not a failure — swallow it; the clean marker lands below.
+          if (evt.kind === "error" && ctrl.signal.aborted) continue;
           try {
             appendTranscriptEvent(session.id, evt.kind, evt);
           } catch (err) {
@@ -156,6 +166,19 @@ export async function POST(request: Request) {
           }
         }
 
+        if (ctrl.signal.aborted) {
+          // Honest marker: the turn ended because the user stopped it, not
+          // because the agent finished. The done lifecycle ends the
+          // transcript's "still thinking" state for late attachers.
+          appendTranscriptEvent(session.id, "error", {
+            kind: "error",
+            message: "Stopped by user.",
+          });
+          appendTranscriptEvent(session.id, "lifecycle", {
+            kind: "lifecycle",
+            phase: "done",
+          });
+        }
         touchSession(session.id);
 
         send("done", {});
@@ -163,6 +186,7 @@ export async function POST(request: Request) {
         const message = err instanceof Error ? err.message : String(err);
         send("error", { message });
       } finally {
+        releaseLiveTurn(session.id, ctrl);
         try {
           controller.close();
         } catch {

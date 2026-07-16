@@ -114,6 +114,20 @@ export function deleteSession(id: string): void {
   getDb().prepare("DELETE FROM sessions WHERE id = ?").run(id);
 }
 
+/** The session for a (project, agent, label) triple, if one exists. */
+export function findSession(
+  project_slug: string,
+  agent_id: string,
+  label: string,
+): Session | null {
+  const row = getDb()
+    .prepare(
+      "SELECT * FROM sessions WHERE project_slug = ? AND agent_id = ? AND label = ?",
+    )
+    .get(project_slug, agent_id, label) as SessionRow | undefined;
+  return row ? rowToSession(row) : null;
+}
+
 export function getSession(id: string): Session | null {
   const row = getDb()
     .prepare("SELECT * FROM sessions WHERE id = ?")
