@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 
 import {
   applyGoalPrSync,
+  listDuePrSyncs,
   listOpenGoalPrs,
   markGoalPrSyncError,
   type GoalPr,
@@ -70,7 +71,14 @@ export function parseGhPrView(payload: unknown): {
   };
 }
 
+// Single-flight per PR: the tick sync, a page-view sync, and the sweep
+// can all fire around the same moment — the first one wins, the rest
+// no-op instead of stacking duplicate gh subprocesses.
+const inFlight = new Set<string>();
+
 async function syncOnePr(pr: GoalPr): Promise<GoalPr | null> {
+  if (inFlight.has(pr.id)) return null;
+  inFlight.add(pr.id);
   try {
     const { stdout } = await execFileAsync(
       "gh",
@@ -86,6 +94,8 @@ async function syncOnePr(pr: GoalPr): Promise<GoalPr | null> {
   } catch (err) {
     markGoalPrSyncError(pr.id, err instanceof Error ? err.message : String(err));
     return null;
+  } finally {
+    inFlight.delete(pr.id);
   }
 }
 
@@ -111,4 +121,28 @@ export function maybeSyncGoalPrs(goal_id: string, maxAgeMs = 120_000): void {
   void syncGoalPrs(goal_id).catch((err) =>
     console.error(`[pr-sync] background sync failed for goal ${goal_id}:`, err),
   );
+}
+
+// The centralized sweep never overlaps itself: with many due PRs and a
+// slow gh, one pass could outlive the 30s scheduler interval.
+let sweepRunning = false;
+
+/**
+ * The centralized freshness pass, called from the 30s scheduler sweep.
+ * One cheap SQL lists every open PR whose own `next_sync_at` has arrived
+ * (the adaptive schedule stamped by the db layer on each sync); only
+ * those hit GitHub. Returns how many PRs were checked.
+ */
+export async function syncDueGoalPrs(): Promise<number> {
+  if (sweepRunning) return 0;
+  sweepRunning = true;
+  try {
+    const due = listDuePrSyncs();
+    for (const pr of due) {
+      await syncOnePr(pr);
+    }
+    return due.length;
+  } finally {
+    sweepRunning = false;
+  }
 }

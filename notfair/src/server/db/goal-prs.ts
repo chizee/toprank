@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import {
+  computeNextSyncAt,
+  SYNC_ERROR_RETRY_MS,
+} from "@/lib/pr-poll-policy";
 import { getDb } from "./db";
 
 /**
@@ -30,6 +34,12 @@ export type GoalPr = {
   merged_at: string | null;
   last_synced_at: string | null;
   sync_error: string | null;
+  /** When the centralized sweep should next check GitHub. NULL for
+   *  terminal PRs (merged/closed) — they are never synced again. */
+  next_sync_at: string | null;
+  /** Last time a sync OBSERVED a change (state / review / comments).
+   *  Drives the adaptive poll interval in pr-poll-policy. */
+  last_activity_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -51,8 +61,8 @@ export function createGoalPr(input: {
   const now = new Date().toISOString();
   const id = randomUUID();
   db.prepare(
-    `INSERT OR IGNORE INTO goal_prs (id, goal_id, action_id, url, title, branch, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO goal_prs (id, goal_id, action_id, url, title, branch, next_sync_at, last_activity_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.goal_id,
@@ -60,6 +70,9 @@ export function createGoalPr(input: {
     input.url,
     input.title,
     input.branch ?? null,
+    // Immediately due: a fresh registration should reflect GitHub asap.
+    now,
+    now,
     now,
     now,
   );
@@ -132,12 +145,29 @@ export function applyGoalPrSync(
   },
 ): GoalPr | null {
   const db = getDb();
+  const current = getGoalPr(id);
+  if (!current) return null;
   const now = new Date().toISOString();
+
+  // "Activity" = any observable change on GitHub since the last sync.
+  // It resets the adaptive poll clock so hot PRs poll fast again.
+  const changed =
+    current.state !== sync.state ||
+    current.review_decision !== sync.review_decision ||
+    current.comment_count !== sync.comment_count ||
+    current.is_draft !== sync.is_draft;
+  const last_activity_at = changed
+    ? now
+    : (current.last_activity_at ?? current.created_at);
+  const next_sync_at =
+    sync.state === "open" ? computeNextSyncAt(now, last_activity_at) : null;
+
   db.prepare(
     `UPDATE goal_prs
      SET state = ?, title = COALESCE(?, title), review_decision = ?,
          comment_count = ?, is_draft = ?, merged_at = ?,
-         last_synced_at = ?, sync_error = NULL, updated_at = ?
+         last_synced_at = ?, sync_error = NULL,
+         next_sync_at = ?, last_activity_at = ?, updated_at = ?
      WHERE id = ?`,
   ).run(
     sync.state,
@@ -147,6 +177,8 @@ export function applyGoalPrSync(
     sync.is_draft ? 1 : 0,
     sync.merged_at,
     now,
+    next_sync_at,
+    last_activity_at,
     now,
     id,
   );
@@ -154,10 +186,28 @@ export function applyGoalPrSync(
 }
 
 export function markGoalPrSyncError(id: string, error: string): void {
-  const now = new Date().toISOString();
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const retryIso = new Date(now + SYNC_ERROR_RETRY_MS).toISOString();
   getDb()
     .prepare(
-      "UPDATE goal_prs SET sync_error = ?, last_synced_at = ?, updated_at = ? WHERE id = ?",
+      "UPDATE goal_prs SET sync_error = ?, last_synced_at = ?, next_sync_at = ?, updated_at = ? WHERE id = ?",
     )
-    .run(error.slice(0, 500), now, now, id);
+    .run(error.slice(0, 500), nowIso, retryIso, nowIso, id);
+}
+
+/**
+ * Open PRs due for a freshness check, across every project — the
+ * centralized sweep's work list. `next_sync_at IS NULL` on an open row
+ * (pre-policy data) counts as due so it self-heals into the schedule.
+ */
+export function listDuePrSyncs(nowIso = new Date().toISOString()): GoalPr[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM goal_prs
+       WHERE state = 'open' AND (next_sync_at IS NULL OR next_sync_at <= ?)
+       ORDER BY next_sync_at ASC`,
+    )
+    .all(nowIso) as GoalPrRow[];
+  return rows.map(mapRow);
 }

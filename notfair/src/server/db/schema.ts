@@ -205,11 +205,18 @@ CREATE TABLE IF NOT EXISTS goal_prs (
   merged_at       TEXT,
   last_synced_at  TEXT,
   sync_error      TEXT,
+  -- Centralized freshness sweep: the 30s scheduler syncs a PR when
+  -- next_sync_at arrives. The interval adapts to activity (fast after
+  -- last_activity_at, backing off toward an hourly cap); terminal PRs
+  -- carry NULL and are never synced again.
+  next_sync_at     TEXT,
+  last_activity_at TEXT,
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   UNIQUE(goal_id, url)
 );
 CREATE INDEX IF NOT EXISTS idx_goal_prs_goal ON goal_prs(goal_id, state);
+CREATE INDEX IF NOT EXISTS idx_goal_prs_due ON goal_prs(state, next_sync_at);
 
 CREATE TABLE IF NOT EXISTS goal_ticks (
   id           TEXT PRIMARY KEY,
