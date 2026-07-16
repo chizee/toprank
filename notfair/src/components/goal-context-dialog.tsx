@@ -156,7 +156,7 @@ export function GoalContextDialog({
                     <span className="text-[hsl(var(--notfair-ink-4))]"> of </span>
                     {fmtK(window)}
                     <span className="ml-2 text-[13px] font-normal text-[hsl(var(--notfair-ink-3))]">
-                      {pct(state.total).toFixed(1)}% used
+                      {((state.total / window) * 100).toFixed(1)}% used
                     </span>
                   </>
                 ) : (
@@ -181,6 +181,26 @@ export function GoalContextDialog({
                 </select>
               </label>
             </div>
+
+            {/* Near/over the window: say what actually happens, before the
+                user has to wonder. The harness compacts on its own; the
+                goal's operating state never lives in the window. */}
+            {window !== undefined && state.total >= window * 0.8 && (
+              <div className="rounded-md bg-[hsl(var(--notfair-warn-soft))] px-3 py-2 text-[12px] leading-relaxed text-[hsl(var(--notfair-warn))]">
+                <b>
+                  {state.total >= window
+                    ? "This conversation has outgrown the window."
+                    : "Approaching the window."}
+                </b>{" "}
+                The harness automatically compacts older turns to keep the
+                thread going — nothing breaks, but compacted turns are
+                summarized and lose detail. The goal itself is not at risk:
+                its metric, actions, and memory live in NotFair&rsquo;s
+                database, the agent&rsquo;s instructions are re-sent every
+                turn, and every check runs from a fresh, self-contained
+                brief.
+              </div>
+            )}
 
             {/* Stacked bar of the WHOLE window; the muted tail is free space. */}
             <div

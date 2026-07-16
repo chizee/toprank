@@ -3,13 +3,20 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
-import { getGoalForAgent, getLatestGoalForAgent } from "@/server/db/goals";
+import {
+  getGoalForAgent,
+  getLatestGoalForAgent,
+  listGoalLearnings,
+} from "@/server/db/goals";
 import { listSessionsForAgent } from "@/server/sessions/view";
 import { readTranscriptTail } from "@/server/sessions/transcript-tail";
 import { getMcpCatalog } from "@/server/mcp-catalog";
+import { DEFAULT_HARNESS_ADAPTER, requireAdapter } from "@/server/adapters/registry";
 import { projectHref } from "@/lib/project-href";
 import { goalLabel } from "@/lib/goal-label";
 import { LiveTranscript } from "@/components/live-transcript";
+import { GoalContextDialog } from "@/components/goal-context-dialog";
+import { GoalMemoryDialog } from "@/components/goal-memory-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +51,12 @@ export default async function CheckTranscriptPage({
     display_name: m.display_name,
     resource_url: m.resource_url,
   }));
+  const modelOptions = await requireAdapter(
+    project.harness_adapter ?? DEFAULT_HARNESS_ADAPTER,
+  ).listModels();
+  // A check runs as the same agent as the goal chat: identical identity,
+  // tools, and learnings ledger — only the conversation is the tick's own.
+  const learnings = goal ? listGoalLearnings(goal.id, 100) : [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -58,6 +71,26 @@ export default async function CheckTranscriptPage({
         <h1 className="m-0 min-w-0 truncate text-[14px] font-semibold">
           {goal ? goalLabel(goal) : resolved.name} — check log
         </h1>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <GoalContextDialog
+            projectSlug={slug}
+            agentId={resolved.agent_id}
+            threadId={threadId}
+            models={modelOptions.map((m) => ({
+              value: m.value,
+              label: m.label,
+              context_window: m.context_window,
+            }))}
+          />
+          <GoalMemoryDialog
+            entries={learnings.map((l) => ({
+              id: l.id,
+              body: l.body,
+              confidence: l.confidence,
+              created_at: l.created_at,
+            }))}
+          />
+        </div>
       </header>
       <div className="min-h-0 flex-1">
         <LiveTranscript
