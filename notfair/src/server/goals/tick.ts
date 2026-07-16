@@ -12,7 +12,7 @@ import {
   dueGoals,
   finishGoalTick,
   getGoal,
-  getLastFinishedTick,
+  getLastAgentTick,
   isPastDeadline,
   isTargetMet,
   listActionsDueForReview,
@@ -22,10 +22,10 @@ import {
   loggedSpendTotal,
   markGoalTicked,
   recordMetricSnapshot,
-  setNextTickAt,
   type Goal,
   type GoalAction,
   type GoalLearning,
+  type GoalMode,
   type GoalTick,
   type GoalTickTrigger,
 } from "@/server/db/goals";
@@ -41,6 +41,13 @@ import { measureGoalMetric, type MetricMeasurement } from "./metric";
  * record the diary row. Heartbeats are driven by goals.next_tick_at via
  * the shared 30s scheduler interval; manual runs and approval wake-ups
  * call runGoalTick directly.
+ *
+ * Heartbeats never skip a day: the mechanical half (measure → chart
+ * snapshot → PR sync → diary row) runs on every cadence beat so the user
+ * always sees today's check and today's chart point. Only the agent turn
+ * is conditional — when everything is provably in an observation window
+ * (decideAgentTurn), the check is recorded as a no-op instead of waking
+ * an LLM to conclude "nothing to do until Jul 27".
  */
 
 const MAX_SUMMARY = 4000;
@@ -232,6 +239,68 @@ export function buildTickMessage(ctx: TickContext): string {
   return lines.join("\n");
 }
 
+export type AgentTurnDecision =
+  | { wake: true; reason: string }
+  | { wake: false; noopSummary: string };
+
+/**
+ * Does this check need the agent, or is it observe-only? Pure — decided
+ * fresh on every heartbeat from live state (unlike the old smart sleep,
+ * which decided once and slept blind through PR reopens or new chat-driven
+ * work). Observe-only requires POSITIVE proof there is nothing to do; any
+ * ambiguity wakes the agent.
+ */
+export function decideAgentTurn(input: {
+  trigger: GoalTickTrigger;
+  hasExtraContext: boolean;
+  measurementOk: boolean;
+  mode: GoalMode;
+  targetMet: boolean | null;
+  pastDeadline: boolean;
+  actionsDueForReview: number;
+  gatedActions: number;
+  /** Earliest review_after among gated actions (they sort ASC). */
+  earliestGateEnd: string | null;
+  openPrs: number;
+}): AgentTurnDecision {
+  if (input.trigger !== "heartbeat" || input.hasExtraContext) {
+    return { wake: true, reason: `${input.trigger} trigger` };
+  }
+  if (!input.measurementOk) {
+    return { wake: true, reason: "measurement failed — agent must diagnose" };
+  }
+  if (input.actionsDueForReview > 0) {
+    return { wake: true, reason: "actions due for review" };
+  }
+  if (input.openPrs > 0) {
+    return { wake: true, reason: "open PR needs attention on cadence" };
+  }
+  if (input.pastDeadline) {
+    return { wake: true, reason: "deadline passed — stop condition" };
+  }
+  if (input.mode === "maintain" ? input.targetMet !== true : input.targetMet !== false) {
+    return {
+      wake: true,
+      reason:
+        input.mode === "maintain"
+          ? "metric drifted off target"
+          : "target met (or unknown) — stop condition to verify",
+    };
+  }
+  if (input.gatedActions === 0) {
+    return { wake: true, reason: "no observation window open — agent should be working" };
+  }
+  const n = input.gatedActions;
+  return {
+    wake: false,
+    noopSummary:
+      `No-op check — metric measured and recorded; the agent was not woken. ` +
+      `${n} action${n === 1 ? " is" : "s are"} still inside ${n === 1 ? "its" : "their"} observation window` +
+      `${input.earliestGateEnd ? ` (next review ${input.earliestGateEnd.slice(0, 10)})` : ""}, ` +
+      `nothing is due for review, and there are no open PRs.`,
+  };
+}
+
 /**
  * Run one tick for a goal. Fire-and-forget safe: never throws; every
  * failure lands on the goal_ticks row so the diary shows it.
@@ -292,20 +361,46 @@ async function runGoalTickInner(
     metric_error: measurement.ok ? null : measurement.error,
   });
 
+  const actionsDueForReview = listActionsDueForReview(goal.id, nowIso);
+  const gatedActions = listGatedActions(goal.id, nowIso);
+  const pullRequests = listGoalPrs(goal.id, 10);
+  const targetMet = isTargetMet(freshGoal);
+  const pastDeadline = isPastDeadline(freshGoal, nowIso);
+
+  const decision = decideAgentTurn({
+    trigger,
+    hasExtraContext: Boolean(opts.extraContext),
+    measurementOk: measurement.ok,
+    mode: freshGoal.mode,
+    targetMet,
+    pastDeadline,
+    actionsDueForReview: actionsDueForReview.length,
+    gatedActions: gatedActions.length,
+    earliestGateEnd: gatedActions[0]?.review_after ?? null,
+    openPrs: pullRequests.filter((pr) => pr.state === "open").length,
+  });
+
+  if (!decision.wake) {
+    // Observe-only check: the diary row and chart point are already
+    // recorded above; no session, no tokens.
+    finishGoalTick(tick.id, "done", decision.noopSummary);
+    return;
+  }
+
   const message = buildTickMessage({
     goal: freshGoal,
     tickNumber,
     nowIso,
     measurement,
-    targetMet: isTargetMet(freshGoal),
-    pastDeadline: isPastDeadline(freshGoal, nowIso),
-    actionsDueForReview: listActionsDueForReview(goal.id, nowIso),
-    gatedActions: listGatedActions(goal.id, nowIso),
+    targetMet,
+    pastDeadline,
+    actionsDueForReview,
+    gatedActions,
     gatedByOthers: listGatedActionsForOtherAgents(goal.project_slug, goal.id, nowIso),
     loggedSpendUsd: loggedSpendTotal(goal.id),
     recentLearnings: listGoalLearnings(goal.id, 8),
-    lastTick: getLastFinishedTick(goal.id),
-    pullRequests: listGoalPrs(goal.id, 6),
+    lastTick: getLastAgentTick(goal.id),
+    pullRequests,
     extraContext: opts.extraContext,
   });
 
@@ -320,38 +415,10 @@ async function runGoalTickInner(
     });
     attachTickSession(tick.id, sessionId);
     finishGoalTick(tick.id, "done", summary);
-    smartSleep(goal.id);
   } catch (err) {
     const messageText = err instanceof Error ? err.message : String(err);
     finishGoalTick(tick.id, "failed", messageText);
   }
-}
-
-/**
- * Smart sleep: when the tick ends with no reviews pending and every open
- * mutation still inside its observation window, the next heartbeat is
- * pushed to the earliest review date — waking an LLM daily to conclude
- * "nothing to do until Jul 16" burns tokens for nothing. Never moves the
- * heartbeat earlier than the cron already scheduled, never past the
- * deadline, and the user's "Run tick now" always works regardless.
- */
-function smartSleep(goalId: string): void {
-  const goal = getGoal(goalId);
-  if (!goal || goal.status !== "active" || !goal.next_tick_at) return;
-  const nowIso = new Date().toISOString();
-  if (listActionsDueForReview(goal.id, nowIso).length > 0) return;
-  // An open PR means external state can flip any day (review comments,
-  // merge) and the agent must react on cadence — never oversleep it.
-  if (listGoalPrs(goal.id, 10).some((pr) => pr.state === "open")) return;
-  const gated = listGatedActions(goal.id, nowIso);
-  if (gated.length === 0) return;
-  const earliestReview = gated
-    .map((a) => a.review_after!)
-    .sort()[0]!;
-  if (earliestReview <= goal.next_tick_at) return;
-  const capped =
-    goal.deadline && goal.deadline < earliestReview ? goal.deadline : earliestReview;
-  setNextTickAt(goal.id, capped);
 }
 
 /**

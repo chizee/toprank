@@ -448,13 +448,6 @@ export function listGatedActionsForOtherAgents(
     .all(project_slug, goal_id, nowIso) as Array<GoalAction & { agent_id: string }>;
 }
 
-/** Directly set the next heartbeat (smart sleep). Never used to move it earlier. */
-export function setNextTickAt(id: string, iso: string): void {
-  getDb()
-    .prepare("UPDATE goals SET next_tick_at = ?, updated_at = ? WHERE id = ? AND status = 'active'")
-    .run(iso, now(), id);
-}
-
 /**
  * Status transitions outside the intake→proposed→active happy path:
  * pause/resume and the three terminal states. Terminal states are
@@ -785,11 +778,18 @@ export function listGoalTicks(goal_id: string, limit = 30): GoalTick[] {
     .all(goal_id, limit) as GoalTick[];
 }
 
-export function getLastFinishedTick(goal_id: string): GoalTick | null {
+/**
+ * Most recent finished tick that carries context worth briefing the next
+ * turn with: agent turns (session attached) and failures. Observe-only
+ * no-op checks (done, no session) are skipped — a week of "no-op check"
+ * rows must not evict the agent's last real summary from the brief.
+ */
+export function getLastAgentTick(goal_id: string): GoalTick | null {
   const row = getDb()
     .prepare(
       `SELECT * FROM goal_ticks
         WHERE goal_id = ? AND status IN ('done','failed')
+          AND NOT (status = 'done' AND session_id IS NULL)
         ORDER BY tick_number DESC LIMIT 1`,
     )
     .get(goal_id);
