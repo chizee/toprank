@@ -13,15 +13,20 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { SidebarBrand } from "@/components/sidebar-brand";
-import { BookOpen, Plug, Settings, Target, type LucideIcon } from "lucide-react";
+import { BookOpen, LayoutGrid, Plug, Plus, Settings, type LucideIcon } from "lucide-react";
 import { listProjects } from "@/server/db/projects";
 import { getActiveProject } from "@/server/active-project";
 import { listProjectAgents } from "@/server/agent-meta";
-import { getGoalForAgent, getLatestGoalForAgent, type GoalStatus } from "@/server/db/goals";
+import {
+  getPinnedGoalIds,
+  listGoals,
+  listLiveGoals,
+  type GoalStatus,
+} from "@/server/db/goals";
 import { colorForAgentSlug } from "@/lib/agent-colors";
+import { SidebarGoalItem } from "@/components/sidebar-goal-item";
 import { readHarnessUsage } from "@/server/harness-usage";
 import { projectHref } from "@/lib/project-href";
-import { cn } from "@/lib/utils";
 import { goalLabel } from "@/lib/goal-label";
 import { ProjectSwitcher } from "./project-switcher";
 import { HarnessFooter } from "./harness-footer";
@@ -40,21 +45,30 @@ const NAV: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-/** Compact status dot per goal state — the sidebar's only status signal. */
-const GOAL_DOT: Record<GoalStatus, string> = {
+/** Compact status dot per live goal state — the rail's only status signal.
+ *  Closed goals never render here; their outcomes live on the board. */
+const GOAL_DOT: Partial<Record<GoalStatus, string>> = {
   intake: "ns-dot-warn",
   proposed: "ns-dot-warn",
   active: "ns-dot-live",
   paused: "ns-dot-mute",
-  achieved: "ns-dot-on",
-  failed: "ns-dot-err",
-  killed: "ns-dot-mute",
 };
 
 export async function AppSidebar() {
   const projects = listProjects();
   const active = await getActiveProject();
   const agentEntries = active ? await listProjectAgents(active.slug) : [];
+  // The rail shows only non-closed goals — an achieved/failed/closed goal
+  // moves to the All-goals board instead of lingering in daily nav.
+  // Pinned goals float to the top; the rest keep creation order.
+  const liveGoals = active ? listLiveGoals(active.slug) : [];
+  const pinnedIds = active ? getPinnedGoalIds(active.slug) : new Set<string>();
+  const railGoals = [
+    ...liveGoals.filter((g) => pinnedIds.has(g.id)),
+    ...liveGoals.filter((g) => !pinnedIds.has(g.id)),
+  ];
+  const totalGoals = active ? listGoals(active.slug).length : 0;
+  const agentBySlug = new Map(agentEntries.map((a) => [a.agent_id, a]));
   // Best-effort fetch of harness usage. For Codex this hits the
   // chatgpt.com wham/usage endpoint (cached 60s in-process); for
   // Claude Code it just reads the local stats-cache. Either failure
@@ -92,33 +106,45 @@ export async function AppSidebar() {
             <SidebarGroupLabel>Goals</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {agentEntries.map((a) => {
-                  const goal = getGoalForAgent(a.agent_id) ?? getLatestGoalForAgent(a.agent_id);
-                  const color = colorForAgentSlug(a.slug);
-                  return (
-                    <SidebarMenuItem key={a.agent_id}>
-                      <SidebarMenuButton asChild>
-                        <Link href={projectHref(active.slug, `/goals/${a.slug}`)}>
-                          <span
-                            className={cn("ns-dot", goal ? GOAL_DOT[goal.status] : "ns-dot-mute")}
-                            aria-hidden
-                          />
-                          <span className={cn("truncate", color.label)}>
-                            {goal ? goalLabel(goal) : a.name}
-                          </span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
                     <Link href={projectHref(active.slug, "")}>
-                      <Target />
+                      <Plus />
                       <span>New goal…</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                {railGoals.map((goal) => {
+                  const agent = agentBySlug.get(goal.agent_id);
+                  if (!agent) return null;
+                  const color = colorForAgentSlug(agent.slug);
+                  return (
+                    <SidebarGoalItem
+                      key={goal.id}
+                      href={projectHref(active.slug, `/goals/${agent.slug}`)}
+                      homeHref={projectHref(active.slug, "")}
+                      goalId={goal.id}
+                      label={goalLabel(goal)}
+                      status={goal.status as "intake" | "proposed" | "active" | "paused"}
+                      pinned={pinnedIds.has(goal.id)}
+                      dotClass={GOAL_DOT[goal.status] ?? "ns-dot-mute"}
+                      labelClass={color.label}
+                    />
+                  );
+                })}
+                {totalGoals > 0 && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link href={projectHref(active.slug, "/goals")}>
+                        <LayoutGrid />
+                        <span>All goals</span>
+                        <span className="ml-auto text-[11px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
+                          {totalGoals}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

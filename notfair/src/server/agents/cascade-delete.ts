@@ -81,6 +81,52 @@ export async function getProjectDeletionSummary(
 }
 
 /**
+ * Hard-delete ONE agent's artifacts: unregister its MCP servers from the
+ * harness config, drop its workspace dir, and delete its sessions
+ * (transcripts cascade). Goal rows are the caller's job
+ * (`deleteGoalsForAgent`) — this module owns the filesystem/harness side.
+ */
+export async function cascadeDeleteAgentArtifacts(
+  project_slug: string,
+  agent_id: string,
+): Promise<void> {
+  const project = getProject(project_slug);
+  const adapter = project ? requireAdapter(project.harness_adapter) : null;
+
+  if (adapter) {
+    const { GOALS_MCP_KEY, BROWSER_MCP_KEY } = await import(
+      "@/server/mcp-server/registration"
+    );
+    const serverNames = [
+      ...getMcpCatalog(project_slug).map((spec) => spec.key),
+      GOALS_MCP_KEY,
+      BROWSER_MCP_KEY,
+    ];
+    for (const serverName of serverNames) {
+      try {
+        await adapter.unregisterMcp({
+          serverName,
+          projectSlug: project_slug,
+          agentId: agent_id,
+        });
+      } catch {
+        // best-effort
+      }
+    }
+  }
+
+  try {
+    await rm(workspaceDirFor(agent_id), { recursive: true, force: true });
+  } catch (err) {
+    console.error(`[delete] failed to rm workspace ${agent_id}:`, err);
+  }
+
+  getDb()
+    .prepare("DELETE FROM sessions WHERE project_slug = ? AND agent_id = ?")
+    .run(project_slug, agent_id);
+}
+
+/**
  * Hard-delete every artifact tied to a project that lives outside the
  * `projects` row's own FK cascade: agent workspace dirs, sessions +
  * transcripts, MCP tokens. The caller is expected to then call

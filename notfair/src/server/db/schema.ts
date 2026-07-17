@@ -177,6 +177,14 @@ CREATE TABLE IF NOT EXISTS goal_support_metric_snapshots (
 CREATE INDEX IF NOT EXISTS idx_goal_support_snapshots_metric
   ON goal_support_metric_snapshots(metric_id, created_at);
 
+-- Sidebar pins: pinned goals sort to the top of the goal rail. A separate
+-- table (not a column on goals) because schema boot is CREATE-IF-NOT-EXISTS
+-- only: existing databases never gain columns.
+CREATE TABLE IF NOT EXISTS goal_pins (
+  goal_id    TEXT PRIMARY KEY REFERENCES goals(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS goal_learnings (
   id      TEXT PRIMARY KEY,
   goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,

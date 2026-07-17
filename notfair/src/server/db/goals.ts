@@ -414,6 +414,52 @@ export function amendGoal(id: string, input: AmendGoalInput): Goal | null {
   return getGoal(id);
 }
 
+/**
+ * Rename the goal's display label. Works in any status — a closed goal's
+ * label is still the user's handle for it in history views.
+ */
+export function renameGoal(id: string, short_label: string): Goal | null {
+  const r = getDb()
+    .prepare("UPDATE goals SET short_label = ?, updated_at = ? WHERE id = ?")
+    .run(short_label, now(), id);
+  if (r.changes === 0) return null;
+  return getGoal(id);
+}
+
+/**
+ * Hard-delete an agent's goal rows. FK cascades take actions, snapshots,
+ * learnings, ticks, PRs, and pins with them. Agent = goal, so callers pair
+ * this with the agent's workspace/session cascade.
+ */
+export function deleteGoalsForAgent(agent_id: string): number {
+  return getDb().prepare("DELETE FROM goals WHERE agent_id = ?").run(agent_id).changes;
+}
+
+// ── pins ─────────────────────────────────────────────────────────────────
+
+export function setGoalPinned(id: string, pinned: boolean): void {
+  const db = getDb();
+  if (pinned) {
+    db.prepare(
+      "INSERT OR IGNORE INTO goal_pins (goal_id, created_at) VALUES (?, ?)",
+    ).run(id, now());
+  } else {
+    db.prepare("DELETE FROM goal_pins WHERE goal_id = ?").run(id);
+  }
+}
+
+/** Pinned goal ids for a project (sidebar sorts these first). */
+export function getPinnedGoalIds(project_slug: string): Set<string> {
+  const rows = getDb()
+    .prepare(
+      `SELECT p.goal_id FROM goal_pins p
+        JOIN goals g ON g.id = p.goal_id
+        WHERE g.project_slug = ?`,
+    )
+    .all(project_slug) as Array<{ goal_id: string }>;
+  return new Set(rows.map((r) => r.goal_id));
+}
+
 /** Total incremental spend the agent has logged (non-abandoned actions). */
 export function loggedSpendTotal(goal_id: string): number {
   const row = getDb()

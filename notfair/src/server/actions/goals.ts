@@ -3,11 +3,15 @@
 import { revalidatePath } from "next/cache";
 import {
   createGoal,
+  deleteGoalsForAgent,
   getGoal,
   getGoalForAgent,
+  renameGoal,
+  setGoalPinned,
   setGoalStatus,
   startGoalLoop,
 } from "@/server/db/goals";
+import { cascadeDeleteAgentArtifacts } from "@/server/agents/cascade-delete";
 import { getProject } from "@/server/db/projects";
 import {
   goalAgentIdFor,
@@ -152,6 +156,44 @@ export async function killGoalAction(
 ): Promise<GoalActionResult> {
   const goal = setGoalStatus(goal_id, "killed", reason?.trim() || "closed by user");
   if (!goal) return { ok: false, error: "Goal not found." };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Rename the goal's display label (the sidebar/board handle). */
+export async function renameGoalAction(
+  goal_id: string,
+  label: string,
+): Promise<GoalActionResult> {
+  const trimmed = label.trim();
+  if (!trimmed) return { ok: false, error: "Name can't be empty." };
+  const goal = renameGoal(goal_id, trimmed);
+  if (!goal) return { ok: false, error: "Goal not found." };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Pin/unpin the goal to the top of the sidebar rail. */
+export async function setGoalPinnedAction(
+  goal_id: string,
+  pinned: boolean,
+): Promise<GoalActionResult> {
+  if (!getGoal(goal_id)) return { ok: false, error: "Goal not found." };
+  setGoalPinned(goal_id, pinned);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * Delete the goal AND its agent — workspace dir, chat history, MCP
+ * registrations, every goal row. Unlike closing (killGoalAction), nothing
+ * survives; this is the "it never happened" path.
+ */
+export async function deleteGoalAction(goal_id: string): Promise<GoalActionResult> {
+  const goal = getGoal(goal_id);
+  if (!goal) return { ok: false, error: "Goal not found." };
+  await cascadeDeleteAgentArtifacts(goal.project_slug, goal.agent_id);
+  deleteGoalsForAgent(goal.agent_id);
   revalidatePath("/", "layout");
   return { ok: true };
 }
