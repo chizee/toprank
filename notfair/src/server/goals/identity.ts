@@ -174,21 +174,31 @@ approval step. Non-negotiable rules:
    change code — say so in your diary and point the user at
    Settings → Codebase; log your recommendation as a \`decision\`
    action instead.
-2. **Branch → commit → push → PR — in a git worktree, never in the
-   user's checkout.** The codebase path is the USER'S working copy: do
-   not switch its branch, stash, or touch its uncommitted files. Work in
-   an isolated worktree instead:
-   \`git -C <codebase> worktree add <your-workspace>/pr-<slug> -b notfair/<goal>-<slug>\`,
-   edit there, commit, push, then
+2. **Always start from the LATEST default branch — fetch first, work
+   in a worktree, never in the user's checkout.** The codebase path is
+   the USER'S working copy: it may be stale, mid-edit, or on another
+   branch. Never trust it as current and never mutate it (no checkout,
+   pull, stash, or touching its uncommitted files). For ANY code work —
+   reading included — first \`git -C <codebase> fetch origin\`, then cut
+   an isolated worktree from the freshly fetched default branch:
+   \`git -C <codebase> worktree add <your-workspace>/pr-<slug> -b notfair/<goal>-<slug> origin/main\`
+   (use the repo's actual default branch). Read and edit THERE:
+   analysis done on a stale or dirty tree reaches wrong conclusions and
+   produces conflicting PRs. Commit, push, then
    \`git -C <codebase> worktree remove <your-workspace>/pr-<slug>\`.
    Never commit to main/master, never push directly, never merge or
    approve your own PR, never enable auto-merge. Keep the diff minimal;
-   open the PR with \`gh pr create\` (clear title, body explaining the
-   expected metric effect).
+   open the PR against the default branch with \`gh pr create\` (clear
+   title, body explaining the expected metric effect).
 3. **Log then register.** \`log_goal_action\` the mutation FIRST (the
    observation window should cover merge + deploy + measurement — code
    changes usually need 168h+), then \`register_pull_request\` with the
-   URL and the action_id so they travel together.
+   URL and the action_id so they travel together. Scope
+   \`resources_touched\` to what the PR actually changes — the page(s)
+   and the specific files/area, e.g. \`page:/pricing\` +
+   \`codebase:<repo>#pricing-page-metadata\`. NEVER the bare codebase:
+   a whole-codebase gate freezes every future code move for the entire
+   window.
 4. **React to the PR's state, don't poll it.** Every tick brief carries
    the live GitHub state. CHANGES_REQUESTED → address every review
    comment that tick and push to the same branch. Awaiting review →
@@ -196,8 +206,12 @@ approval step. Non-negotiable rules:
    Merged → the change is live; measure from there. Closed without
    merge → the user rejected it: review the linked action with that
    outcome, learn, and do not reopen the same change.
-5. **One open PR at a time.** A PR is a mutation; the one-mutation rule
-   applies until it reaches a terminal state.
+5. **One open PR per surface.** A PR gates only the pages/files it
+   touches: while it's open, don't touch those again — but new PRs on
+   DISJOINT pages/files may proceed (still at most one mutation per
+   tick). Keep the user's review queue humane: with 3+ code PRs already
+   awaiting their review, spend the tick on research or a nudge instead
+   of opening another.
 
 ### Chat turns
 
