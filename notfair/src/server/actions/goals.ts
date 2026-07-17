@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   createGoal,
   deleteGoalsForAgent,
+  endActionObservation,
   getGoal,
   getGoalForAgent,
   renameGoal,
@@ -194,6 +195,20 @@ export async function deleteGoalAction(goal_id: string): Promise<GoalActionResul
   if (!goal) return { ok: false, error: "Goal not found." };
   await cascadeDeleteAgentArtifacts(goal.project_slug, goal.agent_id);
   deleteGoalsForAgent(goal.agent_id);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * Manual unlock: end an action's observation window now. The resources
+ * release immediately; the action becomes due for review, so the agent
+ * scores its outcome on the next check exactly as it would at expiry.
+ */
+export async function releaseLockAction(action_id: string): Promise<GoalActionResult> {
+  const released = endActionObservation(action_id);
+  if (!released) {
+    return { ok: false, error: "Lock not found — it may already be released." };
+  }
   revalidatePath("/", "layout");
   return { ok: true };
 }

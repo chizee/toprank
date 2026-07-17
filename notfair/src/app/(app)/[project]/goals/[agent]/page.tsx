@@ -5,10 +5,9 @@ import { resolveAgentBySlug } from "@/server/agent-meta";
 import {
   getGoalForAgent,
   getLatestGoalForAgent,
-  listGatedActions,
   listGoalActions,
+  listOpenGoalActions,
   loggedSpendTotal,
-  listActionsDueForReview,
   listGoalLearnings,
   listGoalTicks,
   listMetricSnapshots,
@@ -26,7 +25,6 @@ import { DEFAULT_HARNESS_ADAPTER, requireAdapter } from "@/server/adapters/regis
 import { projectHref } from "@/lib/project-href";
 import { goalLabel } from "@/lib/goal-label";
 import { formatMetric } from "@/lib/format-metric";
-import { timeAgo } from "@/lib/time-ago";
 import { GoalMemoryDialog } from "@/components/goal-memory-dialog";
 import { Markdown } from "@/components/markdown";
 import { GoalContextDialog } from "@/components/goal-context-dialog";
@@ -40,13 +38,16 @@ import { GoalProgressChart } from "@/components/goal-progress-chart";
 import { GoalChecksStrip } from "@/components/goal-checks-strip";
 import { GoalChecksList } from "@/components/goal-checks-list";
 import { RailSection } from "@/components/rail-section";
-import { listGoalPrs, type GoalPr } from "@/server/db/goal-prs";
+import { listGoalPrs } from "@/server/db/goal-prs";
 import {
   listSupportMetrics,
   listSupportMetricSnapshots,
   type GoalSupportMetric,
 } from "@/server/db/goal-support-metrics";
 import { GoalSparkline } from "@/components/goal-sparkline";
+import { GoalMovesDialog } from "@/components/goal-moves-dialog";
+import { type MoveRow } from "@/components/goal-moves";
+import { GoalPrsDialog, type PrRow } from "@/components/goal-prs-dialog";
 import { maybeSyncGoalPrs } from "@/server/goals/pr-sync";
 import { buildCheckSquares, currentStreak } from "@/lib/goal-streak";
 
@@ -113,6 +114,32 @@ export default async function GoalPage({
   const live = goal.status === "intake" || goal.status === "proposed" || goal.status === "active" || goal.status === "paused";
   const learnings = listGoalLearnings(goal.id, 100);
 
+  // Header dialogs: the moves journal (every open action, whatever its
+  // stage) and open PRs. Kick a background GitHub sync when PR rows look
+  // stale — the page's auto-refresh poll picks up the fresh state.
+  const moveRows: MoveRow[] = listOpenGoalActions(goal.id).map((a) => ({
+    action_id: a.id,
+    kind: a.kind,
+    description: a.description,
+    resources: JSON.parse(a.resources_touched_json || "[]") as string[],
+    made_at: a.created_at,
+    observe_until: a.review_after,
+  }));
+  const openPrs = listGoalPrs(goal.id, 100).filter((pr) => pr.state === "open");
+  if (openPrs.length > 0) maybeSyncGoalPrs(goal.id);
+  const prRows: PrRow[] = openPrs.map((pr) => ({
+    id: pr.id,
+    url: pr.url,
+    title: pr.title,
+    state: pr.state,
+    review_decision: pr.review_decision,
+    comment_count: pr.comment_count,
+    is_draft: Boolean(pr.is_draft),
+    branch: pr.branch,
+    created_at: pr.created_at,
+    sync_error: pr.sync_error,
+  }));
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Every pre-terminal state before START changes server-side via
@@ -153,6 +180,8 @@ export default async function GoalPage({
                 created_at: l.created_at,
               }))}
             />
+            <GoalMovesDialog moves={moveRows} nextCheckAt={goal.next_tick_at} />
+            <GoalPrsDialog prs={prRows} />
           </div>
           {live && (
             <GoalControls
@@ -199,19 +228,10 @@ function GoalRail({
 }) {
   const snapshots = listMetricSnapshots(goal.id, 400);
   const ticks = listGoalTicks(goal.id, 60);
-  const dueActions = listActionsDueForReview(goal.id);
-  const gatedActions = listGatedActions(goal.id);
   const allActions = listGoalActions(goal.id, 100);
   const targetMet = isTargetMet(goal);
   const tickRunning = ticks.some((t) => t.status === "running");
-  // PRs the agent opened against the codebase. Kick a background GitHub
-  // sync when rows look stale — the page's auto-refresh poll picks up the
-  // fresh state a moment later without blocking this render.
-  // Merged/closed PRs leave the rail section; each stays reachable from
-  // the check that created it (CheckRow.prs).
   const supportMetrics = listSupportMetrics(goal.id);
-  const openPrs = listGoalPrs(goal.id, 100).filter((pr) => pr.state === "open");
-  if (openPrs.length > 0) maybeSyncGoalPrs(goal.id);
   // First diary page for the lazy checks list; older pages stream in on
   // scroll via loadMoreGoalChecksAction.
   const { rows: checkRows, hasMore: checksHaveMore } = listCheckRows(goal.id);
@@ -374,42 +394,6 @@ function GoalRail({
             </RailSection>
           )}
 
-          {(dueActions.length > 0 || gatedActions.length > 0) && (
-            <RailSection
-              title="Open actions"
-              count={dueActions.length + gatedActions.length}
-            >
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                {dueActions.map((a) => (
-                  <li key={a.id} className="text-[12px] leading-snug">
-                    <span className="ns-tag">review due</span>{" "}
-                    <Markdown className="inline text-[12px] text-[hsl(var(--notfair-ink-3))] [&_p]:m-0 [&_p]:inline">
-                      {a.description}
-                    </Markdown>
-                  </li>
-                ))}
-                {gatedActions.map((a) => (
-                  <li key={a.id} className="text-[12px] leading-snug">
-                    <span className="ns-tag-mono">observing → {fmtDate(a.review_after)}</span>{" "}
-                    <Markdown className="inline text-[12px] text-[hsl(var(--notfair-ink-3))] [&_p]:m-0 [&_p]:inline">
-                      {a.description}
-                    </Markdown>
-                  </li>
-                ))}
-              </ul>
-            </RailSection>
-          )}
-
-          {openPrs.length > 0 && (
-            <RailSection title="Open pull requests" count={openPrs.length}>
-              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-                {openPrs.map((pr) => (
-                  <PrItem key={pr.id} pr={pr} />
-                ))}
-              </ul>
-            </RailSection>
-          )}
-
           <RailSection title="Checks" count={goal.tick_count}>
             {checkRows.length === 0 ? (
               <p className="m-0 text-[12px] text-[hsl(var(--notfair-ink-4))]">
@@ -429,54 +413,6 @@ function GoalRail({
         </>
       )}
     </div>
-  );
-}
-
-function PrItem({ pr }: { pr: GoalPr }) {
-  const needsReview =
-    pr.state === "open" &&
-    !pr.is_draft &&
-    pr.review_decision !== "CHANGES_REQUESTED";
-  return (
-    <li className="text-[12px] leading-snug">
-      <div className="flex items-baseline justify-between gap-2">
-        <a
-          href={pr.url}
-          target="_blank"
-          rel="noreferrer"
-          className="ns-link min-w-0 truncate font-medium"
-        >
-          {pr.title}
-        </a>
-        <span className="shrink-0 text-[10.5px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
-          {timeAgo(pr.created_at)}
-        </span>
-      </div>
-      <p className="m-0 mt-0.5 flex flex-wrap items-center gap-1.5">
-        {pr.state === "merged" ? (
-          <span className="ns-tag">merged</span>
-        ) : pr.state === "closed" ? (
-          <span className="ns-tag-red">closed unmerged</span>
-        ) : pr.is_draft ? (
-          <span className="ns-tag">draft</span>
-        ) : pr.review_decision === "CHANGES_REQUESTED" ? (
-          <span className="ns-tag-amber">changes requested — agent's turn</span>
-        ) : (
-          <span className="ns-tag-accent">needs your review</span>
-        )}
-        {pr.comment_count > 0 && (
-          <span className="text-[11px] text-[hsl(var(--notfair-ink-4))]">
-            {pr.comment_count} comment{pr.comment_count === 1 ? "" : "s"}
-          </span>
-        )}
-        {pr.branch && <span className="ns-tag-mono">{pr.branch}</span>}
-      </p>
-      {pr.sync_error && (
-        <p className="m-0 mt-0.5 text-[11px] text-[hsl(var(--notfair-warn))]">
-          sync failed: {pr.sync_error}
-        </p>
-      )}
-    </li>
   );
 }
 

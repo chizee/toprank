@@ -699,6 +699,24 @@ export function listActionsDueForReview(goal_id: string, nowIso = now()): GoalAc
     .all(goal_id, nowIso) as GoalAction[];
 }
 
+/**
+ * End an action's observation window NOW — the user's manual unlock.
+ * The action stays open and becomes immediately due for review, so the
+ * agent scores it on its next check; nothing is deleted or rewritten.
+ */
+export function endActionObservation(id: string): GoalAction | null {
+  const ts = now();
+  const r = getDb()
+    .prepare(
+      `UPDATE goal_actions SET review_after = ?
+        WHERE id = ? AND status = 'open'
+          AND review_after IS NOT NULL AND review_after > ?`,
+    )
+    .run(ts, id, ts);
+  if (r.changes === 0) return null;
+  return getGoalAction(id);
+}
+
 /** Open mutations still inside their observation window — the gate. */
 export function listGatedActions(goal_id: string, nowIso = now()): GoalAction[] {
   return getDb()

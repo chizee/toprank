@@ -14,9 +14,12 @@ vi.hoisted(() => {
 import { getDb } from "./db";
 import {
   createGoal,
+  createGoalAction,
   deleteGoalsForAgent,
+  endActionObservation,
   getGoal,
   getPinnedGoalIds,
+  listGatedActions,
   recordMetricSnapshot,
   renameGoal,
   setGoalPinned,
@@ -64,6 +67,26 @@ describe("goal pins", () => {
     setGoalPinned(goal.id, true);
     expect(getPinnedGoalIds(SLUG).has(goal.id)).toBe(false);
     expect(getPinnedGoalIds("other").has(goal.id)).toBe(true);
+  });
+});
+
+describe("endActionObservation", () => {
+  it("releases a gated action into review-due without touching its status", () => {
+    const goal = createGoal({ project_slug: SLUG, agent_id: "a-unlock", statement: "x" });
+    const action = createGoalAction({
+      goal_id: goal.id,
+      kind: "mutation",
+      description: "gated",
+      expected_effect: "n/a",
+      review_after: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    expect(listGatedActions(goal.id)).toHaveLength(1);
+
+    const released = endActionObservation(action.id);
+    expect(released?.status).toBe("open");
+    expect(listGatedActions(goal.id)).toHaveLength(0);
+    // Releasing twice (or releasing a windowless action) is a no-op.
+    expect(endActionObservation(action.id)).toBeNull();
   });
 });
 
