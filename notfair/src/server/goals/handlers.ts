@@ -27,6 +27,12 @@ import {
   type MetricDirection,
 } from "@/server/db/goals";
 import { getProject } from "@/server/db/projects";
+import {
+  listSupportMetrics,
+  replaceSupportBackfillSnapshots,
+  upsertSupportMetric,
+  type GoalSupportMetric,
+} from "@/server/db/goal-support-metrics";
 import { findMcpToken } from "@/server/mcp/tokens";
 import {
   PROJECT_BRIEF_MAX_BYTES,
@@ -34,7 +40,7 @@ import {
   writeProjectBrief,
 } from "@/server/onboarding/project-brief";
 import type { Project } from "@/types";
-import { runHistorySource, runMetricSource } from "./metric";
+import { LOCAL_SOURCE_KEY, runHistorySource, runMetricSource } from "./metric";
 
 /**
  * Handlers for NotFair's MCP tools — the goal agent's coordination
@@ -84,6 +90,10 @@ export type GoalStateView = {
   recent_learnings: GoalLearning[];
   recent_ticks: Array<Pick<GoalTick, "tick_number" | "status" | "metric_value" | "summary" | "started_at">>;
   metric_history: Array<{ value: number; created_at: string }>;
+  /** Supporting metrics: measured every check, context only, never judged. */
+  supporting_metrics: Array<
+    Pick<GoalSupportMetric, "name" | "direction" | "baseline_value" | "current_value">
+  >;
   /** Sum of spend_usd across your logged (non-abandoned) actions. */
   logged_spend_usd: number;
   /** Other agents' still-gated resources in this workspace — equally untouchable. */
@@ -118,6 +128,12 @@ export async function handleGetGoal(
       metric_history: listMetricSnapshots(goal.id, 30).map((s) => ({
         value: s.value,
         created_at: s.created_at,
+      })),
+      supporting_metrics: listSupportMetrics(goal.id).map((m) => ({
+        name: m.name,
+        direction: m.direction,
+        baseline_value: m.baseline_value,
+        current_value: m.current_value,
       })),
       logged_spend_usd: loggedSpendTotal(goal.id),
       gated_by_other_agents: listGatedActionsForOtherAgents(ctx.project_slug, goal.id).map(
@@ -205,10 +221,13 @@ export async function handleProposeGoalMetric(
       error: "Define the goal first (define_goal) — a metric needs an ambition to measure.",
     };
   }
-  if (!findMcpToken(ctx.project_slug, input.metric_source_key)) {
+  if (
+    input.metric_source_key !== LOCAL_SOURCE_KEY &&
+    !findMcpToken(ctx.project_slug, input.metric_source_key)
+  ) {
     return {
       ok: false,
-      error: `No connected MCP '${input.metric_source_key}' for this project. Use a connected data source.`,
+      error: `No connected MCP '${input.metric_source_key}' for this project. Use a connected data source, or the '${LOCAL_SOURCE_KEY}' shell source.`,
     };
   }
 
@@ -266,7 +285,10 @@ export async function handleBackfillHistory(
   const r = resolveGoal(input.goal_id, ctx, { requireOwner: true });
   if (!r.ok) return r;
   const goal = r.data;
-  if (!findMcpToken(ctx.project_slug, input.source_key)) {
+  if (
+    input.source_key !== LOCAL_SOURCE_KEY &&
+    !findMcpToken(ctx.project_slug, input.source_key)
+  ) {
     return { ok: false, error: `No connected MCP '${input.source_key}' for this project.` };
   }
   const run = await runHistorySource(ctx.project_slug, {
@@ -294,6 +316,102 @@ export async function handleBackfillHistory(
       to: points[points.length - 1]!.date.slice(0, 10),
     },
   };
+}
+
+// ── add_supporting_metric ────────────────────────────────────────────────
+
+export type AddSupportMetricInput = {
+  goal_id: string;
+  name: string;
+  source_key: string;
+  source_tool: string;
+  source_args_json: string;
+  direction?: MetricDirection;
+  /** Optional date-segmented history query (same source) so the metric's
+   *  sparkline has a past from day one — mirrors backfill_metric_history. */
+  history_args_json?: string;
+};
+
+/**
+ * Attach a supporting metric to the goal — measured by the platform on
+ * every check alongside the primary metric, shown on the Goal tab, and
+ * carried in every tick brief. No target semantics: the goal is still
+ * judged on its ONE primary metric. Same verification gate as the
+ * primary (the platform re-runs the exact call), and calling again with
+ * the same name redefines the metric in place.
+ */
+export async function handleAddSupportMetric(
+  input: AddSupportMetricInput,
+  ctx: HandlerContext,
+): Promise<HandlerResult<{ metric: GoalSupportMetric; backfilled: number }>> {
+  const r = resolveGoal(input.goal_id, ctx, { requireOwner: true });
+  if (!r.ok) return r;
+  const goal = r.data;
+
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Give the supporting metric a name." };
+  if (goal.metric_name && name === goal.metric_name) {
+    return {
+      ok: false,
+      error: `'${name}' is the goal's primary metric — supporting metrics measure something else.`,
+    };
+  }
+  if (
+    input.source_key !== LOCAL_SOURCE_KEY &&
+    !findMcpToken(ctx.project_slug, input.source_key)
+  ) {
+    return {
+      ok: false,
+      error: `No connected MCP '${input.source_key}' for this project. Use a connected data source, or the '${LOCAL_SOURCE_KEY}' shell source.`,
+    };
+  }
+
+  const measured = await runMetricSource(ctx.project_slug, {
+    key: input.source_key,
+    tool: input.source_tool,
+    args_json: input.source_args_json,
+  });
+  if (!measured.ok) {
+    return {
+      ok: false,
+      error: `Server-side verification failed — fix the query and add again. ${measured.error}`,
+    };
+  }
+
+  const metric = upsertSupportMetric({
+    goal_id: goal.id,
+    name,
+    source_key: input.source_key,
+    source_tool: input.source_tool,
+    source_args_json: input.source_args_json,
+    direction: input.direction ?? null,
+    measured_value: measured.value,
+  });
+
+  // Optional history, verified and executed the same way as the metric.
+  // A broken history query fails the call AFTER the metric is stored —
+  // the metric itself verified fine; the agent fixes and re-adds.
+  let backfilled = 0;
+  if (input.history_args_json) {
+    const run = await runHistorySource(ctx.project_slug, {
+      key: input.source_key,
+      tool: input.source_tool,
+      args_json: input.history_args_json,
+    });
+    if (!run.ok) {
+      return {
+        ok: false,
+        error: `Metric stored, but the history query failed — fix it and call again (same name redefines). ${run.error}`,
+      };
+    }
+    const nowIso = new Date().toISOString();
+    const points = run.points.filter((p) => p.date <= nowIso);
+    backfilled = replaceSupportBackfillSnapshots(
+      metric.id,
+      points.map((p) => ({ value: p.value, created_at: p.date })),
+    );
+  }
+  return { ok: true, data: { metric, backfilled } };
 }
 
 // ── propose_target (chat intake, step 3) ─────────────────────────────────

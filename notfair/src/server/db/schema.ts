@@ -147,6 +147,36 @@ CREATE TABLE IF NOT EXISTS goal_metric_snapshots (
 CREATE INDEX IF NOT EXISTS idx_goal_snapshots_goal
   ON goal_metric_snapshots(goal_id, created_at);
 
+-- Supporting metrics: extra numbers the loop measures alongside the goal's
+-- primary metric (leading indicators, diagnostics). No target semantics —
+-- the goal is still judged on the ONE primary metric. Self-contained tables
+-- (not columns on goals/goal_metric_snapshots) because schema boot is
+-- CREATE-IF-NOT-EXISTS only: existing databases never gain columns.
+CREATE TABLE IF NOT EXISTS goal_support_metrics (
+  id               TEXT PRIMARY KEY,
+  goal_id          TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,
+  source_key       TEXT NOT NULL,
+  source_tool      TEXT NOT NULL,
+  source_args_json TEXT NOT NULL,
+  direction        TEXT CHECK (direction IN ('increase','decrease')),
+  baseline_value   REAL NOT NULL,
+  current_value    REAL NOT NULL,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  UNIQUE(goal_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS goal_support_metric_snapshots (
+  id         TEXT PRIMARY KEY,
+  metric_id  TEXT NOT NULL REFERENCES goal_support_metrics(id) ON DELETE CASCADE,
+  value      REAL NOT NULL,
+  source     TEXT NOT NULL DEFAULT 'tick' CHECK (source IN ('verify','tick','backfill')),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_goal_support_snapshots_metric
+  ON goal_support_metric_snapshots(metric_id, created_at);
+
 CREATE TABLE IF NOT EXISTS goal_learnings (
   id      TEXT PRIMARY KEY,
   goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,

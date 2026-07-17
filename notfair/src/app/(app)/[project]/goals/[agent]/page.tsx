@@ -41,6 +41,12 @@ import { GoalChecksStrip } from "@/components/goal-checks-strip";
 import { GoalChecksList } from "@/components/goal-checks-list";
 import { RailSection } from "@/components/rail-section";
 import { listGoalPrs, type GoalPr } from "@/server/db/goal-prs";
+import {
+  listSupportMetrics,
+  listSupportMetricSnapshots,
+  type GoalSupportMetric,
+} from "@/server/db/goal-support-metrics";
+import { GoalSparkline } from "@/components/goal-sparkline";
 import { maybeSyncGoalPrs } from "@/server/goals/pr-sync";
 import { buildCheckSquares, currentStreak } from "@/lib/goal-streak";
 
@@ -201,6 +207,7 @@ function GoalRail({
   // fresh state a moment later without blocking this render.
   // Merged/closed PRs leave the rail section; each stays reachable from
   // the check that created it (CheckRow.prs).
+  const supportMetrics = listSupportMetrics(goal.id);
   const openPrs = listGoalPrs(goal.id, 100).filter((pr) => pr.state === "open");
   if (openPrs.length > 0) maybeSyncGoalPrs(goal.id);
   // First diary page for the lazy checks list; older pages stream in on
@@ -355,6 +362,16 @@ function GoalRail({
               )}
           </RailCard>
 
+          {supportMetrics.length > 0 && (
+            <RailSection title="Supporting metrics" count={supportMetrics.length}>
+              <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                {supportMetrics.map((m) => (
+                  <SupportMetricItem key={m.id} metric={m} />
+                ))}
+              </ul>
+            </RailSection>
+          )}
+
           {(dueActions.length > 0 || gatedActions.length > 0) && (
             <RailSection
               title="Open actions"
@@ -463,6 +480,35 @@ function PrItem({ pr }: { pr: GoalPr }) {
 
 function RailCard({ children }: { children: React.ReactNode }) {
   return <div className="ns-card p-3.5">{children}</div>;
+}
+
+/** One supporting metric: current value, delta context, mini sparkline. */
+function SupportMetricItem({ metric }: { metric: GoalSupportMetric }) {
+  const values = listSupportMetricSnapshots(metric.id, 90).map((sn) => sn.value);
+  return (
+    <li className="text-[12px] leading-snug">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-[hsl(var(--notfair-ink-4))]">{metric.name}</span>
+        <span className="font-medium tabular-nums">
+          {formatMetric(metric.current_value)}
+          <span className="ml-1.5 font-normal text-[11px] text-[hsl(var(--notfair-ink-4))]">
+            baseline {formatMetric(metric.baseline_value)}
+          </span>
+        </span>
+      </div>
+      {values.length >= 2 && (
+        <div className="mt-1">
+          <GoalSparkline
+            values={values}
+            target={null}
+            direction={metric.direction}
+            width={330}
+            height={36}
+          />
+        </div>
+      )}
+    </li>
+  );
 }
 
 function RailStat({ k, v }: { k: string; v: string }) {

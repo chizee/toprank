@@ -3,6 +3,7 @@ import { CronExpressionParser } from "cron-parser";
 
 import {
   handleAmendGoal,
+  handleAddSupportMetric,
   handleBackfillHistory,
   handleDefineGoal,
   handleGetGoal,
@@ -130,16 +131,18 @@ const proposeGoalMetricInput = z.object({
   metric_source_key: z
     .string()
     .min(1)
-    .describe("Connected catalog MCP key, e.g. 'notfair-googleads'."),
+    .describe(
+      "Connected catalog MCP key (e.g. 'notfair-googleads'), or 'local' to measure via a shell command the platform runs on this machine.",
+    ),
   metric_source_tool: z
     .string()
     .min(1)
-    .describe("Tool to call on that server, usually 'runScript'."),
+    .describe("Tool to call on that server, usually 'runScript'. For the 'local' source: 'shell'."),
   metric_source_args_json: z
     .string()
     .min(1)
     .describe(
-      "JSON-encoded arguments object for the tool call. The call must return a single number (or {value: number}). You must have TESTED this exact call yourself first.",
+      "JSON-encoded arguments object for the tool call. The call must return a single number (or {value: number}). For 'local': {\"command\": \"<sh command>\"} whose stdout is that number. You must have TESTED this exact call yourself first.",
     ),
   metric_direction: z
     .enum(["increase", "decrease"])
@@ -164,13 +167,18 @@ const backfillHistoryInput = z.object({
   source_key: z
     .string()
     .min(1)
-    .describe("Connected catalog MCP key (usually the same as the metric's)."),
-  source_tool: z.string().min(1).describe("Tool to call, usually 'runScript'."),
+    .describe(
+      "Connected catalog MCP key (usually the same as the metric's), or 'local' for a shell command.",
+    ),
+  source_tool: z
+    .string()
+    .min(1)
+    .describe("Tool to call, usually 'runScript'. For the 'local' source: 'shell'."),
   source_args_json: z
     .string()
     .min(1)
     .describe(
-      "JSON-encoded arguments for a DATE-SEGMENTED query returning an array of {date: 'YYYY-MM-DD', value: number} — one point per day, ~30 days, same definition as the goal metric. TEST it yourself first.",
+      "JSON-encoded arguments for a DATE-SEGMENTED query returning an array of {date: 'YYYY-MM-DD', value: number} — one point per day, ~30 days, same definition as the goal metric. For 'local': {\"command\": \"<sh command>\"} printing that array to stdout. TEST it yourself first.",
     ),
 });
 
@@ -182,6 +190,53 @@ async function handleBackfillHistoryTool(input: unknown): Promise<ToolResult> {
   if (!r.ok) return { ok: false, error: r.error };
   return txt(
     `History backfilled: ${r.data.points} daily points from ${r.data.from} to ${r.data.to}. The progress chart now has context.`,
+  );
+}
+
+// ── add_supporting_metric ──────────────────────────────────────────────
+
+const addSupportMetricInput = z.object({
+  ...goalIdFields,
+  name: z
+    .string()
+    .min(1)
+    .describe("Human label incl. unit + window, e.g. 'Listing PRs open (live)'. Re-using a name redefines that metric."),
+  source_key: z
+    .string()
+    .min(1)
+    .describe(
+      "Connected catalog MCP key (e.g. 'notfair-googleads'), or 'local' for a shell command.",
+    ),
+  source_tool: z
+    .string()
+    .min(1)
+    .describe("Tool to call on that server, usually 'runScript'. For the 'local' source: 'shell'."),
+  source_args_json: z
+    .string()
+    .min(1)
+    .describe(
+      "JSON-encoded arguments object for the tool call. Must return a single number (or {value: number}); for 'local': {\"command\": \"<sh command>\"} whose stdout is that number. TEST it yourself first.",
+    ),
+  direction: z
+    .enum(["increase", "decrease"])
+    .optional()
+    .describe("Which way is healthy, if there is one — context only, never judged."),
+  history_args_json: z
+    .string()
+    .optional()
+    .describe(
+      "Optional: DATE-SEGMENTED version of the same query (same source) returning an array of {date: 'YYYY-MM-DD', value: number}, ~30 days — gives the metric's chart a past from day one. Replaces any earlier backfill. TEST it yourself first.",
+    ),
+});
+
+async function handleAddSupportMetricTool(input: unknown): Promise<ToolResult> {
+  const parsed = addSupportMetricInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const { project_slug, agent_id, ...rest } = parsed.data;
+  const r = await handleAddSupportMetric(rest, { project_slug, agent_id });
+  if (!r.ok) return { ok: false, error: r.error };
+  return txt(
+    `Supporting metric '${r.data.metric.name}' verified — current value ${r.data.metric.current_value}${r.data.backfilled > 0 ? `, ${r.data.backfilled} history points backfilled` : ""}. The platform now measures it on every check; it appears on your Goal tab and in every tick brief. The goal is still judged on the primary metric only.`,
   );
 }
 
@@ -505,6 +560,13 @@ export const TOOLS: ToolDefinition[] = [
       "Reconstruct the metric's past: run a date-segmented version of the metric query (per-day values, ~30 days) so the user's progress chart has history from day one. Platform-verified like the metric; replaces any earlier backfill. Call during intake right after propose_goal_metric.",
     inputSchema: backfillHistoryInput,
     handler: handleBackfillHistoryTool,
+  },
+  {
+    name: "add_supporting_metric",
+    description:
+      "Attach a SUPPORTING metric to your goal — a second number the platform measures on every check alongside the primary (leading indicators, diagnostics: 'PRs opened' while merges are the target). Platform-verified like the primary; re-using a name redefines that metric. No target semantics — the goal is judged on the primary metric only. Usable at any point in the goal's life.",
+    inputSchema: addSupportMetricInput,
+    handler: handleAddSupportMetricTool,
   },
   {
     name: "propose_target",

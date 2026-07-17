@@ -33,7 +33,12 @@ import {
 } from "@/server/db/goals";
 import { listGoalPrs, type GoalPr } from "@/server/db/goal-prs";
 import { syncGoalPrs } from "./pr-sync";
-import { measureGoalMetric, type MetricMeasurement } from "./metric";
+import { measureGoalMetric, runMetricSource, type MetricMeasurement } from "./metric";
+import {
+  listSupportMetrics,
+  recordSupportMetricSnapshot,
+  type GoalSupportMetric,
+} from "@/server/db/goal-support-metrics";
 
 /**
  * The goal loop's tick runner — one OODA iteration per invocation.
@@ -62,6 +67,8 @@ export type TickContext = {
   tickNumber: number;
   nowIso: string;
   measurement: MetricMeasurement;
+  /** Supporting metrics measured this check: value, or the error. */
+  supportReadings: SupportReading[];
   targetMet: boolean | null;
   pastDeadline: boolean;
   actionsDueForReview: GoalAction[];
@@ -78,6 +85,33 @@ export type TickContext = {
 
 function fmtValue(v: number | null): string {
   return v === null ? "—" : String(v);
+}
+
+export type SupportReading = {
+  metric: GoalSupportMetric;
+  measurement: MetricMeasurement;
+};
+
+/**
+ * Measure every supporting metric and record snapshots — same ground-truth
+ * rule as the primary: the platform measures before the agent wakes. A
+ * failing supporting metric never blocks the check; the error rides into
+ * the brief for the agent to fix (redefine via add_supporting_metric).
+ */
+async function measureSupportMetrics(goal: Goal): Promise<SupportReading[]> {
+  const readings: SupportReading[] = [];
+  for (const metric of listSupportMetrics(goal.id)) {
+    const measurement = await runMetricSource(goal.project_slug, {
+      key: metric.source_key,
+      tool: metric.source_tool,
+      args_json: metric.source_args_json,
+    });
+    if (measurement.ok) {
+      recordSupportMetricSnapshot(metric.id, measurement.value, "tick");
+    }
+    readings.push({ metric, measurement });
+  }
+  return readings;
 }
 
 /** One line of live PR state for the tick brief. */
@@ -138,6 +172,17 @@ export function buildTickMessage(ctx: TickContext): string {
   lines.push(
     `- Baseline: ${fmtValue(goal.baseline_value)} | Target: ${fmtValue(goal.target_value)} (${goal.metric_direction ?? "?"})`,
   );
+  for (const r of ctx.supportReadings) {
+    if (r.measurement.ok) {
+      lines.push(
+        `- [supporting] ${r.metric.name}: **${r.measurement.value}** (baseline ${r.metric.baseline_value}${r.metric.direction ? `, healthy = ${r.metric.direction}` : ""}) — context only, the goal is judged on the primary metric`,
+      );
+    } else {
+      lines.push(
+        `- [supporting] ${r.metric.name}: MEASUREMENT FAILED: ${r.measurement.error} — fix by redefining it via add_supporting_metric (same name)`,
+      );
+    }
+  }
   lines.push("");
 
   lines.push("## Stop-condition flags");
@@ -380,6 +425,9 @@ async function runClaimedTick(
   if (measurement.ok) {
     recordMetricSnapshot(goal.id, measurement.value, "tick");
   }
+  // Supporting metrics too — snapshots land even on observe-only checks,
+  // so their charts stay daily.
+  const supportReadings = await measureSupportMetrics(goal);
   setGoalTickMetric(
     tick.id,
     measurement.ok ? measurement.value : null,
@@ -419,6 +467,7 @@ async function runClaimedTick(
     tickNumber,
     nowIso,
     measurement,
+    supportReadings,
     targetMet,
     pastDeadline,
     actionsDueForReview,

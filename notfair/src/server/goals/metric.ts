@@ -1,13 +1,21 @@
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { promisify } from "node:util";
 import { mcpRpcAutoRefresh } from "@/server/mcp/rpc";
 import type { Goal } from "@/server/db/goals";
+import { getProject } from "@/server/db/projects";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Mechanical execution of a goal's stored metric query against a catalog
- * MCP (e.g. notfair-googleads `runScript`). This is the loop's ground
- * truth: the tick runner calls it BEFORE the agent wakes, so the agent
- * never self-reports the number it is being judged on. The same path
- * verifies the metric during intake (`propose_goal_metric`) — a metric
- * that can't be measured here is rejected before the goal can activate.
+ * MCP (e.g. notfair-googleads `runScript`) or the `local` shell source.
+ * This is the loop's ground truth: the tick runner calls it BEFORE the
+ * agent wakes, so the agent never self-reports the number it is being
+ * judged on. The same path verifies the metric during intake
+ * (`propose_goal_metric`) — a metric that can't be measured here is
+ * rejected before the goal can activate.
  */
 
 export type MetricMeasurement =
@@ -30,6 +38,55 @@ export type MetricSource = {
   /** JSON-encoded arguments object for the tool call. */
   args_json: string;
 };
+
+/**
+ * The `local` source: instead of a catalog MCP, the platform runs a
+ * shell command on this machine and parses its stdout as the value —
+ * for ambitions no connected MCP can measure (GitHub PRs via `gh`, a
+ * local SQLite ledger, a curl'd endpoint). The trust rule is unchanged:
+ * the agent authors the command once, but every measurement is executed
+ * by the platform itself, never self-reported. It also adds no new
+ * capability — tick agents already run with full shell access here.
+ *
+ * Spec: key `local`, tool `shell`, args `{"command": "<sh command>"}`.
+ * Runs from the project's codebase_path when it exists (use absolute
+ * paths regardless), with the metric timeout applied.
+ */
+export const LOCAL_SOURCE_KEY = "local";
+export const LOCAL_SOURCE_TOOL = "shell";
+
+type LocalRun = { ok: true; text: string } | { ok: false; error: string };
+
+async function runLocalShell(
+  project_slug: string,
+  args: Record<string, unknown>,
+): Promise<LocalRun> {
+  const command = args.command;
+  if (typeof command !== "string" || !command.trim()) {
+    return { ok: false, error: `Local source args must be {"command": "<shell command>"}` };
+  }
+  const codebase = getProject(project_slug)?.codebase_path;
+  const cwd = codebase && existsSync(codebase) ? codebase : homedir();
+  try {
+    const { stdout } = await execFileAsync("/bin/sh", ["-c", command], {
+      timeout: METRIC_TIMEOUT_MS,
+      maxBuffer: 4 * 1024 * 1024,
+      cwd,
+    });
+    return { ok: true, text: stdout.trim() };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Local command failed: ${truncate(msg, 500)}` };
+  }
+}
+
+/** Validate the (key, tool) pair for a local source. Null when not local. */
+function localSourceError(source: MetricSource): string | null {
+  if (source.key !== LOCAL_SOURCE_KEY) return null;
+  return source.tool === LOCAL_SOURCE_TOOL
+    ? null
+    : `The '${LOCAL_SOURCE_KEY}' source only supports tool '${LOCAL_SOURCE_TOOL}'.`;
+}
 
 export function metricSourceFromGoal(goal: Goal): MetricSource | null {
   if (!goal.metric_source_key || !goal.metric_source_tool || !goal.metric_source_args_json) {
@@ -97,6 +154,27 @@ export async function runMetricSource(
     args = parsed as Record<string, unknown>;
   } catch {
     return { ok: false, error: "metric_source_args_json is not valid JSON" };
+  }
+
+  if (source.key === LOCAL_SOURCE_KEY) {
+    const toolError = localSourceError(source);
+    if (toolError) return { ok: false, error: toolError };
+    const run = await runLocalShell(project_slug, args);
+    if (!run.ok) return run;
+    let payload: unknown = run.text;
+    try {
+      payload = JSON.parse(run.text);
+    } catch {
+      // Not JSON — parseMetricValue handles numeric strings.
+    }
+    const value = parseMetricValue(payload);
+    if (value === null) {
+      return {
+        ok: false,
+        error: `Local command must print a single number (or {value: number}) to stdout. Got: ${truncate(run.text, 300)}`,
+      };
+    }
+    return { ok: true, value };
   }
 
   const rpc = await mcpRpcAutoRefresh<ToolCallResult>(
@@ -203,6 +281,26 @@ export async function runHistorySource(
     args = parsed as Record<string, unknown>;
   } catch {
     return { ok: false, error: "history args_json is not valid JSON" };
+  }
+  if (source.key === LOCAL_SOURCE_KEY) {
+    const toolError = localSourceError(source);
+    if (toolError) return { ok: false, error: toolError };
+    const run = await runLocalShell(project_slug, args);
+    if (!run.ok) return run;
+    let payload: unknown = run.text;
+    try {
+      payload = JSON.parse(run.text);
+    } catch {
+      // fall through — parseHistoryPoints rejects non-array payloads.
+    }
+    const points = parseHistoryPoints(payload);
+    if (!points) {
+      return {
+        ok: false,
+        error: `Local history command must print an array of {date, value} rows (1–400 points) to stdout. Got: ${truncate(run.text, 300)}`,
+      };
+    }
+    return { ok: true, points };
   }
   const rpc = await mcpRpcAutoRefresh<ToolCallResult>(
     project_slug,
