@@ -41,7 +41,50 @@ async function openDialog() {
   await screen.findByText(/agent instructions/i);
 }
 
-beforeEach(() => getContext.mockReset());
+beforeEach(() => {
+  getContext.mockReset();
+  window.localStorage.clear();
+});
+
+describe("GoalContextDialog model resolution", () => {
+  const twoModels = {
+    ...props,
+    models: [
+      { value: "gpt-5.5", label: "GPT-5.5", context_window: 272_000 },
+      { value: "gpt-5.6-sol", label: "GPT-5.6 sol", context_window: 400_000, is_default: true },
+    ],
+  };
+
+  it("uses the harness default model when the composer has no override", async () => {
+    getContext.mockResolvedValueOnce(contextOf(500));
+    render(<GoalContextDialog {...twoModels} />);
+    await openDialog();
+    expect(screen.getByText(/window of GPT-5\.6 sol · 400k/)).toBeInTheDocument();
+  });
+
+  it("uses the composer's localStorage model override", async () => {
+    window.localStorage.setItem("NotFair:model:proj:goal-1", "gpt-5.5");
+    getContext.mockResolvedValueOnce(contextOf(500));
+    render(<GoalContextDialog {...twoModels} />);
+    await openDialog();
+    expect(screen.getByText(/window of GPT-5\.5 · 272k/)).toBeInTheDocument();
+  });
+
+  it("ignores a stale override that no longer names a known model", async () => {
+    window.localStorage.setItem("NotFair:model:proj:goal-1", "retired-model");
+    getContext.mockResolvedValueOnce(contextOf(500));
+    render(<GoalContextDialog {...twoModels} />);
+    await openDialog();
+    expect(screen.getByText(/window of GPT-5\.6 sol · 400k/)).toBeInTheDocument();
+  });
+
+  it("offers no model picker — the window follows the chat model", async () => {
+    getContext.mockResolvedValueOnce(contextOf(500));
+    render(<GoalContextDialog {...twoModels} />);
+    await openDialog();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+});
 
 describe("GoalContextDialog window pressure", () => {
   it("stays quiet while the window has comfortable headroom", async () => {

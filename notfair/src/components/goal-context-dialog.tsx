@@ -19,8 +19,10 @@ import { Markdown } from "@/components/markdown";
 
 /**
  * /context for a goal: what fills this agent's context window, measured
- * against the SELECTED MODEL's real window size (read from the harness's
- * own model metadata — never hardcoded here). Token counts are estimates
+ * against the CURRENT chat model's real window size (read from the
+ * harness's own model metadata — never hardcoded here). The current model
+ * is whatever the composer would use: the per-project+agent localStorage
+ * override when set, else the harness default. Token counts are estimates
  * (~4 chars/token); clicking a row reveals the chunk's exact content.
  */
 
@@ -28,6 +30,7 @@ export type ContextModelOption = {
   value: string;
   label: string;
   context_window?: number;
+  is_default?: boolean;
 };
 
 const GROUP_META: Record<
@@ -56,11 +59,14 @@ type LoadState =
 
 export function GoalContextDialog({
   projectSlug,
+  agentSlug,
   agentId,
   threadId,
   models,
 }: {
   projectSlug: string;
+  /** URL slug — keys the composer's model-override localStorage entry. */
+  agentSlug: string;
   agentId: string;
   threadId: string;
   models: ContextModelOption[];
@@ -68,11 +74,18 @@ export function GoalContextDialog({
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<LoadState>({ phase: "idle" });
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [model, setModel] = useState(models[0]?.value ?? "");
+  // The composer's override, read fresh each time the dialog opens (the
+  // user may have switched models since). "" = no override stored.
+  const [overrideModel, setOverrideModel] = useState("");
 
+  // Mirror the chat composer's resolution exactly: localStorage override
+  // when it names a known model, else the harness default.
   const selected = useMemo(
-    () => models.find((m) => m.value === model) ?? models[0],
-    [models, model],
+    () =>
+      models.find((m) => m.value === overrideModel) ??
+      models.find((m) => m.is_default) ??
+      models[0],
+    [models, overrideModel],
   );
   const window = selected?.context_window;
 
@@ -89,7 +102,13 @@ export function GoalContextDialog({
 
   function onOpenChange(next: boolean) {
     setOpen(next);
-    if (next && state.phase === "idle") void load();
+    if (next) {
+      // `window` is shadowed by the context-window const above.
+      setOverrideModel(
+        globalThis.localStorage?.getItem(`NotFair:model:${projectSlug}:${agentSlug}`) ?? "",
+      );
+      if (state.phase === "idle") void load();
+    }
     if (!next) setExpanded(null);
   }
 
@@ -145,8 +164,8 @@ export function GoalContextDialog({
 
         {state.phase === "ready" && (
           <>
-            {/* Headline: used-of-window, with the model (and its window)
-                selectable — window sizes come from the harness's own model
+            {/* Headline: used-of-window against the model the chat actually
+                uses — window sizes come from the harness's own model
                 metadata. */}
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="m-0 text-[20px] font-semibold tabular-nums">
@@ -165,21 +184,12 @@ export function GoalContextDialog({
                   </span>
                 )}
               </p>
-              <label className="flex items-center gap-1.5 text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
-                window of
-                <select
-                  value={selected?.value ?? ""}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="rounded-md bg-[hsl(var(--notfair-surface-2))] px-1.5 py-0.5 text-[12px] text-[hsl(var(--notfair-ink-2))]"
-                >
-                  {models.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                      {m.context_window ? ` · ${fmtK(m.context_window)}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {selected && (
+                <span className="text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
+                  window of {selected.label}
+                  {window ? ` · ${fmtK(window)}` : ""}
+                </span>
+              )}
             </div>
 
             {/* Near/over the window: say what actually happens, before the

@@ -135,12 +135,14 @@ export default async function GoalPage({
           <div className="hidden lg:contents">
             <GoalContextDialog
               projectSlug={slug}
+              agentSlug={agentSlug}
               agentId={resolved.agent_id}
               threadId={threadId}
               models={modelOptions.map((m) => ({
                 value: m.value,
                 label: m.label,
                 context_window: m.context_window,
+                is_default: m.is_default,
               }))}
             />
             <GoalMemoryDialog
