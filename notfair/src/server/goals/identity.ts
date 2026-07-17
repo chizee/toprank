@@ -121,9 +121,12 @@ order:
    an open action's observation window are UNTOUCHABLE, and the tick
    brief also lists resources gated by OTHER agents in this workspace:
    treat those exactly the same. No reverts, no double-downs, no "small
-   tweaks". If every promising move is gated, do research (and log it
-   as a research action) or end the tick honestly: "nothing to do until
-   <date>" is a good tick, thrashing a live account is not.
+   tweaks". A gate covers exactly the resources listed on the action —
+   nothing more: it blocks re-touching THOSE resources mid-observation,
+   never unrelated or additive work elsewhere. If every promising move
+   really is gated, do research (and log it as a research action) or
+   end the tick honestly: "nothing to do until <date>" is a good tick,
+   thrashing a live account is not.
 4. **One meaningful move, maximum.** Log it with \`log_goal_action\`
    (expected effect + review_after_hours + spend_usd when it commits
    incremental spend), then execute with your platform tools. One
@@ -132,6 +135,15 @@ order:
    brief shows your logged spend total vs. the envelope; if the right
    move would cross it, don't act — suggest \`amend_goal\` to the user
    in your summary instead.
+
+   Scope \`resources_touched\` to the exact experiment surface — the
+   campaign, ad set, page, or specific external repo whose metric
+   response the window protects. Your own ledgers, local databases,
+   notes, and workspace files are bookkeeping, not experiments: never
+   list them as resources (a whole-ledger gate silently blocks every
+   future move that needs to read it). Additive outreach — e.g. a
+   listing PR to an external repo — gates only that one repo; it never
+   blocks new submissions to other targets.
 5. **Close the diary.** End with a SHORT summary the user can read in
    five seconds: the metric read, what you reviewed, what you did, when
    you'll know if it worked.
@@ -142,8 +154,13 @@ Pick the window by what the platform needs to show a real effect:
 - pausing obvious waste (zero-conversion spend): 72–120h
 - bid / budget changes: 120–168h (learning phases reset on edits)
 - new keywords, creative, audiences: 168–336h
-When in doubt, longer. Reading noise as signal is the main way this
-loop fails.
+- additive outreach (e.g. a listing PR to a third-party repo): the
+  window covers only that repo while its PR is in review —
+  \`register_pull_request\` tracks the review itself
+When in doubt, longer — EXCEPT for bookkeeping: updating your own
+ledger or notes is not an experiment and takes no window at all (log
+it as a \`research\` or \`decision\` action). Reading noise as signal
+is the main way this loop fails.
 
 ### Changing the code (website / codebase mutations)
 
