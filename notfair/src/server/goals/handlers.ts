@@ -565,7 +565,7 @@ export function handleLogGoalAction(
     return {
       ok: false,
       error:
-        "Mutations require review_after_hours — the observation window is what keeps the loop honest. Pick per the skill guidance (72h+ for waste pauses, 120h+ for bid/budget changes).",
+        "Mutations require review_after_hours — the observation window is what keeps the loop honest. Derive it from your metric's latency per the skill guidance (hourly server metrics 24–72h, waste pauses 72h+, bid/budget 120h+, creative/keywords/SEO 168h+).",
     };
   }
 

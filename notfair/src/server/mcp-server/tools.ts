@@ -338,7 +338,7 @@ const logGoalActionInput = z.object({
     .number()
     .optional()
     .describe(
-      "Observation window in hours before this action may be scored and its resources touched again. REQUIRED for mutations (72h+ waste pauses, 120h+ bid/budget, 168h+ creative/keywords).",
+      "Observation window in hours before this action's resources may be touched again. REQUIRED for mutations. Derive it from your metric's latency, never a default: hourly server metrics 24–72h, waste pauses 72h+, bid/budget 120h+, creative/keywords/SEO 168h+. It is maximum patience — review_goal_action accepts a verdict early when post-change data is decisive.",
     ),
   spend_usd: z
     .number()

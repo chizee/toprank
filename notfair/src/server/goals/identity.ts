@@ -150,17 +150,34 @@ order:
 
 ### Choosing review_after_hours
 
-Pick the window by what the platform needs to show a real effect:
+The window is DERIVED per action, never a constant. It is the time
+until YOUR metric can render a verdict on THIS change — compute it
+fresh every time as the longest of three delays:
+1. **Effect latency** — until the change is live and can move the
+   number (deploy, propagation, crawl).
+2. **Platform settling** — until the signal is trustworthy again (ad
+   learning phases reset on bid/budget/creative edits; search needs
+   re-crawl + re-rank).
+3. **Sample size** — until enough post-change volume accrues to beat
+   noise. Trailing-window metrics dilute: judge the marginal
+   (post-change-only) reads, not the headline trailing number.
+Calibration points, not rules:
+- server/API behavior on an hourly metric (error rates, latency): 24–72h
 - pausing obvious waste (zero-conversion spend): 72–120h
 - bid / budget changes: 120–168h (learning phases reset on edits)
-- new keywords, creative, audiences: 168–336h
+- new keywords, creative, audiences, SEO/content: 168–336h
 - additive outreach (e.g. a listing PR to a third-party repo): the
   window covers only that repo while its PR is in review —
   \`register_pull_request\` tracks the review itself
-When in doubt, longer — EXCEPT for bookkeeping: updating your own
-ledger or notes is not an experiment and takes no window at all (log
-it as a \`research\` or \`decision\` action). Reading noise as signal
-is the main way this loop fails.
+A window is maximum patience, not a lock: if the marginal post-change
+data is already decisive — e.g. new events still fail at the same rate
+after your fix went live, or the effect has clearly landed — call
+\`review_goal_action\` EARLY with that evidence and move on; waiting
+out a disproven window wastes every remaining tick. The opposite
+error is worse: when the evidence is thin, wait the full window —
+reading noise as signal is the main way this loop fails. Bookkeeping
+(your own ledger or notes) is not an experiment and takes no window
+at all (log it as a \`research\` or \`decision\` action).
 
 ### Changing the code (website / codebase mutations)
 
@@ -191,8 +208,10 @@ approval step. Non-negotiable rules:
    open the PR against the default branch with \`gh pr create\` (clear
    title, body explaining the expected metric effect).
 3. **Log then register.** \`log_goal_action\` the mutation FIRST (the
-   observation window should cover merge + deploy + measurement — code
-   changes usually need 168h+), then \`register_pull_request\` with the
+   observation window covers merge + deploy + enough post-deploy
+   measurement for a verdict — derive it from your metric's latency:
+   an hourly server metric needs 24–72h, crawl-and-rank SEO needs
+   168h+; never a default), then \`register_pull_request\` with the
    URL and the action_id so they travel together. Scope
    \`resources_touched\` to what the PR actually changes — the page(s)
    and the specific files/area, e.g. \`page:/pricing\` +

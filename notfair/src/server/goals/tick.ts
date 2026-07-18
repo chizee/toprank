@@ -226,7 +226,7 @@ export function buildTickMessage(ctx: TickContext): string {
   lines.push("");
 
   lines.push(
-    "## Actions still gated (the LISTED resources are untouchable — a gate never blocks unrelated or additive work elsewhere)",
+    "## Actions still gated (the LISTED resources are untouchable — a gate never blocks unrelated or additive work elsewhere; if marginal post-change data already gives a decisive verdict, review the action EARLY via review_goal_action instead of waiting out the window)",
   );
   if (ctx.gatedActions.length === 0) {
     lines.push("- none");
