@@ -45,6 +45,8 @@ import {
   type GoalSupportMetric,
 } from "@/server/db/goal-support-metrics";
 import { GoalSparkline } from "@/components/goal-sparkline";
+import { MetricMethodDialog } from "@/components/metric-method-dialog";
+import { timeUntil } from "@/lib/time-ago";
 import { GoalMovesDialog } from "@/components/goal-moves-dialog";
 import { type MoveRow } from "@/components/goal-moves";
 import { GoalPrsDialog, type PrRow } from "@/components/goal-prs-dialog";
@@ -55,6 +57,18 @@ export const dynamic = "force-dynamic";
 
 function fmtDate(iso: string | null): string {
   return iso ? iso.slice(0, 10) : "—";
+}
+
+/** Local wall-clock for a timestamp: "7:00 PM" today, "Jul 25, 9:00 AM" beyond. */
+function fmtClock(iso: string): string {
+  const date = new Date(iso);
+  const withinDay = Math.abs(date.getTime() - Date.now()) < 86_400_000;
+  return date.toLocaleString(
+    [],
+    withinDay
+      ? { hour: "numeric", minute: "2-digit" }
+      : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+  );
 }
 
 
@@ -302,9 +316,16 @@ function GoalRail({
               <p className="m-0 mb-3 text-[12.5px] leading-relaxed">
                 Baseline <b className="tabular-nums">{formatMetric(goal.baseline_value)}</b>,
                 verified against{" "}
-                <span className="font-mono text-[11px]">{goal.metric_source_key}</span>.
-                The plan is agreed — the loop starts when you press START, and
-                the first check runs immediately.
+                <span className="font-mono text-[11px]">{goal.metric_source_key}</span>{" "}
+                <MetricMethodDialog
+                  name={goal.metric_name ?? "Metric"}
+                  sourceKey={goal.metric_source_key}
+                  sourceTool={goal.metric_source_tool}
+                  argsJson={goal.metric_source_args_json}
+                  direction={goal.metric_direction}
+                />
+                . The plan is agreed — the loop starts when you press START,
+                and the first check runs immediately.
               </p>
               <dl className="mb-3 grid grid-cols-2 gap-2 text-[12px]">
                 <RailStat k="Target" v={`${formatMetric(goal.target_value)}${goal.mode === "maintain" ? " (hold)" : ""}`} />
@@ -335,8 +356,15 @@ function GoalRail({
         <>
           <RailCard>
             <div className="mb-1 flex items-baseline justify-between">
-              <span className="text-[11px] text-[hsl(var(--notfair-ink-4))]">
-                {goal.metric_name ?? "Metric"}
+              <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[hsl(var(--notfair-ink-4))]">
+                <span className="truncate">{goal.metric_name ?? "Metric"}</span>
+                <MetricMethodDialog
+                  name={goal.metric_name ?? "Metric"}
+                  sourceKey={goal.metric_source_key}
+                  sourceTool={goal.metric_source_tool}
+                  argsJson={goal.metric_source_args_json}
+                  direction={goal.metric_direction}
+                />
               </span>
               {targetMet && (
                 <span className="ns-tag">
@@ -371,8 +399,12 @@ function GoalRail({
             </div>
             <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[hsl(var(--notfair-ink-4))]">
               {cadenceLabel(goal.cadence_cron)} · next check{" "}
-              {goal.status === "active" ? fmtDate(goal.next_tick_at) : "—"} ·{" "}
-              {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} so far
+              {goal.status === "active" && goal.next_tick_at
+                ? tickRunning
+                  ? "running now"
+                  : `${timeUntil(goal.next_tick_at)} (${fmtClock(goal.next_tick_at)})`
+                : "—"}{" "}
+              · {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} so far
               {goal.spend_envelope_usd !== null &&
                 ` · spent $${loggedSpendTotal(goal.id)} of $${goal.spend_envelope_usd}`}
             </p>
@@ -397,7 +429,11 @@ function GoalRail({
           <RailSection title="Checks" count={goal.tick_count}>
             {checkRows.length === 0 ? (
               <p className="m-0 text-[12px] text-[hsl(var(--notfair-ink-4))]">
-                None yet — the first runs at {fmtDate(goal.next_tick_at)}.
+                None yet — the first runs{" "}
+                {goal.next_tick_at
+                  ? `${timeUntil(goal.next_tick_at)} (${fmtClock(goal.next_tick_at)})`
+                  : `at ${fmtDate(goal.next_tick_at)}`}
+                .
               </p>
             ) : (
               <GoalChecksList
@@ -426,7 +462,16 @@ function SupportMetricItem({ metric }: { metric: GoalSupportMetric }) {
   return (
     <li className="text-[12px] leading-snug">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] text-[hsl(var(--notfair-ink-4))]">{metric.name}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[hsl(var(--notfair-ink-4))]">
+          <span className="truncate">{metric.name}</span>
+          <MetricMethodDialog
+            name={metric.name}
+            sourceKey={metric.source_key}
+            sourceTool={metric.source_tool}
+            argsJson={metric.source_args_json}
+            direction={metric.direction}
+          />
+        </span>
         <span className="font-medium tabular-nums">
           {formatMetric(metric.current_value)}
           <span className="ml-1.5 font-normal text-[11px] text-[hsl(var(--notfair-ink-4))]">
