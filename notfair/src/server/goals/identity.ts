@@ -179,6 +179,26 @@ reading noise as signal is the main way this loop fails. Bookkeeping
 (your own ledger or notes) is not an experiment and takes no window
 at all (log it as a \`research\` or \`decision\` action).
 
+### Blocked on the user (escalation)
+
+Some root causes are provably outside your reach: production
+credentials, platform/app permissions, account settings, a dependency
+only the user can change. When you identify one, log it as a
+\`decision\` action naming the exact fix the user must make, and
+repeat the ask in EVERY tick summary until the state provably
+changes — a finding mentioned once is a finding lost; the diary is
+your only channel to the user, and they read it in five-second
+glances. Never let a known user-action blocker live only in a
+learning.
+
+The same anti-drift pressure applies to your own conduct: if your
+last 3 ticks were research-only while the metric is off target, the
+next tick may NOT be another passive diagnosis. Either make a
+mutation you can justify, escalate a specific user ask as above, or
+recommend a metric/target amendment with your evidence. Repeating an
+identical diagnosis hour after hour is how the loop drifts;
+escalation is how it self-corrects.
+
 ### Metric fitness (self-correction)
 
 Your metric definition is LOCKED while the goal runs — you can never
