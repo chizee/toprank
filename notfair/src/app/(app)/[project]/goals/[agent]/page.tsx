@@ -47,7 +47,6 @@ import {
   listSupportMetricSnapshots,
   type GoalSupportMetric,
 } from "@/server/db/goal-support-metrics";
-import { GoalSparkline } from "@/components/goal-sparkline";
 import { MetricMethodDialog } from "@/components/metric-method-dialog";
 import { timeUntil } from "@/lib/time-ago";
 import { GoalMovesDialog } from "@/components/goal-moves-dialog";
@@ -87,11 +86,11 @@ const STATUS_CHIP: Record<Goal["status"], string> = {
 };
 
 /**
- * THE goal screen — everything about one goal on a single page. Chat is
- * the primary surface (goals are defined and steered in conversation);
- * the right rail is the loop's state: plan/START, metric + sparkline,
- * tick diary, open actions, memory. No tabs, no thread management — one
- * goal, one conversation, one screen.
+ * THE goal screen — everything about one goal on a single page. The loop
+ * dashboard is the primary surface (metric hero, supporting metrics on
+ * the same chart grammar, check diary); chat is the side panel for
+ * steering, questions, and amendments. No tabs, no thread management —
+ * one goal, one conversation, one screen.
  */
 export default async function GoalPage({
   params,
@@ -222,8 +221,17 @@ export default async function GoalPage({
       </header>
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        {/* Chat — the primary surface. */}
-        <section className="flex min-w-0 flex-1 flex-col">
+        {/* The loop dashboard — metrics and checks ARE the product of a
+            running goal, so they get the primary column. */}
+        <section className="min-w-0 flex-1 overflow-y-auto px-5 py-4 md:px-7">
+          <div className="mx-auto flex max-w-3xl flex-col gap-5">
+            <GoalDashboard slug={slug} agentSlug={agentSlug} goal={goal} />
+          </div>
+        </section>
+
+        {/* Chat — important but occasional: steering, questions, amendments.
+            A calm side panel, not the main stage. */}
+        <aside className="hidden w-[420px] shrink-0 flex-col bg-[hsl(var(--notfair-surface-2)/0.4)] lg:flex">
           <LiveTranscript
             key={threadId}
             projectSlug={slug}
@@ -235,18 +243,13 @@ export default async function GoalPage({
             mcpCatalog={mcpCatalog}
             modelOptions={modelOptions}
           />
-        </section>
-
-        {/* Status rail — the loop's state at a glance. */}
-        <aside className="hidden w-[380px] shrink-0 overflow-y-auto bg-[hsl(var(--notfair-surface-2)/0.4)] px-4 py-4 xl:block">
-          <GoalRail slug={slug} agentSlug={agentSlug} goal={goal} />
         </aside>
       </div>
     </div>
   );
 }
 
-function GoalRail({
+function GoalDashboard({
   slug,
   agentSlug,
   goal,
@@ -307,7 +310,7 @@ function GoalRail({
   const streak = currentStreak(squares);
 
   return (
-    <div className="flex flex-col gap-5">
+    <>
       {/* Statement */}
       <p className="m-0 text-[12.5px] leading-relaxed text-[hsl(var(--notfair-ink-3))]">
         “{goal.statement}”
@@ -433,11 +436,11 @@ function GoalRail({
 
           {supportMetrics.length > 0 && (
             <RailSection title="Supporting metrics" count={supportMetrics.length}>
-              <ul className="m-0 flex list-none flex-col gap-3 p-0">
+              <div className="grid gap-4 md:grid-cols-2">
                 {supportMetrics.map((m) => (
                   <SupportMetricItem key={m.id} metric={m} />
                 ))}
-              </ul>
+              </div>
             </RailSection>
           )}
 
@@ -463,7 +466,7 @@ function GoalRail({
 
         </>
       )}
-    </div>
+    </>
   );
 }
 
@@ -471,12 +474,18 @@ function RailCard({ children }: { children: React.ReactNode }) {
   return <div className="ns-card p-3.5">{children}</div>;
 }
 
-/** One supporting metric: current value, delta context, mini sparkline. */
+/** One supporting metric — the SAME card grammar as the main metric:
+ *  name + ⓘ header, big current value with baseline context, and the
+ *  same time chart (no target line: supports have no target). */
 function SupportMetricItem({ metric }: { metric: GoalSupportMetric }) {
-  const values = listSupportMetricSnapshots(metric.id, 90).map((sn) => sn.value);
+  const points = listSupportMetricSnapshots(metric.id, 400).map((sn) => ({
+    t: Date.parse(sn.created_at),
+    v: sn.value,
+    source: sn.source,
+  }));
   return (
-    <li className="text-[12px] leading-snug">
-      <div className="flex items-baseline justify-between gap-2">
+    <div className="ns-card p-3.5">
+      <div className="mb-1 flex items-baseline justify-between">
         <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[hsl(var(--notfair-ink-4))]">
           <span className="truncate">{metric.name}</span>
           <MetricMethodDialog
@@ -487,25 +496,28 @@ function SupportMetricItem({ metric }: { metric: GoalSupportMetric }) {
             direction={metric.direction}
           />
         </span>
-        <span className="font-medium tabular-nums">
+      </div>
+      <div className="flex items-baseline gap-3">
+        <span className="text-xl font-semibold tabular-nums">
           {formatMetric(metric.current_value)}
-          <span className="ml-1.5 font-normal text-[11px] text-[hsl(var(--notfair-ink-4))]">
-            baseline {formatMetric(metric.baseline_value)}
-          </span>
+        </span>
+        <span className="text-[11.5px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
+          baseline {formatMetric(metric.baseline_value)}
         </span>
       </div>
-      {values.length >= 2 && (
-        <div className="mt-1">
-          <GoalSparkline
-            values={values}
+      {points.length >= 2 && (
+        <div className="mt-3">
+          <GoalProgressChart
+            points={points}
+            actions={[]}
+            failures={[]}
             target={null}
-            direction={metric.direction}
-            width={330}
-            height={36}
+            baseline={metric.baseline_value}
+            deadline={null}
           />
         </div>
       )}
-    </li>
+    </div>
   );
 }
 

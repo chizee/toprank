@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Pause, Play, Square, Zap } from "lucide-react";
+import { MoreHorizontal, Pause, Play, Square, Zap } from "lucide-react";
 import {
   killGoalAction,
   pauseGoalAction,
@@ -11,6 +11,13 @@ import {
   runTickNowAction,
 } from "@/server/actions/goals";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +27,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/** Pause / resume / run-tick-now / close controls for a live goal. */
+/**
+ * Live-goal controls, sized for the chip row. "Run check" stays a
+ * first-class chip — it's the one control used daily. Pause/resume and
+ * Close live behind the ⋯ overflow: needed, but rare enough that they
+ * shouldn't spend header space or invite misclicks next to daily chips.
+ */
 export function GoalControls({
   goalId,
   status,
@@ -50,52 +62,73 @@ export function GoalControls({
   return (
     <div className="flex items-center gap-2">
       {status === "active" && (
-        <>
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="Run tick now"
-            disabled={pending}
-            onClick={() => run(() => runTickNowAction(goalId), "Tick started — watch the diary.")}
-          >
-            <Zap className="size-3.5" />
-            <span className="hidden sm:inline">Run tick now</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="Pause goal"
-            disabled={pending}
-            onClick={() => run(() => pauseGoalAction(goalId), "Goal paused.")}
-          >
-            <Pause className="size-3.5" />
-            <span className="hidden sm:inline">Pause</span>
-          </Button>
-        </>
+        <button
+          type="button"
+          className="ns-chip"
+          aria-label="Run check now"
+          disabled={pending}
+          onClick={() => run(() => runTickNowAction(goalId), "Check started — watch the diary.")}
+        >
+          <Zap aria-hidden />
+          <span className="hidden sm:inline">Run check</span>
+        </button>
       )}
       {status === "paused" && (
-        <Button
-          variant="outline"
-          size="sm"
+        <button
+          type="button"
+          className="ns-chip"
           aria-label="Resume goal"
           disabled={pending}
           onClick={() => run(() => resumeGoalAction(goalId), "Goal resumed — heartbeat restarted.")}
         >
-          <Play className="size-3.5" />
+          <Play aria-hidden />
           <span className="hidden sm:inline">Resume</span>
-        </Button>
+        </button>
       )}
-      <Button
-        variant="outline"
-        size="sm"
-        aria-label="Close goal"
-        disabled={pending}
-        onClick={() => setKillOpen(true)}
-        className="text-[hsl(0_72%_51%)]"
-      >
-        <Square className="size-3.5" />
-        <span className="hidden sm:inline">Close goal</span>
-      </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="ns-chip !px-1.5"
+            aria-label="More goal actions"
+            disabled={pending}
+          >
+            <MoreHorizontal aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          {status === "active" && (
+            <DropdownMenuItem
+              disabled={pending}
+              onSelect={() => run(() => pauseGoalAction(goalId), "Goal paused.")}
+            >
+              <Pause />
+              Pause the loop
+            </DropdownMenuItem>
+          )}
+          {status === "paused" && (
+            <DropdownMenuItem
+              disabled={pending}
+              onSelect={() =>
+                run(() => resumeGoalAction(goalId), "Goal resumed — heartbeat restarted.")
+              }
+            >
+              <Play />
+              Resume the loop
+            </DropdownMenuItem>
+          )}
+          {(status === "active" || status === "paused") && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={pending}
+            onSelect={() => setKillOpen(true)}
+          >
+            <Square />
+            Close goal…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Dialog open={killOpen} onOpenChange={setKillOpen}>
         <DialogContent>

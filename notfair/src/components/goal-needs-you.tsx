@@ -57,7 +57,7 @@ export function GoalNeedsYouDialog({ items }: { items: NeedsYouItem[] }) {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[hsl(var(--notfair-warn)/0.15)] px-2.5 py-1 text-[12px] font-medium text-[hsl(var(--notfair-warn))] transition-colors hover:bg-[hsl(var(--notfair-warn)/0.25)]"
+          className="ns-chip !bg-[hsl(var(--notfair-warn)/0.15)] font-medium !text-[hsl(var(--notfair-warn))] hover:!bg-[hsl(var(--notfair-warn)/0.25)]"
           title="Actions only you can take — the agent is blocked on these"
         >
           <TriangleAlert className="size-3.5" aria-hidden />

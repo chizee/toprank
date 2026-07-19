@@ -41,7 +41,7 @@ export function GoalPrsDialog({ prs }: { prs: PrRow[] }) {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[hsl(var(--notfair-surface-2))] px-2.5 py-1 text-[12px] text-[hsl(var(--notfair-ink-3))] transition-colors hover:text-[hsl(var(--notfair-ink-1))]"
+          className="ns-chip"
           title="Open pull requests this goal's agent is waiting on"
         >
           <GitPullRequest className="size-3.5" aria-hidden />

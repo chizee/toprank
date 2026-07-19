@@ -48,7 +48,7 @@ export function GoalMemoryDialog({ entries }: { entries: MemoryEntry[] }) {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[hsl(var(--notfair-surface-2))] px-2.5 py-1 text-[12px] text-[hsl(var(--notfair-ink-3))] transition-colors hover:text-[hsl(var(--notfair-ink-1))]"
+          className="ns-chip"
           title="What the agent has learned about this goal"
         >
           <Brain className="size-3.5" aria-hidden />
