@@ -38,6 +38,7 @@ import { GoalControls } from "@/components/goal-controls";
 import { GoalStartButton } from "@/components/goal-start-button";
 import { GoalAutoRefresh } from "@/components/goal-auto-refresh";
 import { GoalProgressChart } from "@/components/goal-progress-chart";
+import { GoalMetricCard, type MetricVariant } from "@/components/goal-metric-card";
 import { GoalChecksStrip } from "@/components/goal-checks-strip";
 import { GoalChecksList } from "@/components/goal-checks-list";
 import { RailSection } from "@/components/rail-section";
@@ -293,6 +294,55 @@ function GoalDashboard({
   const mutationTicks = new Set(
     allActions.filter((a) => a.kind === "mutation").map((a) => a.tick_number),
   );
+  // One metric, several windows: supporting metrics whose base name matches
+  // the goal metric fold into the hero card's window switcher; anything
+  // else remains a genuine supporting metric below.
+  const baseName = (name: string | null) =>
+    (name ?? "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const windowLabel = (name: string | null) => {
+    const paren = /\(([^)]*)\)\s*$/.exec(name ?? "")?.[1] ?? "";
+    return paren.split(/[\s,]+/).filter(Boolean).pop() ?? "now";
+  };
+  const supportRows = supportMetrics.map((metric) => ({
+    metric,
+    points: listSupportMetricSnapshots(metric.id, 400).map((sn) => ({
+      t: Date.parse(sn.created_at),
+      v: sn.value,
+      source: sn.source,
+    })),
+  }));
+  const isWindowVariant = ({ metric }: (typeof supportRows)[number]) =>
+    baseName(metric.name) === baseName(goal.metric_name);
+  const extraSupports = supportRows.filter((row) => !isWindowVariant(row));
+  const metricVariants: MetricVariant[] = [
+    {
+      key: "goal",
+      label: windowLabel(goal.metric_name),
+      name: goal.metric_name ?? "Metric",
+      current: goal.current_value,
+      baseline: goal.baseline_value,
+      target: goal.target_value,
+      direction: goal.metric_direction,
+      sourceKey: goal.metric_source_key,
+      sourceTool: goal.metric_source_tool,
+      argsJson: goal.metric_source_args_json,
+      points: chartPoints,
+    },
+    ...supportRows.filter(isWindowVariant).map(({ metric, points }) => ({
+      key: metric.id,
+      label: windowLabel(metric.name),
+      name: metric.name,
+      current: metric.current_value,
+      baseline: metric.baseline_value,
+      target: null,
+      direction: metric.direction,
+      sourceKey: metric.source_key,
+      sourceTool: metric.source_tool,
+      argsJson: metric.source_args_json,
+      points,
+    })),
+  ];
+
   const squares = buildCheckSquares(
     ticks
       .filter((t) => t.status !== "running" && t.trigger_kind !== "intake")
@@ -371,73 +421,57 @@ function GoalDashboard({
         goal.status === "failed" ||
         goal.status === "killed") && (
         <>
-          <RailCard>
-            <div className="mb-1 flex items-baseline justify-between">
-              <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[hsl(var(--notfair-ink-4))]">
-                <span className="truncate">{goal.metric_name ?? "Metric"}</span>
-                <MetricMethodDialog
-                  name={goal.metric_name ?? "Metric"}
-                  sourceKey={goal.metric_source_key}
-                  sourceTool={goal.metric_source_tool}
-                  argsJson={goal.metric_source_args_json}
-                  direction={goal.metric_direction}
-                />
-              </span>
-              {targetMet && (
-                <span className="ns-tag">
-                  {goal.mode === "maintain" ? "holding" : "target met"}
-                </span>
-              )}
-              {tickRunning && <span className="ns-tag">checking…</span>}
-            </div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-2xl font-semibold tabular-nums">
-                {formatMetric(goal.current_value)}
-              </span>
-              <span className="text-[11.5px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
-                target {formatMetric(goal.target_value)}
-                {goal.mode === "maintain" ? " (hold)" : ""} · baseline {formatMetric(goal.baseline_value)}
-              </span>
-            </div>
-            {goal.mode === "maintain" && (
-              <div className="mt-3">
-                <GoalChecksStrip squares={squares} streak={streak} />
-              </div>
-            )}
-            <div className="mt-3">
-              <GoalProgressChart
-                points={chartPoints}
-                actions={chartActions}
-                failures={chartFailures}
-                target={goal.target_value}
-                baseline={goal.baseline_value}
-                deadline={goal.deadline ? Date.parse(goal.deadline) : null}
-              />
-            </div>
-            <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[hsl(var(--notfair-ink-4))]">
-              {cadenceLabel(goal.cadence_cron)} · next check{" "}
-              {goal.status === "active" && goal.next_tick_at
-                ? tickRunning
-                  ? "running now"
-                  : `${timeUntil(goal.next_tick_at)} (${fmtClock(goal.next_tick_at)})`
-                : "—"}{" "}
-              · {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} so far
-              {goal.spend_envelope_usd !== null &&
-                ` · spent $${loggedSpendTotal(goal.id)} of $${goal.spend_envelope_usd}`}
-            </p>
-            {goal.status_reason &&
-              (goal.status === "achieved" || goal.status === "failed" || goal.status === "killed") && (
-                <Markdown className="mt-2 text-[12px] leading-relaxed text-[hsl(var(--notfair-ink-3))] [&_p]:m-0">
-                  {goal.status_reason}
-                </Markdown>
-              )}
-          </RailCard>
+          <GoalMetricCard
+            variants={metricVariants}
+            mode={goal.mode}
+            badges={
+              <>
+                {targetMet && (
+                  <span className="ns-tag">
+                    {goal.mode === "maintain" ? "holding" : "target met"}
+                  </span>
+                )}
+                {tickRunning && <span className="ns-tag">checking…</span>}
+              </>
+            }
+            strip={
+              goal.mode === "maintain" ? (
+                <div className="mt-3">
+                  <GoalChecksStrip squares={squares} streak={streak} />
+                </div>
+              ) : undefined
+            }
+            footer={
+              <>
+                <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[hsl(var(--notfair-ink-4))]">
+                  {cadenceLabel(goal.cadence_cron)} · next check{" "}
+                  {goal.status === "active" && goal.next_tick_at
+                    ? tickRunning
+                      ? "running now"
+                      : `${timeUntil(goal.next_tick_at)} (${fmtClock(goal.next_tick_at)})`
+                    : "—"}{" "}
+                  · {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} so far
+                  {goal.spend_envelope_usd !== null &&
+                    ` · spent $${loggedSpendTotal(goal.id)} of $${goal.spend_envelope_usd}`}
+                </p>
+                {goal.status_reason &&
+                  (goal.status === "achieved" || goal.status === "failed" || goal.status === "killed") && (
+                    <Markdown className="mt-2 text-[12px] leading-relaxed text-[hsl(var(--notfair-ink-3))] [&_p]:m-0">
+                      {goal.status_reason}
+                    </Markdown>
+                  )}
+              </>
+            }
+            actions={chartActions}
+            failures={chartFailures}
+            deadline={goal.deadline ? Date.parse(goal.deadline) : null}
+          />
 
-          {supportMetrics.length > 0 && (
-            <RailSection title="Supporting metrics" count={supportMetrics.length}>
+          {extraSupports.length > 0 && (
+            <RailSection title="Supporting metrics" count={extraSupports.length}>
               <div className="flex flex-col gap-4">
-                {supportMetrics.map((m) => (
-                  <SupportMetricItem key={m.id} metric={m} />
+                {extraSupports.map(({ metric }) => (
+                  <SupportMetricItem key={metric.id} metric={metric} />
                 ))}
               </div>
             </RailSection>
