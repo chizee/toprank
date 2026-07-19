@@ -86,10 +86,10 @@ const STATUS_CHIP: Record<Goal["status"], string> = {
 };
 
 /**
- * THE goal screen — everything about one goal on a single page. The loop
- * dashboard is the primary surface (metric hero, supporting metrics on
- * the same chart grammar, check diary); chat is the side panel for
- * steering, questions, and amendments. No tabs, no thread management —
+ * THE goal screen — everything about one goal on a single page. Chat is
+ * the primary surface (goals are defined and steered in conversation);
+ * the right rail is the loop dashboard: metric hero, supporting metrics
+ * on the same chart grammar, check diary. No tabs, no thread management —
  * one goal, one conversation, one screen.
  */
 export default async function GoalPage({
@@ -221,17 +221,8 @@ export default async function GoalPage({
       </header>
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        {/* The loop dashboard — metrics and checks ARE the product of a
-            running goal, so they get the primary column. */}
-        <section className="min-w-0 flex-1 overflow-y-auto px-5 py-4 md:px-7">
-          <div className="mx-auto flex max-w-3xl flex-col gap-5">
-            <GoalDashboard slug={slug} agentSlug={agentSlug} goal={goal} />
-          </div>
-        </section>
-
-        {/* Chat — important but occasional: steering, questions, amendments.
-            A calm side panel, not the main stage. */}
-        <aside className="hidden w-[420px] shrink-0 flex-col bg-[hsl(var(--notfair-surface-2)/0.4)] lg:flex">
+        {/* Chat — the primary surface. */}
+        <section className="flex min-w-0 flex-1 flex-col">
           <LiveTranscript
             key={threadId}
             projectSlug={slug}
@@ -243,6 +234,14 @@ export default async function GoalPage({
             mcpCatalog={mcpCatalog}
             modelOptions={modelOptions}
           />
+        </section>
+
+        {/* The loop dashboard rail — metric hero, supporting metrics on the
+            same chart grammar, check diary. Wide enough for real charts. */}
+        <aside className="hidden w-[440px] shrink-0 overflow-y-auto bg-[hsl(var(--notfair-surface-2)/0.4)] px-4 py-4 xl:block">
+          <div className="flex flex-col gap-5">
+            <GoalDashboard slug={slug} agentSlug={agentSlug} goal={goal} />
+          </div>
         </aside>
       </div>
     </div>
@@ -436,7 +435,7 @@ function GoalDashboard({
 
           {supportMetrics.length > 0 && (
             <RailSection title="Supporting metrics" count={supportMetrics.length}>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-4">
                 {supportMetrics.map((m) => (
                   <SupportMetricItem key={m.id} metric={m} />
                 ))}
