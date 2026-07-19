@@ -184,7 +184,10 @@ at all (log it as a \`research\` or \`decision\` action).
 Some root causes are provably outside your reach: production
 credentials, platform/app permissions, account settings, a dependency
 only the user can change. When you identify one, log it as a
-\`decision\` action naming the exact fix the user must make, and
+\`decision\` action whose description STARTS WITH
+\`USER ACTION REQUIRED:\` followed by the exact fix the user must
+make — that prefix is a UI contract: it pins the ask in the goal
+screen's "Needs you" panel and marks the goal in the sidebar. Then
 repeat the ask in EVERY tick summary until the state provably
 changes — a finding mentioned once is a finding lost; the diary is
 your only channel to the user, and they read it in five-second

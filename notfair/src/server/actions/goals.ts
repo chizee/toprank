@@ -6,11 +6,14 @@ import {
   deleteGoalsForAgent,
   endActionObservation,
   getGoal,
+  getGoalAction,
   getGoalForAgent,
   renameGoal,
+  reviewGoalAction,
   setGoalPinned,
   setGoalStatus,
   startGoalLoop,
+  USER_ACTION_PREFIX,
 } from "@/server/db/goals";
 import { cascadeDeleteAgentArtifacts } from "@/server/agents/cascade-delete";
 import { getProject } from "@/server/db/projects";
@@ -209,6 +212,32 @@ export async function releaseLockAction(action_id: string): Promise<GoalActionRe
   if (!released) {
     return { ok: false, error: "Lock not found — it may already be released." };
   }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * "Mark handled" on a Needs-you escalation. The user says they made the
+ * fix; the action closes so the card stops nagging. If telemetry later
+ * proves otherwise, the agent's blocked-on-user rule re-escalates with a
+ * fresh decision action — acknowledgment is cheap, lying to the loop isn't.
+ */
+export async function markUserActionHandledAction(
+  action_id: string,
+): Promise<GoalActionResult> {
+  const action = getGoalAction(action_id);
+  if (
+    !action ||
+    action.kind !== "decision" ||
+    !action.description.startsWith(USER_ACTION_PREFIX)
+  ) {
+    return { ok: false, error: "Not an open user-action escalation." };
+  }
+  const reviewed = reviewGoalAction(
+    action_id,
+    "User marked this handled from the goal screen. Verify against telemetry on a later check; re-escalate if it is still broken.",
+  );
+  if (!reviewed) return { ok: false, error: "Already closed." };
   revalidatePath("/", "layout");
   return { ok: true };
 }

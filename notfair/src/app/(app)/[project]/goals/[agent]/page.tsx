@@ -7,13 +7,16 @@ import {
   getLatestGoalForAgent,
   listGoalActions,
   listOpenGoalActions,
+  listUserActionRequests,
   loggedSpendTotal,
   listGoalLearnings,
   listGoalTicks,
   listMetricSnapshots,
   isTargetMet,
+  USER_ACTION_PREFIX,
   type Goal,
 } from "@/server/db/goals";
+import { GoalNeedsYou, type NeedsYouItem } from "@/components/goal-needs-you";
 import { listCheckRows } from "@/server/goals/checks";
 import {
   listSessionsForAgent,
@@ -242,6 +245,15 @@ function GoalRail({
 }) {
   const snapshots = listMetricSnapshots(goal.id, 400);
   const ticks = listGoalTicks(goal.id, 60);
+  // Open escalations only the user can resolve — pinned above everything.
+  const needsYou: NeedsYouItem[] = listUserActionRequests(goal.id).map((a) => ({
+    action_id: a.id,
+    ask: a.description
+      .slice(USER_ACTION_PREFIX.length)
+      .replace(/^[\s:—–-]+/, ""),
+    tick_number: a.tick_number,
+    raised_at: a.created_at,
+  }));
   const allActions = listGoalActions(goal.id, 100);
   const targetMet = isTargetMet(goal);
   const tickRunning = ticks.some((t) => t.status === "running");
@@ -293,6 +305,8 @@ function GoalRail({
 
   return (
     <div className="flex flex-col gap-5">
+      <GoalNeedsYou items={needsYou} />
+
       {/* Statement */}
       <p className="m-0 text-[12.5px] leading-relaxed text-[hsl(var(--notfair-ink-3))]">
         “{goal.statement}”

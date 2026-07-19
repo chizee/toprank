@@ -19,6 +19,7 @@ import { listProjects } from "@/server/db/projects";
 import { getActiveProject } from "@/server/active-project";
 import { listProjectAgents } from "@/server/agent-meta";
 import {
+  countUserActionRequests,
   getPinnedGoalIds,
   listGoals,
   listLiveGoals,
@@ -80,6 +81,8 @@ export async function AppSidebar() {
   const agentBySlug = new Map(agentEntries.map((a) => [a.agent_id, a]));
   // Move-to-group menu targets on every goal row.
   const groupTargets = goalGroups.map((group) => ({ id: group.id, name: group.name }));
+  // Open "Needs you" escalations per goal — amber mark on the rail rows.
+  const attentionByGoal = active ? countUserActionRequests(active.slug) : new Map<string, number>();
   // Full goal list for the create-group dialog behind the + header action.
   const groupNameById = new Map(goalGroups.map((group) => [group.id, group.name]));
   const editorGoals: GoalGroupEditorGoal[] = allGoals.map((goal) => {
@@ -165,6 +168,7 @@ export async function AppSidebar() {
                       projectSlug={active.slug}
                       groups={groupTargets}
                       groupId={null}
+                      needsAttention={(attentionByGoal.get(goal.id) ?? 0) > 0}
                     />
                   );
                 })}
@@ -196,6 +200,7 @@ export async function AppSidebar() {
                             projectSlug={active.slug}
                             groups={groupTargets}
                             groupId={group.id}
+                            needsAttention={(attentionByGoal.get(goal.id) ?? 0) > 0}
                           />
                         );
                       })}

@@ -659,6 +659,33 @@ export function listOpenGoalActions(goal_id: string): GoalAction[] {
     .all(goal_id) as GoalAction[];
 }
 
+/** Escalation contract: the agent identity requires decision actions that
+ *  need the USER to act to start with this prefix. The "Needs you" UI keys
+ *  off it — prose elsewhere never surfaces there. */
+export const USER_ACTION_PREFIX = "USER ACTION REQUIRED";
+
+/** Open escalations awaiting the user, oldest first. */
+export function listUserActionRequests(goal_id: string): GoalAction[] {
+  return listOpenGoalActions(goal_id).filter(
+    (a) => a.kind === "decision" && a.description.startsWith(USER_ACTION_PREFIX),
+  );
+}
+
+/** goal_id → open user-escalation count, for rail badges across a project. */
+export function countUserActionRequests(project_slug: string): Map<string, number> {
+  const rows = getDb()
+    .prepare(
+      `SELECT a.goal_id AS goal_id, COUNT(*) AS n
+         FROM goal_actions a
+         JOIN goals g ON g.id = a.goal_id
+        WHERE g.project_slug = ? AND a.status = 'open'
+          AND a.kind = 'decision' AND a.description LIKE ? || '%'
+        GROUP BY a.goal_id`,
+    )
+    .all(project_slug, USER_ACTION_PREFIX) as Array<{ goal_id: string; n: number }>;
+  return new Map(rows.map((r) => [r.goal_id, r.n]));
+}
+
 export function listGoalActions(goal_id: string, limit = 50): GoalAction[] {
   return getDb()
     .prepare(

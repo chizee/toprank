@@ -16,6 +16,7 @@ import {
   PinOff,
   Play,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 import {
   SidebarMenuAction,
@@ -77,6 +78,7 @@ export function SidebarGoalItem({
   projectSlug,
   groups,
   groupId,
+  needsAttention = false,
 }: {
   href: string;
   /** Project home — where the user lands after deleting the open goal. */
@@ -92,6 +94,8 @@ export function SidebarGoalItem({
   groups: { id: string; name: string }[];
   /** The group this goal currently belongs to, if any. */
   groupId: string | null;
+  /** Open "Needs you" escalations — renders the amber attention mark. */
+  needsAttention?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -147,6 +151,12 @@ export function SidebarGoalItem({
         >
           <span className={cn("ns-dot", dotClass)} aria-hidden />
           <span className={cn("truncate", labelClass)}>{label}</span>
+          {needsAttention && (
+            <TriangleAlert
+              aria-label="Needs your action"
+              className="!size-3 shrink-0 text-[hsl(var(--notfair-warn))]"
+            />
+          )}
           {pinned && (
             <Pin
               aria-label="Pinned"
