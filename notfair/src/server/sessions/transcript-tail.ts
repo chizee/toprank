@@ -126,6 +126,11 @@ export function readTranscriptTail(
     } else if (row.kind === "error") {
       const text = typeof payload.message === "string" ? payload.message : "";
       events.push({ kind: "assistant_text", id, ts, body: `⚠ ${text}` });
+      // An error IS the end of the turn: the harness died without writing
+      // its final, so no lifecycle "done" will ever come. Emit a synthetic
+      // boundary so the client's open-turn detection closes immediately
+      // instead of showing "still working" until the staleness cutoff.
+      events.push({ kind: "lifecycle", id: `${id}:done`, ts, phase: "done" });
     } else {
       events.push({ kind: "unknown", id, ts, raw_type: row.kind });
     }
