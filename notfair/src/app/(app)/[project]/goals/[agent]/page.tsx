@@ -427,23 +427,30 @@ function GoalDashboard({
             badges={
               <>
                 {targetMet && (
-                  <span className="ns-tag">
+                  <span key="state" className="ns-tag">
                     {goal.mode === "maintain" ? "holding" : "target met"}
                   </span>
                 )}
-                {tickRunning && <span className="ns-tag">checking…</span>}
+                {tickRunning && (
+                  <span key="checking" className="ns-tag">
+                    checking…
+                  </span>
+                )}
               </>
             }
             strip={
               goal.mode === "maintain" ? (
-                <div className="mt-3">
+                <div key="strip" className="mt-3">
                   <GoalChecksStrip squares={squares} streak={streak} />
                 </div>
               ) : undefined
             }
             footer={
               <>
-                <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[hsl(var(--notfair-ink-4))]">
+                <p
+                  key="cadence"
+                  className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[hsl(var(--notfair-ink-4))]"
+                >
                   {cadenceLabel(goal.cadence_cron)} · next check{" "}
                   {goal.status === "active" && goal.next_tick_at
                     ? tickRunning
@@ -456,7 +463,10 @@ function GoalDashboard({
                 </p>
                 {goal.status_reason &&
                   (goal.status === "achieved" || goal.status === "failed" || goal.status === "killed") && (
-                    <Markdown className="mt-2 text-[12px] leading-relaxed text-[hsl(var(--notfair-ink-3))] [&_p]:m-0">
+                    <Markdown
+                      key="reason"
+                      className="mt-2 text-[12px] leading-relaxed text-[hsl(var(--notfair-ink-3))] [&_p]:m-0"
+                    >
                       {goal.status_reason}
                     </Markdown>
                   )}
