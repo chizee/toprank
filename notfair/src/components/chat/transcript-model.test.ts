@@ -137,6 +137,11 @@ describe("humanizeTool", () => {
     expect(humanizeTool("mcp__X__frobnicateWidget", null).verb).toBe(
       "Called frobnicate widget",
     );
+    // PostHog's exec is a query engine — label-less legacy rows still
+    // deserve the honest specific verb.
+    expect(humanizeTool("notfair_growth__posthog.exec", null).verb).toBe(
+      "Ran a query",
+    );
   });
 });
 

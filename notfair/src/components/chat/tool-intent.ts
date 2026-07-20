@@ -104,7 +104,7 @@ export function humanizeTool(name: string, label: string | null): ToolIntent {
     return { verb: "Searched the web", target: label ?? undefined };
   // MCP / generic tool — strip namespace prefixes and speak the action
   // in natural language ("Listed ad accounts", "Ran a query", …).
-  return mcpActionIntent(formatToolName(name), label);
+  return mcpActionIntent(formatToolName(name), label, name);
 }
 
 /**
@@ -114,15 +114,23 @@ export function humanizeTool(name: string, label: string | null): ToolIntent {
  * phrase and the rest names the object. Unknown verbs fall back to
  * "Called <action>" — honest, never wrong.
  */
-function mcpActionIntent(action: string, label: string | null): ToolIntent {
+function mcpActionIntent(
+  action: string,
+  label: string | null,
+  fullName = "",
+): ToolIntent {
   const pretty = prettifyToolAction(action); // e.g. "list ad accounts"
   const [head = "", ...rest] = pretty.split(" ");
   const obj = rest.join(" ");
   const target = label ?? undefined;
   // SQL-looking labels beat name heuristics: whatever the tool is called,
-  // the user is looking at a query.
+  // the user is looking at a query. Analytics servers whose exec IS a
+  // query engine (PostHog) qualify by name even for label-less legacy
+  // rows — their exec has no other meaning.
   const sqlish =
-    !!label && /^\s*(select|with|insert|delete\s+from|update\s+\w+\s+set)\b/i.test(label);
+    (!!label &&
+      /^\s*(select|with|insert|delete\s+from|update\s+\w+\s+set)\b/i.test(label)) ||
+    fullName.toLowerCase().includes("posthog");
   switch (head.toLowerCase()) {
     case "exec":
     case "execute":
