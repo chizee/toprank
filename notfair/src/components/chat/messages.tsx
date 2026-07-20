@@ -8,6 +8,7 @@ import {
   Loader2,
   MessageCircle,
   Wrench,
+  XCircle,
 } from "lucide-react";
 
 import { Markdown } from "@/components/markdown";
@@ -126,12 +127,12 @@ export function ToolGroup({
   const mcpCount = tools.filter((tool) =>
     matchMcpServerKey(tool.name, mcpCatalog),
   ).length;
-  const StatusIcon = isLive ? Loader2 : hasError ? AlertCircle : CheckCircle2;
+  const StatusIcon = isLive ? Loader2 : hasError ? XCircle : CheckCircle2;
   const statusClass = isLive
-    ? "text-muted-foreground motion-safe:animate-spin"
+    ? "text-[hsl(var(--notfair-accent))] motion-safe:animate-spin"
     : hasError
       ? "text-destructive"
-      : "text-muted-foreground/50";
+      : "text-emerald-500";
   const summaryLabel =
     tools.length === 1
       ? intent.verb
@@ -159,7 +160,14 @@ export function ToolGroup({
         ) : (
           <HeadIcon className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <span className="font-medium text-foreground/80">{summaryLabel}</span>
+        <span
+          className={cn(
+            "font-medium",
+            isLive ? "ns-shimmer-text" : "text-foreground/80",
+          )}
+        >
+          {summaryLabel}
+        </span>
         {tools.length === 1 && intent.target && (
           <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-muted-foreground/80">
             {intent.target}
@@ -199,13 +207,13 @@ function ToolRow({
   const StatusIcon = entry.done
     ? entry.ok
       ? CheckCircle2
-      : AlertCircle
+      : XCircle
     : Loader2;
   const statusClass = entry.done
     ? entry.ok
-      ? "text-muted-foreground/50"
+      ? "text-emerald-500"
       : "text-destructive"
-    : "text-muted-foreground motion-safe:animate-spin";
+    : "text-[hsl(var(--notfair-accent))] motion-safe:animate-spin";
   // Show the raw command/label only when it actually adds information —
   // i.e. it's not redundant with the intent target the header already
   // surfaces (path/url/etc.). Keeps simple tool rows tight while still

@@ -47,16 +47,23 @@ export function WorkingIndicator({
       <div className="flex min-w-0 items-center gap-2 text-xs">
         {ended ? (
           <CheckCircle2
-            className="size-3.5 shrink-0 text-muted-foreground"
+            className="size-3.5 shrink-0 text-emerald-500"
             aria-hidden
           />
         ) : (
           <Loader2
-            className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+            className="size-3.5 shrink-0 animate-spin text-[hsl(var(--notfair-accent))]"
             aria-hidden
           />
         )}
-        <span className="font-medium text-foreground/90">{headline}</span>
+        <span
+          className={cn(
+            "font-medium",
+            ended ? "text-foreground/90" : "ns-shimmer-text",
+          )}
+        >
+          {headline}
+        </span>
         <span className="text-muted-foreground/45">·</span>
         <span className="truncate text-muted-foreground">
           {agentDisplayName}

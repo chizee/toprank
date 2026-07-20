@@ -203,6 +203,11 @@
   100% { transform: translateX(260%); }
 }
 
+@keyframes ns-text-shimmer {
+  0%   { background-position: 180% 0; }
+  100% { background-position: -180% 0; }
+}
+
 @keyframes heartbeat {
   0%, 100% { transform: scale(0.92); opacity: 0.85; }
   20%      { transform: scale(1.18); opacity: 1; }
@@ -429,6 +434,32 @@
   }
   .ns-chip:hover { color: hsl(var(--notfair-ink-1)); }
   .ns-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Working-state text shimmer — the Claude/ChatGPT "thinking" sweep.
+     A light band travels across the label via background-clip: text.
+     Apply only while genuinely live; static text must never shimmer. */
+  .ns-shimmer-text {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--notfair-ink-4)) 0%,
+      hsl(var(--notfair-ink-4)) 35%,
+      hsl(var(--notfair-ink-1)) 50%,
+      hsl(var(--notfair-ink-4)) 65%,
+      hsl(var(--notfair-ink-4)) 100%
+    );
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: ns-text-shimmer 1.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ns-shimmer-text {
+      animation: none;
+      background: none;
+      color: hsl(var(--notfair-ink-2));
+    }
+  }
   .ns-chip > svg { width: 14px; height: 14px; flex-shrink: 0; }
 
   /* Progress pips — small numbered circles + hairlines. */
