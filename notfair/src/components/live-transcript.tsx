@@ -37,6 +37,7 @@ import {
 import { Markdown } from "@/components/markdown";
 import { brandDomain } from "@/components/mcp-icon";
 import { RunningDot } from "@/components/running-dot";
+import { findOpenTurn, isOpenTurnLive } from "@/lib/turn-state";
 import {
   WorkingIndicator,
   type WorkingMood,
@@ -646,6 +647,22 @@ export function LiveTranscript({
   const transcriptEnded = events.some(
     (e) => e.kind === "lifecycle" && e.phase === "done",
   );
+  // A turn can be running that THIS tab didn't start — another tab, a
+  // reload mid-turn, or a dropped SSE stream (the backend keeps going;
+  // disconnect ≠ cancel). Without this, the UI showed a Send button and
+  // no indicator while the agent was mid-work: everything read as
+  // "finished". Derive in-flight state from the committed events, with a
+  // staleness cutoff so a server crash can't strand a forever-spinner.
+  const openTurn = useMemo(() => findOpenTurn(events), [events]);
+  const [staleNow, setStaleNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!openTurn || sendingChat) return;
+    setStaleNow(Date.now());
+    const id = setInterval(() => setStaleNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [openTurn, sendingChat]);
+  const remoteTurnActive = !sendingChat && isOpenTurnLive(openTurn, staleNow);
+  const composerBusy = sendingChat || remoteTurnActive;
   // Keep the indicator at the bottom of the transcript throughout a live
   // turn. Read-only logs can opt into a static completed status, but merely
   // disabling the composer must never manufacture a forever-running state.
@@ -656,6 +673,7 @@ export function LiveTranscript({
   // working.")
   const showThinking =
     sendingChat ||
+    remoteTurnActive ||
     Boolean(blockedReason) ||
     (showCompletedStatus && transcriptEnded);
 
@@ -711,7 +729,7 @@ export function LiveTranscript({
                     <LiveWorkingIndicator
                       agentDisplayName={agentDisplayName}
                       events={events}
-                      turnStartedAt={turnStartedAt}
+                      turnStartedAt={turnStartedAt ?? openTurn?.startedAt ?? null}
                       lifecyclePhase={pendingLifecycle}
                       pendingTools={pendingTools}
                       hasPendingAssistant={pendingAssistant.length > 0}
@@ -833,7 +851,7 @@ export function LiveTranscript({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-              {sendingChat ? (
+              {composerBusy ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -857,12 +875,14 @@ export function LiveTranscript({
               )}
             </div>
           </form>
-          {(sendingChat || !composerDisabled) && (
+          {(composerBusy || !composerDisabled) && (
             <p className="pt-1.5 text-center text-[10px] text-muted-foreground">
-              {sendingChat ? (
+              {composerBusy ? (
                 <span className="inline-flex items-center gap-1.5">
                   <RunningDot size="sm" aria-label="" />
-                  Streaming — click stop to abort
+                  {sendingChat
+                    ? "Streaming — click stop to abort"
+                    : "Agent is working — click stop to interrupt"}
                 </span>
               ) : (
                 <>Enter to send · Shift+Enter for newline</>
@@ -1406,8 +1426,15 @@ function LiveWorkingIndicator({
   hasPendingAssistant?: boolean;
 }) {
   const [now, setNow] = useState<number>(() => Date.now());
+  // Scope the "done" check to the current turn — an earlier completed
+  // turn's done event must not freeze the clock on a live later turn.
   const visiblyEnded =
-    events.some((e) => e.kind === "lifecycle" && e.phase === "done") &&
+    events.some(
+      (e) =>
+        e.kind === "lifecycle" &&
+        e.phase === "done" &&
+        (turnStartedAt == null || e.ts >= turnStartedAt),
+    ) &&
     !pendingTools?.some((t) => !t.done) &&
     !hasPendingAssistant;
   useEffect(() => {
