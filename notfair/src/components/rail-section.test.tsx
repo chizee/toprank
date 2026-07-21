@@ -33,4 +33,25 @@ describe("RailSection", () => {
     fireEvent.click(toggle);
     expect(screen.getByText("action rows")).toBeVisible();
   });
+
+  it("collapses independently from neighboring sections", () => {
+    render(
+      <>
+        <RailSection title="Goal">
+          <p>Increase qualified traffic</p>
+        </RailSection>
+        <RailSection title="Main metric">
+          <p>Organic sessions</p>
+        </RailSection>
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Goal" }));
+
+    expect(screen.getByText("Increase qualified traffic")).not.toBeVisible();
+    expect(screen.getByText("Organic sessions")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Main metric" }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
 });

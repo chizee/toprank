@@ -358,39 +358,44 @@ function GoalDashboard({
 
   return (
     <>
-      {/* Statement */}
-      <p className="m-0 text-[12.5px] leading-relaxed text-[hsl(var(--notfair-ink-3))]">
-        “{goal.statement}”
-      </p>
+      <RailSection title="Goal">
+        <p className="m-0 text-[12.5px] leading-relaxed text-[hsl(var(--notfair-ink-3))]">
+          “{goal.statement}”
+        </p>
+      </RailSection>
 
       {/* Lifecycle-specific card */}
       {goal.status === "intake" && (
-        <RailCard>
-          <p className="m-0 text-[12.5px] leading-relaxed">
-            The agent is working out how to <b>measure</b> this — watch the
-            chat. It will verify a metric, show you the baseline, and propose
-            a plan. Nothing touches your account yet.
-          </p>
-        </RailCard>
+        <RailSection title="Main metric">
+          <RailCard>
+            <p className="m-0 text-[12.5px] leading-relaxed">
+              The agent is working out how to <b>measure</b> this — watch the
+              chat. It will verify a metric, show you the baseline, and propose
+              a plan. Nothing touches your account yet.
+            </p>
+          </RailCard>
+        </RailSection>
       )}
 
       {goal.status === "proposed" && (
-        <RailCard>
-          <p className="m-0 text-[12.5px] leading-relaxed">
-            Baseline <b className="tabular-nums">{formatMetric(goal.baseline_value)}</b>,
-            verified against{" "}
-            <span className="font-mono text-[11px]">{goal.metric_source_key}</span>{" "}
-            <MetricMethodDialog
-              name={goal.metric_name ?? "Metric"}
-              sourceKey={goal.metric_source_key}
-              sourceTool={goal.metric_source_tool}
-              argsJson={goal.metric_source_args_json}
-              direction={goal.metric_direction}
-            />
-            . Agree the target in chat — the moment you confirm, the loop
-            starts and the first check runs.
-          </p>
-        </RailCard>
+        <RailSection title="Main metric">
+          <RailCard>
+            <p className="m-0 text-[12.5px] leading-relaxed">
+              Baseline <b className="tabular-nums">{formatMetric(goal.baseline_value)}</b>,
+              verified against{" "}
+              <span className="font-mono text-[11px]">{goal.metric_source_key}</span>{" "}
+              <MetricMethodDialog
+                name={goal.metric_name ?? "Metric"}
+                sourceKey={goal.metric_source_key}
+                sourceTool={goal.metric_source_tool}
+                argsJson={goal.metric_source_args_json}
+                direction={goal.metric_direction}
+              />
+              . Agree the target in chat — the moment you confirm, the loop
+              starts and the first check runs.
+            </p>
+          </RailCard>
+        </RailSection>
       )}
 
       {(goal.status === "active" ||
@@ -399,61 +404,63 @@ function GoalDashboard({
         goal.status === "failed" ||
         goal.status === "killed") && (
         <>
-          <GoalMetricCard
-            variants={metricVariants}
-            mode={goal.mode}
-            badges={
-              <>
-                {targetMet && (
-                  <span key="state" className="ns-tag">
-                    {goal.mode === "maintain" ? "holding" : "target met"}
-                  </span>
-                )}
-                {tickRunning && (
-                  <span key="checking" className="ns-tag">
-                    checking…
-                  </span>
-                )}
-              </>
-            }
-            strip={
-              goal.mode === "maintain" ? (
-                <div key="strip" className="mt-3">
-                  <GoalChecksStrip squares={squares} streak={streak} />
-                </div>
-              ) : undefined
-            }
-            footer={
-              <>
-                <p
-                  key="cadence"
-                  className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[hsl(var(--notfair-ink-4))]"
-                >
-                  {cadenceLabel(goal.cadence_cron)} · next check{" "}
-                  {goal.status === "active" && goal.next_tick_at
-                    ? tickRunning
-                      ? "running now"
-                      : `${timeUntil(goal.next_tick_at)} (${fmtClock(goal.next_tick_at)})`
-                    : "—"}{" "}
-                  · {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} so far
-                  {goal.spend_envelope_usd !== null &&
-                    ` · spent $${loggedSpendTotal(goal.id)} of $${goal.spend_envelope_usd}`}
-                </p>
-                {goal.status_reason &&
-                  (goal.status === "achieved" || goal.status === "failed" || goal.status === "killed") && (
-                    <Markdown
-                      key="reason"
-                      className="mt-2 text-[12px] leading-relaxed text-[hsl(var(--notfair-ink-3))] [&_p]:m-0"
-                    >
-                      {goal.status_reason}
-                    </Markdown>
+          <RailSection title="Main metric">
+            <GoalMetricCard
+              variants={metricVariants}
+              mode={goal.mode}
+              badges={
+                <>
+                  {targetMet && (
+                    <span key="state" className="ns-tag">
+                      {goal.mode === "maintain" ? "holding" : "target met"}
+                    </span>
                   )}
-              </>
-            }
-            actions={chartActions}
-            failures={chartFailures}
-            deadline={goal.deadline ? Date.parse(goal.deadline) : null}
-          />
+                  {tickRunning && (
+                    <span key="checking" className="ns-tag">
+                      checking…
+                    </span>
+                  )}
+                </>
+              }
+              strip={
+                goal.mode === "maintain" ? (
+                  <div key="strip" className="mt-3">
+                    <GoalChecksStrip squares={squares} streak={streak} />
+                  </div>
+                ) : undefined
+              }
+              footer={
+                <>
+                  <p
+                    key="cadence"
+                    className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[hsl(var(--notfair-ink-4))]"
+                  >
+                    {cadenceLabel(goal.cadence_cron)} · next check{" "}
+                    {goal.status === "active" && goal.next_tick_at
+                      ? tickRunning
+                        ? "running now"
+                        : `${timeUntil(goal.next_tick_at)} (${fmtClock(goal.next_tick_at)})`
+                      : "—"}{" "}
+                    · {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} so far
+                    {goal.spend_envelope_usd !== null &&
+                      ` · spent $${loggedSpendTotal(goal.id)} of $${goal.spend_envelope_usd}`}
+                  </p>
+                  {goal.status_reason &&
+                    (goal.status === "achieved" || goal.status === "failed" || goal.status === "killed") && (
+                      <Markdown
+                        key="reason"
+                        className="mt-2 text-[12px] leading-relaxed text-[hsl(var(--notfair-ink-3))] [&_p]:m-0"
+                      >
+                        {goal.status_reason}
+                      </Markdown>
+                    )}
+                </>
+              }
+              actions={chartActions}
+              failures={chartFailures}
+              deadline={goal.deadline ? Date.parse(goal.deadline) : null}
+            />
+          </RailSection>
 
           {extraSupports.length > 0 && (
             <RailSection title="Supporting metrics" count={extraSupports.length}>
