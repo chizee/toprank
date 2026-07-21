@@ -23,6 +23,16 @@
     "./seo/seo-page",
     "./seo/broken-link-checker",
     "./seo/geo-optimizer",
+    "./seo/local-seo",
+    "./seo/hreflang-international",
+    "./seo/sitemap-audit",
+    "./seo/image-seo",
+    "./seo/ecommerce-seo",
+    "./seo/programmatic-seo",
+    "./seo/competitor-pages",
+    "./seo/sxo",
+    "./seo/seo-drift",
+    "./seo/backlink-audit",
     "./notfair-upgrade-skill",
     "./gemini"
   ]

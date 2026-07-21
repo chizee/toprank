@@ -293,6 +293,16 @@ Your data is preserved — the runtime state directory (`~/.toprank/`, holding p
 | [`seo-page`](seo/seo-page/) | Single-page deep analysis. Focused audit of a specific URL for content quality, structure, and keyword optimization. |
 | [`broken-link-checker`](seo/broken-link-checker/) | Scans websites to find and report broken internal and external links (404s/5xx). |
 | [`geo-optimizer`](seo/geo-optimizer/) | Generative Engine Optimization (GEO) for AI search engines. Audits content with a 0–100 GEO Score, rewrites for AI citation, and produces per-engine strategy for ChatGPT, Claude, Perplexity, Gemini, and Google AI Overviews. |
+| [`local-seo`](seo/local-seo/) | Local pack / Google Business Profile audit. NAP consistency, GBP completeness, review health, local & service-area pages, and LocalBusiness schema. |
+| [`hreflang-international`](seo/hreflang-international/) | International / multilingual SEO. Validates hreflang (return tags, x-default, codes), catches hreflang↔canonical conflicts, and reviews URL-structure strategy. |
+| [`sitemap-audit`](seo/sitemap-audit/) | XML sitemap audit. Discovery, structural limits, lastmod accuracy, and a URL reality cross-check (non-200 / noindex / canonicalized-away listed; indexable pages missing). |
+| [`image-seo`](seo/image-seo/) | Image SEO audit. Alt text, file names, WebP/AVIF, compression, srcset, CLS width/height, lazy-load, image sitemaps, ImageObject schema. |
+| [`ecommerce-seo`](seo/ecommerce-seo/) | E-commerce SEO. Category/product pages, faceted-navigation crawl traps, variant canonicals, out-of-stock handling, Product/Offer schema. |
+| [`programmatic-seo`](seo/programmatic-seo/) | Programmatic / templated pages at scale. Demand validation, uniqueness/value gate, internal linking, indexation management, doorway-page guardrails. |
+| [`competitor-pages`](seo/competitor-pages/) | Competitor page gap analysis. Coverage matrix, intent/depth/schema comparison vs. top-ranking URLs, and a brief to beat the SERP. |
+| [`sxo`](seo/sxo/) | Search Experience Optimization. SERP click factors + post-click experience/conversion (intent match, CWV, CTAs, anti-pogo-stick). |
+| [`seo-drift`](seo/seo-drift/) | SEO drift monitoring. Baseline + compare to catch regressions (lost rankings, deindexed pages, overwritten titles, flipped noindex/canonical). |
+| [`backlink-audit`](seo/backlink-audit/) | Backlink / off-page audit. Works from the GSC Links report or a paid export; referring domains, anchor text, internal-linking wins, toxic-link verdict. |
 | [`setup-cms`](seo/setup-cms/) | Connect WordPress, Strapi, Contentful, or Ghost for automated SEO field audits. |
 
 #### Cross-Model
@@ -341,6 +351,16 @@ notfair/
 │   ├── seo-page/                <- single-page deep analysis
 │   ├── broken-link-checker/     <- broken link scanner
 │   ├── geo-optimizer/           <- GEO for AI search engines
+│   ├── local-seo/               <- local pack / Google Business Profile audit
+│   ├── hreflang-international/   <- hreflang / multilingual audit
+│   ├── sitemap-audit/           <- XML sitemap audit
+│   ├── image-seo/               <- image SEO audit
+│   ├── ecommerce-seo/           <- e-commerce store SEO audit
+│   ├── programmatic-seo/        <- programmatic / templated pages at scale
+│   ├── competitor-pages/        <- competitor page gap analysis
+│   ├── sxo/                     <- search experience optimization
+│   ├── seo-drift/               <- SEO regression monitoring
+│   ├── backlink-audit/          <- backlink / off-page audit
 │   └── setup-cms/               <- CMS connector
 ├── gemini/                      <- cross-model review via Gemini CLI
 ├── notfair-upgrade-skill/       <- self-updater
