@@ -2,45 +2,68 @@
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/gVJCRczpps)
 
-**Goal-driven, loop-powered marketing agents — running on your local machine.**
+**Goal-driven, loop-powered marketing — running on your local machine.**
 
-State an ambition — *"cut CAC to $30"*, *"get organic clicks to 1,000/week"*, *"keep wasted ad spend at $0"* — and a dedicated agent turns it into a server-verified metric with a measured baseline, then runs a disciplined improvement loop against it: measure, review past moves, make at most one new move, log the prediction, repeat on your cadence. You watch the number move on a chart. Goals are the only thing you name, see, and manage.
+Stop babysitting dashboards. State an ambition in plain language:
 
-NotFair is two things that share one engine:
+> *"Grow organic clicks 30% in 90 days."* · *"Cut CAC to $30."* · *"Keep wasted ad spend at $0."*
 
-1. **[The NotFair app](#the-notfair-app)** — a local web portal (npm: [`notfair`](https://www.npmjs.com/package/notfair)) that runs goal loops on top of the Claude Code or Codex login you already have.
-2. **[The NotFair plugin](#the-notfair-plugin--marketing-skills-for-your-ai-agent)** — SEO, Google Ads, and Meta Ads skills for Claude Code (and other AI agent hosts), for hands-on-keyboard marketing work in your terminal.
+NotFair gives each ambition a dedicated agent that turns it into a **server-verified metric with a measured baseline**, agrees a target with you in chat, and then runs a disciplined improvement loop against it — measure, score its past moves against what they predicted, make one new move, log the prediction, repeat on your cadence. Around the clock, whether you're watching or not. Goals are the only thing you name, see, and manage; the agents behind them are invisible plumbing.
 
-Both talk to your real platforms through the same MCP servers: Google Ads, Meta Ads (Facebook + Instagram), and Google Search Console. [notfair.co](https://notfair.co) is the companion web service that hosts the ad-platform MCPs and the OAuth — sign in once per platform, no API keys to copy.
+It runs entirely on your machine, on top of the [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview) or [Codex](https://github.com/openai/codex) login you already pay for — no new subscription, no hosted runtime, no API keys to manage. Your data lives in a local SQLite file. Open source, MIT.
 
-> *"Am I wasting money on ads right now?"*
-> *"Why did my traffic drop and how do I fix it?"*
-> *"How do I get more conversions without spending more?"*
+```bash
+npx notfair@latest
+```
 
-Free, open-source, MIT.
+## See it work
 
----
+![The NotFair goal screen: the agent proposing a measured plan in chat, with the live metric chart and check diary on the right](docs/goal-screen.png)
 
-## The NotFair app
+This is a live **"Organic web clicks +30%"** goal — one screen holds the whole loop:
 
-A local, single-user web app built around one idea: **state a goal, get a loop.** No dashboards to interpret, no task boards to groom, no approval inboxes. You describe what you want in plain language; an agent works out how to measure it, proves the measurement reproduces, and then improves the number check by check — with every move logged, predicted, and scored against what actually happened.
+- **The plan is measured before it's agreed** (center): the agent verified the metric in Search Console, the platform reproduced it server-side — baseline **59 clicks** over the latest 28 finalized days — and it backfilled 30 days of history so the chart starts with a trend, not a dot. Then the proposal, in numbers: target `77`, deadline `2026-10-11`, daily 9am checks, `$0` spend envelope. The user replies *"Confirmed — record it."* and the loop is on.
+- **The number that matters** (right): clicks at **76** against the target of **77**, with the target line on a time-true chart, the cadence spelled out — next check in 12h, 17 checks so far — and **$0 of $0 spent**.
+- **The receipts** (right rail, below the chart): every check is a diary entry. Checks 15–17 are honest no-ops: *"metric measured and recorded; the agent was not woken — 2 actions are still inside their observation window."* The loop doesn't fake activity; it waits for its own experiments to mature. Filter to "Action taken" to see only the checks that changed something.
+- **The whole operation** (left): achieve goals ("Organic web clicks +30%", "X Ads CPA < $47") next to maintain watchdogs ("X impressions → steady") that hold a number forever. At the bottom: the harness it's riding — your existing Codex plan, with usage visible.
 
-### How a goal works
+No approval inbox, no task board, no thread management. You chat with a goal when you have something to say; otherwise the loop runs and the chart tells you how it's going.
+
+## How a goal works
 
 1. **State the ambition.** Type it in your own words and optionally tag a platform focus (SEO, Google Ads, Meta Ads). NotFair provisions an anonymous agent for the goal — agent = goal, 1:1 — and drops you into a chat where it is *already working*.
 2. **The agent makes it measurable.** It explores your connected data sources, authors a metric query that returns one number, and tests it. Then the platform **re-runs the exact query server-side** — only a reproducible number with a measured baseline goes on the books. The agent also backfills ~30 days of history so your chart has context from day one.
 3. **You confirm the plan — the loop starts on the spot.** The agent reports the baseline and proposes a target, cadence, and spend envelope. The moment you confirm in chat, the goal goes live and the first check runs immediately. Two modes: **achieve** (reach the number, then done) and **maintain** (hold it there forever — a watchdog).
 4. **The loop runs on your cadence.** Each check, the platform measures the metric mechanically (the agent never self-reports the number it's judged on) and wakes the agent: it reviews past moves against their predicted effects, records what it learned, and the goal protocol allows at most **one** new move — logged with a falsifiable expected effect and an observation window that gates the touched resources until review.
 
-### What you get
+## What you get
 
 - **One screen per goal.** Chat on the left (where the goal is defined and steered), the loop's state on the right: a time-true progress chart with the target line, every action as a marker on the moment it happened, a tick-by-tick check diary, open actions with review dates, and the agent's accumulated memory.
 - **Autonomy with discipline, visibly.** Agents act inside the spend envelope you set, under observation-window rules, with a pause button for scheduled work and every recorded move visible in the app. These are behavioral guardrails for trusted local automation — not an OS-level sandbox.
 - **Code changes through pull requests.** Attach a GitHub-backed codebase and the agent works in its own branch, pushes, opens a PR, and registers it with NotFair. The app tracks PR state; merging stays yours.
 - **Shared context + private memory.** A workspace-wide `PROJECT.md` brief that every agent carries, plus a per-goal learnings ledger that compounds across checks.
-- **One-click platform connections.** The Connections page runs a PKCE OAuth flow for NotFair's hosted MCPs (Google Ads, Meta Ads, Search Console, and more) — pick the account or property once, and every goal agent in the project is wired automatically.
+- **One-click platform connections.** The Connections page runs a PKCE OAuth flow — pick the account or property once, and every goal agent in the project is wired automatically. See the full catalog below.
 
-### Install & run
+## Where the data comes from
+
+A goal is only as honest as its metric, so NotFair measures at the source. Connect any of these from the Connections page — one-click OAuth, no API keys to copy, no Google Cloud project of your own:
+
+| Data source | What agents get |
+|---|---|
+| **NotFair Google Ads** | Live campaigns, bids, budgets, keywords, search terms, change history |
+| **NotFair Meta Ads** | Facebook + Instagram campaigns, ad sets, creatives, insights |
+| **NotFair X Ads** | X (Twitter) campaigns, line items, promoted posts, analytics |
+| **NotFair Google Search Console** | Organic queries, pages, impressions, clicks, indexing |
+| **NotFair Google Analytics** | GA4 sessions, channels, events, conversions, audiences |
+| **PostHog** | Product analytics, funnels, feature flags |
+| **Mixpanel** | Event analytics, cohorts, retention |
+| **Stripe** | Payments, customers, subscriptions, invoices |
+| **Supabase** | Postgres, auth, storage |
+| **Any custom MCP** | Paste a URL — anything that speaks MCP over HTTP with OAuth becomes a data source |
+
+The five NotFair-hosted ad and search servers live at [notfair.co](https://notfair.co); PostHog, Mixpanel, Stripe, and Supabase connect through the official MCP endpoints those vendors publish. And when no MCP can measure the ambition, the **`local` source** runs a shell command on your machine and reads the number from stdout — GitHub stars, a row count in a local database, an internal endpoint, anything you can print.
+
+## Install & run
 
 **Prerequisites:** an Apple Silicon Mac, Node 20+, and at least one harness installed and authenticated — [Codex CLI](https://github.com/openai/codex) (recommended) or [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview). NotFair brings no LLM keys of its own; it runs on the harness login you already pay for.
 
@@ -62,9 +85,30 @@ notfair start           Same, with --port <n>, --no-open, --data-dir <path>
 notfair doctor          Preflight checks with a Fix: line per failure
 ```
 
+### From source
+
+The app lives in the [`notfair/`](notfair/) directory of this repo. You'll need [pnpm](https://pnpm.io); the native modules (`better-sqlite3`, `keytar`) build automatically on install.
+
+```bash
+git clone https://github.com/nowork-studio/NotFair.git
+cd NotFair/notfair
+pnpm install
+
+pnpm cli doctor   # same preflight the published CLI runs
+pnpm dev          # dev server with hot reload at http://127.0.0.1:3326
+```
+
+The dev server uses the same `~/.notfair/` data directory as an installed `notfair` — if you run both on one machine, isolate the dev state:
+
+```bash
+NOTFAIR_DATA_DIR=$PWD/.notfair-dev pnpm dev
+```
+
+For a production-style run from source, `pnpm build` produces the same standalone bundle the npm package ships, and `pnpm cli` runs the CLI (start, doctor) against your checkout. Verify changes with `pnpm typecheck` and `pnpm test`.
+
 Then: create a project, pick your harness, connect the platforms a goal needs, and state your first ambition. Nothing runs — and nothing spends — until you confirm the plan the agent proposes in chat.
 
-### Where your data lives
+## Where your data lives
 
 Everything is local: app state in `~/.notfair/db.sqlite`, agent workspaces in `~/.notfair/agents/<agent-id>/`. OAuth tokens for connected platforms live in that SQLite database (not yet encrypted at the application layer — protect your local user account accordingly).
 
@@ -74,9 +118,15 @@ Full docs, CLI reference, and architecture notes: [`notfair/README.md`](notfair/
 
 ## The NotFair plugin — marketing skills for your AI agent
 
-The plugin is the hands-on side: skills that run inside Claude Code (and any host that reads [`AGENTS.md`](AGENTS.md)) for audits, campaign management, copywriting, and SEO work — you drive, the agent executes. It analyzes your traffic, surfaces what's hurting your rankings, finds wasted ad spend, diagnoses creative fatigue and audience saturation, and tells you exactly what to fix. When it has access to your repo, it goes further: rewriting meta tags, fixing headings, adding structured data, and shipping the changes.
+This repo also ships the **NotFair plugin**: SEO, Google Ads, and Meta Ads skills for Claude Code (and any host that reads [`AGENTS.md`](AGENTS.md)). Where the app runs autonomous goal loops, the plugin is the hands-on side — audits, campaign management, copywriting, and SEO work in your terminal, where you drive and the agent executes. Both share the same engine: the ad-platform MCP servers hosted at [notfair.co](https://notfair.co) (Google Ads, Meta Ads, Google Search Console) — sign in once per platform, no API keys to copy.
 
-### See it work
+> *"Am I wasting money on ads right now?"*
+> *"Why did my traffic drop and how do I fix it?"*
+> *"How do I get more conversions without spending more?"*
+
+It analyzes your traffic, surfaces what's hurting your rankings, finds wasted ad spend, diagnoses creative fatigue and audience saturation, and tells you exactly what to fix. When it has access to your repo, it goes further: rewriting meta tags, fixing headings, adding structured data, and shipping the changes.
+
+### See the skills work
 
 **Google Ads:**
 
