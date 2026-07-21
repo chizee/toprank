@@ -1,5 +1,13 @@
 # NotFair
 
+## 0.9.8 — 2026-07-21
+
+**Completed checks stay fully conversational.** Opening a finished check from the goal rail now keeps its composer and model picker active, so you can ask follow-up questions or give the agent more work in that check's original context instead of being sent back to the main goal chat.
+
+**The goal rail is easier to scan and control.** The goal statement and primary metric now have explicit **Goal** and **Main metric** headings, and every right-rail section can be collapsed independently without losing its internal state.
+
+**Tool activity no longer flashes open and shut.** Live tool groups stay quietly collapsed by default, keep a stable identity while streaming results settle into the transcript, and preserve the user's manual expanded state through completion.
+
 ## 0.9.7 — 2026-07-21
 
 **`notfair update` — one command from "there's a newer version" to running it.** Checks npm, installs globally, and restarts whatever is running: launchd-managed servers restart through the (freshly rewritten) LaunchAgent, background daemons are stopped and relaunched on the same port and data dir, and source checkouts are pointed at `git pull && pnpm build` instead of being paved over.
