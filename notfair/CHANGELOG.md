@@ -1,6 +1,8 @@
 # NotFair
 
-## Unreleased
+## 0.9.4 — 2026-07-20
+
+**The working indicator's status text is visible again.** The shimmer gradient referenced a CSS token that doesn't exist, which invalidated the whole background — and with `background-clip: text` in play, the headline ("Calling the model", "Thinking", "Using N tools") rendered fully transparent, leaving a blank gap next to the spinner. The same undefined-token sweep restores the metric card's active-segment fill, the context dialog's content wells, chip hover colors, and the "Needs you" badge count.
 
 **Linux gets a native folder picker.** The Browse button now works on Linux desktops via zenity (GTK) with a kdialog (KDE/Plasma) fallback, and reports a clear error when neither is installed. Contributed by @RohithVangalla1 (#77), ported to the renamed app tree.
 
