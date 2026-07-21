@@ -35,17 +35,7 @@ type Props = {
   initialEvents: TranscriptEvent[];
   /** Byte offset *after* `initialEvents` — polls start from here. */
   initialCursor: number;
-  /**
-   * When true, disables the composer. This does not imply that a turn is
-   * still running; read-only transcript views also disable the composer.
-   */
-  composerDisabled?: boolean;
-  /**
-   * Optional explanation shown inside a disabled composer. Read-only
-   * transcript views use this instead of claiming the agent is working.
-   */
-  disabledComposerPlaceholder?: string;
-  /** Keep a static terminal status visible in read-only transcript views. */
+  /** Keep a static terminal status visible after a completed turn. */
   showCompletedStatus?: boolean;
   /**
    * Set when the agent's task is parked in `blocked` (e.g., waiting on a
@@ -86,8 +76,6 @@ export function LiveTranscript({
   threadId,
   initialEvents,
   initialCursor,
-  composerDisabled = false,
-  disabledComposerPlaceholder,
   showCompletedStatus = false,
   blockedReason,
   mcpCatalog,
@@ -218,8 +206,7 @@ export function LiveTranscript({
     (e) => e.kind === "lifecycle" && e.phase === "done",
   );
   // Keep the indicator at the bottom of the transcript throughout a live
-  // turn. Read-only logs can opt into a static completed status, but merely
-  // disabling the composer must never manufacture a forever-running state.
+  // turn. Completed check conversations retain a static terminal status.
   const showThinking =
     sendingChat ||
     remoteTurnActive ||
@@ -240,7 +227,6 @@ export function LiveTranscript({
           {rendered.length === 0 &&
           !pendingUserMsg &&
           !sendingChat &&
-          !composerDisabled &&
           !blockedReason ? (
             <TranscriptEmptyState agentDisplayName={agentDisplayName} />
           ) : (
@@ -297,16 +283,12 @@ export function LiveTranscript({
       <div className="bg-gradient-to-t from-background via-background/95 to-transparent pt-2">
         <div className="mx-auto w-full max-w-3xl px-5 pb-3 sm:px-6">
           <ChatComposer
-            disabled={composerDisabled}
             busy={composerBusy}
             sendingChat={sendingChat}
             placeholder={
-              composerDisabled
-                ? disabledComposerPlaceholder ??
-                  "The agent is working — the transcript updates live"
-                : blockedReason
-                  ? "Reply — the agent will see your message"
-                  : "Message this goal's agent…  (type / for commands)"
+              blockedReason
+                ? "Reply — the agent will see your message"
+                : "Message this goal's agent…  (type / for commands)"
             }
             modelOptions={modelOptions}
             model={model}
