@@ -1,6 +1,6 @@
 # NotFair
 
-> Goal-driven, loop-powered marketing agents that chase your targets 24/7 — on your own machine, on top of Claude Code or Codex. State an ambition — "cut CAC to $30", "keep wasted spend at $0" — and a dedicated agent turns it into a measured metric and runs a disciplined loop against it while you sleep. Goals are the only thing you name, see, and manage; the agents behind them are invisible plumbing.
+> Goal-driven, loop-powered marketing agents that run at your business goals 24/7 — on your own machine, on top of Claude Code or Codex. State an ambition — "cut CAC to $30", "keep wasted spend at $0" — and a dedicated agent turns it into a measured metric and runs a disciplined loop against it while you sleep. Goals are the only thing you name, see, and manage; the agents behind them are invisible plumbing.
 
 Open source. Runs entirely on your machine. Bring your own LLM credentials (via the harness CLI you already authenticate to) and your own ad-platform OAuth.
 

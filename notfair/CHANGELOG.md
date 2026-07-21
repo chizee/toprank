@@ -2,7 +2,7 @@
 
 ## 0.9.3 — 2026-07-20
 
-**Tagline refined.** "Goal-driven, loop-powered marketing agents that chase your targets 24/7" — the identity and the hustle in one line, across npm, CLI `--help`, and the READMEs. First release published by the new auto-publish GitHub Action.
+**Tagline refined.** "Goal-driven, loop-powered marketing agents that run at your business goals 24/7" — the identity and the hustle in one line, across npm, CLI `--help`, and the READMEs. First release published by the new auto-publish GitHub Action.
 
 ## 0.9.2 — 2026-07-20
 
