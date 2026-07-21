@@ -11,9 +11,10 @@ vi.hoisted(() => {
   process.env.NOTFAIR_DATA_DIR = mkdtempSync(join(tmpdir(), "notfair-checks-"));
 });
 
-import { CHECKS_PAGE_SIZE, listCheckRows } from "./checks";
+import { CHECKS_PAGE_SIZE, listCheckRows, writeBadgeForTool } from "./checks";
 import { getDb } from "@/server/db/db";
 import {
+  attachTickSession,
   createGoal,
   createGoalAction,
   createGoalTick,
@@ -41,12 +42,41 @@ beforeEach(() => {
   db.prepare("DELETE FROM goal_ticks").run();
   db.prepare("DELETE FROM goal_prs").run();
   db.prepare("DELETE FROM goal_actions").run();
+  db.prepare("DELETE FROM transcript_events").run();
+  db.prepare("DELETE FROM sessions").run();
 });
 
 function seedTicks(count: number): void {
   for (let n = 1; n <= count; n++) {
     createGoalTick({ goal_id: goalId, tick_number: n, trigger_kind: "heartbeat" });
   }
+}
+
+/** Attach a session to a tick and record tool-call start events in it. */
+function seedTickToolCalls(tick_number: number, toolNames: string[]): void {
+  const db = getDb();
+  const ts = new Date().toISOString();
+  const sessionId = `s-tick-${tick_number}`;
+  db.prepare(
+    `INSERT INTO sessions (id, project_slug, agent_id, label, harness_adapter, created_at, updated_at)
+     VALUES (?, ?, 'agent-1', ?, 'codex-local', ?, ?)`,
+  ).run(sessionId, SLUG, `tick-${tick_number}`, ts, ts);
+  const tickId = db
+    .prepare("SELECT id FROM goal_ticks WHERE goal_id = ? AND tick_number = ?")
+    .get(goalId, tick_number) as { id: string };
+  attachTickSession(tickId.id, sessionId);
+  toolNames.forEach((name, i) => {
+    db.prepare(
+      `INSERT INTO transcript_events (id, session_id, seq, kind, payload_json, created_at)
+       VALUES (?, ?, ?, 'tool', ?, ?)`,
+    ).run(
+      `${sessionId}-e${i}`,
+      sessionId,
+      i + 1,
+      JSON.stringify({ kind: "tool", phase: "start", toolCallId: `item_${i}`, name }),
+      ts,
+    );
+  });
 }
 
 describe("listCheckRows paging", () => {
@@ -74,51 +104,115 @@ describe("listCheckRows paging", () => {
   });
 });
 
-describe("listCheckRows action filter", () => {
-  it("annotates every row with its action count", () => {
+describe("writeBadgeForTool", () => {
+  it("maps write tool calls to short badge labels", () => {
+    expect(
+      writeBadgeForTool("notfair_x__notfair_googleads.updateCampaignBudget"),
+    ).toBe("Campaign budget updated");
+    expect(writeBadgeForTool("mcp__NotFair-GoogleAds__pauseKeyword")).toBe(
+      "Keyword paused",
+    );
+    expect(writeBadgeForTool("notfair_x__notfair_goals.amend_goal")).toBe(
+      "Goal updated",
+    );
+    expect(writeBadgeForTool("notfair_x__notfair_goals.add_supporting_metric")).toBe(
+      "Supporting metric added",
+    );
+    expect(writeBadgeForTool("mcp__NotFair-GoogleAds__bulkAddKeywords")).toBe(
+      "Keywords added",
+    );
+    expect(writeBadgeForTool("mcp__NotFair-GoogleAds__runMutationScript")).toBe(
+      "Mutation script ran",
+    );
+    // Bare-verb and prepositional third-party tools stay grammatical.
+    expect(writeBadgeForTool("mcp__NotFair-GoogleAds__mutate")).toBe("Mutated");
+    expect(writeBadgeForTool("mcp__vercel__deploy_to_vercel")).toBe(
+      "Deployed to vercel",
+    );
+    expect(writeBadgeForTool("mcp__slack__send_message")).toBe("Message sent");
+  });
+
+  it("ignores reads, diary bookkeeping, harness built-ins, and PR tools", () => {
+    expect(writeBadgeForTool("shell")).toBeNull();
+    expect(writeBadgeForTool("Write")).toBeNull(); // workspace file, not a platform write
+    expect(writeBadgeForTool("Edit")).toBeNull();
+    expect(writeBadgeForTool("notfair_x__posthog.exec")).toBeNull();
+    expect(writeBadgeForTool("notfair_x__notfair_googleads.listKeywords")).toBeNull();
+    expect(writeBadgeForTool("notfair_x__notfair_goals.get_goal")).toBeNull();
+    expect(writeBadgeForTool("notfair_x__notfair_goals.log_goal_action")).toBeNull();
+    expect(writeBadgeForTool("notfair_x__notfair_goals.log_learning")).toBeNull();
+    expect(writeBadgeForTool("notfair_x__notfair_goals.review_goal_action")).toBeNull();
+    expect(
+      writeBadgeForTool("notfair_x__notfair_goals.register_pull_request"),
+    ).toBeNull();
+    expect(writeBadgeForTool("codex_apps.github.create_pull_request")).toBeNull();
+    expect(writeBadgeForTool("notfair_x__notfair_xads.runScript")).toBeNull();
+  });
+});
+
+describe("listCheckRows write badges + action filter", () => {
+  it("dedupes a check's write calls into counted badges; read-only checks get none", () => {
     seedTicks(3);
+    seedTickToolCalls(2, [
+      "notfair_x__notfair_googleads.updateCampaignBudget",
+      "notfair_x__notfair_googleads.pauseKeyword",
+      "notfair_x__notfair_googleads.pauseKeyword",
+      "notfair_x__posthog.exec", // read — no badge
+      "shell",
+    ]);
+    seedTickToolCalls(3, ["notfair_x__posthog.exec", "shell"]);
+
+    const { rows } = listCheckRows(goalId);
+    const byTick = new Map(rows.map((r) => [r.tick_number, r.writes]));
+    expect(byTick.get(2)).toEqual([
+      { label: "Campaign budget updated", count: 1 },
+      { label: "Keyword paused", count: 2 },
+    ]);
+    expect(byTick.get(3)).toEqual([]);
+    expect(byTick.get(1)).toEqual([]);
+  });
+
+  it("prefers agent-written action badges over name-derived ones for that check", () => {
+    seedTicks(2);
+    seedTickToolCalls(2, ["notfair_x__notfair_googleads.updateCampaignBudget"]);
     createGoalAction({
       goal_id: goalId,
       tick_number: 2,
       kind: "mutation",
-      description: "Pause wasted keywords",
-      expected_effect: "less waste",
+      description: "Raised campaign 123 daily budget $20 → $40",
+      expected_effect: "more clicks",
       review_after: null,
+      badge: "Budget raised",
     });
-    createGoalAction({
-      goal_id: goalId,
-      tick_number: 2,
-      kind: "research",
-      description: "Read search terms",
-      expected_effect: "context",
-      review_after: null,
-    });
+
     const { rows } = listCheckRows(goalId);
-    expect(rows.map((r) => [r.tick_number, r.actions_count])).toEqual([
-      [3, 0],
-      [2, 2],
-      [1, 0],
+    expect(rows.find((r) => r.tick_number === 2)!.writes).toEqual([
+      { label: "Budget raised", count: 1 },
     ]);
   });
 
-  it("filter=action keeps only checks with actions or PRs, cursor-paged", () => {
-    seedTicks(6);
+  it("drops PR-ish agent badges and falls back to the classifier", () => {
+    seedTicks(1);
+    seedTickToolCalls(1, ["notfair_x__notfair_goals.amend_goal"]);
     createGoalAction({
       goal_id: goalId,
-      tick_number: 5,
+      tick_number: 1,
       kind: "mutation",
-      description: "Raise budget",
-      expected_effect: "more clicks",
+      description: "Opened a code PR",
+      expected_effect: "fix lands",
       review_after: null,
+      badge: "PR opened", // redundant with the PR pill
     });
-    createGoalAction({
-      goal_id: goalId,
-      tick_number: 2,
-      kind: "decision",
-      description: "Hold steady",
-      expected_effect: "n/a",
-      review_after: null,
-    });
+
+    const { rows } = listCheckRows(goalId);
+    expect(rows[0]!.writes).toEqual([{ label: "Goal updated", count: 1 }]);
+  });
+
+  it("filter=action keeps only checks that wrote or opened a PR, cursor-paged", () => {
+    seedTicks(6);
+    seedTickToolCalls(5, ["notfair_x__notfair_googleads.updateCampaignBudget"]);
+    seedTickToolCalls(3, ["notfair_x__posthog.exec"]); // read-only — excluded
+    seedTickToolCalls(2, ["notfair_x__notfair_goals.amend_goal"]);
     createGoalPr({
       goal_id: goalId,
       url: "https://github.com/acme/site/pull/7",

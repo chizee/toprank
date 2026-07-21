@@ -44,7 +44,7 @@ function row(tick_number: number, over: Partial<CheckRow> = {}): CheckRow {
     started_at: "2026-07-15T00:00:00.000Z",
     finished_at: "2026-07-15T00:01:00.000Z",
     prs: [],
-    actions_count: 0,
+    writes: [],
     ...over,
   } as CheckRow;
 }
@@ -134,9 +134,9 @@ describe("GoalChecksList", () => {
     expect(screen.getByText("summary 1")).toBeInTheDocument(); // history kept
   });
 
-  it("Action taken hides observe-only checks and fetches the filtered page", async () => {
+  it("Action taken hides read-only checks and fetches the filtered page", async () => {
     loadMore.mockResolvedValueOnce({
-      rows: [row(1, { actions_count: 2 })],
+      rows: [row(1, { writes: [{ label: "Goal updated", count: 1 }] })],
       hasMore: false,
     });
     render(
@@ -144,7 +144,7 @@ describe("GoalChecksList", () => {
         {...baseProps}
         initialRows={[
           row(4),
-          row(3, { actions_count: 1 }),
+          row(3, { writes: [{ label: "Keyword paused", count: 12 }] }),
           row(2, {
             prs: [
               {
@@ -166,7 +166,7 @@ describe("GoalChecksList", () => {
 
     // First toggle fetches the newest filtered page from the server.
     expect(loadMore).toHaveBeenCalledWith("g1", undefined, "action");
-    // Observe-only check 4 is hidden; action check 3, PR check 2, and the
+    // Read-only check 4 is hidden; write check 3, PR check 2, and the
     // server-fetched check 1 remain.
     expect(screen.queryByText("summary 4")).not.toBeInTheDocument();
     expect(screen.getByText("summary 3")).toBeInTheDocument();
@@ -177,6 +177,26 @@ describe("GoalChecksList", () => {
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     expect(screen.getByText("summary 4")).toBeInTheDocument();
     expect(loadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("badges each kind of modification a check made, with counts", () => {
+    render(
+      <GoalChecksList
+        {...baseProps}
+        initialRows={[
+          row(2, {
+            writes: [
+              { label: "Campaign budget updated", count: 1 },
+              { label: "Keyword paused", count: 3 },
+            ],
+          }),
+          row(1),
+        ]}
+        initialHasMore={false}
+      />,
+    );
+    expect(screen.getByText("Campaign budget updated")).toBeInTheDocument();
+    expect(screen.getByText("Keyword paused ×3")).toBeInTheDocument();
   });
 
   it("shows an empty message when no check took action", async () => {

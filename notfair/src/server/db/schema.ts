@@ -161,6 +161,15 @@ CREATE TABLE IF NOT EXISTS goal_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_goal_actions_goal ON goal_actions(goal_id, status);
 
+-- Agent-written check-diary badges ("Budget updated"), one per logged
+-- action. Kept in a separate table so existing CREATE-IF-NOT-EXISTS
+-- databases gain badges without altering goal_actions.
+CREATE TABLE IF NOT EXISTS goal_action_badges (
+  action_id  TEXT PRIMARY KEY REFERENCES goal_actions(id) ON DELETE CASCADE,
+  badge      TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS goal_metric_snapshots (
   id      TEXT PRIMARY KEY,
   goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,

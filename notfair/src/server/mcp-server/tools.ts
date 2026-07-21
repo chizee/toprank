@@ -346,6 +346,13 @@ const logGoalActionInput = z.object({
     .describe(
       "Estimated INCREMENTAL spend this action commits (e.g. a budget raise's expected extra cost until review). The platform sums these against the envelope and shows the total in every tick brief. Omit for spend-neutral actions.",
     ),
+  action_badge: z
+    .string()
+    .max(60)
+    .optional()
+    .describe(
+      "2–4 word past-tense badge naming what changed, shown on this check's diary row (e.g. 'Budget updated', 'Keywords paused', 'Ad label updated'). REQUIRED for mutations, except pull-request changes — the PR badge is automatic, omit it there. Omit for research/decision actions.",
+    ),
 });
 
 async function handleLogGoalActionTool(input: unknown): Promise<ToolResult> {

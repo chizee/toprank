@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { loadMoreGoalChecksAction } from "@/server/actions/goals";
-import type { CheckFilter, CheckPr, CheckRow } from "@/server/goals/checks";
+import type { CheckFilter, CheckPr, CheckRow, CheckWrite } from "@/server/goals/checks";
 import { projectHref } from "@/lib/project-href";
 import { formatMetric } from "@/lib/format-metric";
 import { timeAgo } from "@/lib/time-ago";
@@ -17,8 +17,8 @@ import { Markdown } from "@/components/markdown";
  * tick_number). The page's 5s auto-refresh re-sends the first page, which
  * is merged in by id so freshly loaded history is never dropped.
  *
- * The "Action taken" filter hides observe-only checks (no action recorded,
- * no PR). Rows are kept in one merged store and filtered at render time,
+ * The "Action taken" filter hides read-only checks (nothing modified, no
+ * PR). Rows are kept in one merged store and filtered at render time,
  * so the auto-refresh merge stays filter-agnostic; pagination re-queries
  * the server with the filter so skipped checks don't count against pages.
  */
@@ -136,9 +136,9 @@ export function GoalChecksList({
   );
 }
 
-/** A check "took action" when it recorded an action or registered a PR. */
+/** A check "took action" when it modified something or registered a PR. */
 function tookAction(row: CheckRow): boolean {
-  return row.actions_count > 0 || row.prs.length > 0;
+  return row.writes.length > 0 || row.prs.length > 0;
 }
 
 function FilterButton({
@@ -217,7 +217,10 @@ function CheckItem({
       {/* Running agent checks are watchable live: the session attaches at
           turn start and the check page's transcript polls as it streams.
           No-op checks never carry a session and stay unlinked. */}
-      {(tick.session_id || tick.status === "running" || tick.prs.length > 0) && (
+      {(tick.session_id ||
+        tick.status === "running" ||
+        tick.prs.length > 0 ||
+        tick.writes.length > 0) && (
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           {(tick.session_id || tick.status === "running") && (
             <Link
@@ -227,12 +230,26 @@ function CheckItem({
               {tick.status === "running" ? "watch live ›" : "details ›"}
             </Link>
           )}
+          {tick.writes.map((write) => (
+            <CheckWriteBadge key={write.label} write={write} />
+          ))}
           {tick.prs.map((pr) => (
             <CheckPrButton key={pr.id} pr={pr} />
           ))}
         </div>
       )}
     </li>
+  );
+}
+
+/** Compact accent pill naming one kind of modification the check made
+ *  ("Campaign budget updated", "Keyword paused ×3"). */
+function CheckWriteBadge({ write }: { write: CheckWrite }) {
+  return (
+    <span className="ns-tag-accent inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium">
+      {write.label}
+      {write.count > 1 && ` ×${write.count}`}
+    </span>
   );
 }
 

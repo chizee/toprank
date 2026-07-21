@@ -551,6 +551,7 @@ export type LogGoalActionInput = {
   expected_effect: string;
   review_after_hours?: number;
   spend_usd?: number;
+  action_badge?: string;
 };
 
 export function handleLogGoalAction(
@@ -582,6 +583,7 @@ export function handleLogGoalAction(
     expected_effect: input.expected_effect,
     review_after,
     spend_usd: input.spend_usd ?? null,
+    badge: input.action_badge ?? null,
   });
   return { ok: true, data: { action_id: action.id, review_after: action.review_after } };
 }

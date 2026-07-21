@@ -620,6 +620,8 @@ export type CreateGoalActionInput = {
   expected_effect: string;
   review_after?: string | null;
   spend_usd?: number | null;
+  /** Agent-written check-diary badge, e.g. "Budget updated". */
+  badge?: string | null;
 };
 
 export function createGoalAction(input: CreateGoalActionInput): GoalAction {
@@ -643,7 +645,28 @@ export function createGoalAction(input: CreateGoalActionInput): GoalAction {
     input.spend_usd ?? null,
     ts,
   );
+  const badge = input.badge?.trim().slice(0, 60);
+  if (badge) {
+    db.prepare(
+      "INSERT INTO goal_action_badges (action_id, badge, created_at) VALUES (?, ?, ?)",
+    ).run(id, badge, ts);
+  }
   return getGoalAction(id)!;
+}
+
+/** Agent-written badges across a goal's actions, oldest first per tick. */
+export function listGoalActionBadges(
+  goal_id: string,
+): Array<{ tick_number: number | null; badge: string }> {
+  return getDb()
+    .prepare(
+      `SELECT a.tick_number AS tick_number, b.badge AS badge
+         FROM goal_action_badges b
+         JOIN goal_actions a ON a.id = b.action_id
+        WHERE a.goal_id = ?
+        ORDER BY a.created_at ASC, a.rowid ASC`,
+    )
+    .all(goal_id) as Array<{ tick_number: number | null; badge: string }>;
 }
 
 export function getGoalAction(id: string): GoalAction | null {
@@ -879,6 +902,24 @@ export function listGoalTicks(
       "SELECT * FROM goal_ticks WHERE goal_id = ? ORDER BY tick_number DESC LIMIT ?",
     )
     .all(goal_id, limit) as GoalTick[];
+}
+
+/** Every MCP/tool call started across a goal's tick sessions, in event
+ *  order — the checks list classifies these into write badges. */
+export function listTickToolCalls(
+  goal_id: string,
+): Array<{ tick_number: number; name: string }> {
+  return getDb()
+    .prepare(
+      `SELECT t.tick_number AS tick_number,
+              json_extract(e.payload_json, '$.name') AS name
+         FROM goal_ticks t
+         JOIN transcript_events e ON e.session_id = t.session_id
+        WHERE t.goal_id = ? AND e.kind = 'tool'
+          AND json_extract(e.payload_json, '$.phase') = 'start'
+        ORDER BY t.tick_number ASC, e.seq ASC`,
+    )
+    .all(goal_id) as Array<{ tick_number: number; name: string }>;
 }
 
 /** Specific ticks by number, newest first — backs the filtered checks list. */
