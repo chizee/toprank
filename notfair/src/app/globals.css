@@ -432,7 +432,7 @@
     color: hsl(var(--notfair-ink-3));
     transition: 0.15s ease;
   }
-  .ns-chip:hover { color: hsl(var(--notfair-ink-1)); }
+  .ns-chip:hover { color: hsl(var(--notfair-ink)); }
   .ns-chip:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Working-state text shimmer — the Claude/ChatGPT "thinking" sweep.
@@ -443,7 +443,7 @@
       90deg,
       hsl(var(--notfair-ink-4)) 0%,
       hsl(var(--notfair-ink-4)) 35%,
-      hsl(var(--notfair-ink-1)) 50%,
+      hsl(var(--notfair-ink)) 50%,
       hsl(var(--notfair-ink-4)) 65%,
       hsl(var(--notfair-ink-4)) 100%
     );

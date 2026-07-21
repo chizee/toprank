@@ -110,7 +110,7 @@ export function NewGoalForm({
               type="button"
               disabled={pending}
               onClick={() => setStatement(example)}
-              className="rounded-lg bg-[hsl(var(--notfair-surface-2)/0.6)] px-2.5 py-1 text-[12px] text-[hsl(var(--notfair-ink-3))] shadow-[var(--notfair-shadow-sm)] transition-colors hover:bg-[hsl(var(--notfair-surface-2))] hover:text-[hsl(var(--notfair-ink-1))]"
+              className="rounded-lg bg-[hsl(var(--notfair-surface-2)/0.6)] px-2.5 py-1 text-[12px] text-[hsl(var(--notfair-ink-3))] shadow-[var(--notfair-shadow-sm)] transition-colors hover:bg-[hsl(var(--notfair-surface-2))] hover:text-[hsl(var(--notfair-ink))]"
             >
               {example}
             </button>

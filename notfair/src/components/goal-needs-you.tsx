@@ -62,7 +62,7 @@ export function GoalNeedsYouDialog({ items }: { items: NeedsYouItem[] }) {
         >
           <TriangleAlert className="size-3.5" aria-hidden />
           Needs you
-          <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-[hsl(var(--notfair-warn))] px-1 text-[10.5px] font-semibold tabular-nums text-[hsl(var(--notfair-surface-1))]">
+          <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-[hsl(var(--notfair-warn))] px-1 text-[10.5px] font-semibold tabular-nums text-[hsl(var(--card))]">
             {items.length}
           </span>
         </button>

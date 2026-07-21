@@ -83,7 +83,7 @@ export function GoalMetricCard({
                   className={cn(
                     "rounded-[5px] px-2 py-0.5 text-[11px] tabular-nums transition-colors",
                     v.key === active.key
-                      ? "bg-[hsl(var(--notfair-surface-1))] font-medium text-[hsl(var(--notfair-ink-1))] shadow-sm"
+                      ? "bg-[hsl(var(--card))] font-medium text-[hsl(var(--notfair-ink))] shadow-sm"
                       : "text-[hsl(var(--notfair-ink-4))] hover:text-[hsl(var(--notfair-ink-2))]",
                   )}
                   onClick={() => setKey(v.key)}

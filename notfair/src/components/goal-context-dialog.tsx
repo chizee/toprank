@@ -297,11 +297,11 @@ export function GoalContextDialog({
                           </p>
                         )}
                         {c.format === "json" ? (
-                          <pre className="m-0 max-h-72 overflow-auto rounded-md bg-[hsl(var(--notfair-ink-1)/0.04)] p-3 text-[11px] leading-relaxed whitespace-pre-wrap break-words text-[hsl(var(--notfair-ink-2))]">
+                          <pre className="m-0 max-h-72 overflow-auto rounded-md bg-[hsl(var(--notfair-ink)/0.04)] p-3 text-[11px] leading-relaxed whitespace-pre-wrap break-words text-[hsl(var(--notfair-ink-2))]">
                             {c.content}
                           </pre>
                         ) : (
-                          <div className="max-h-72 overflow-auto rounded-md bg-[hsl(var(--notfair-ink-1)/0.04)] p-3">
+                          <div className="max-h-72 overflow-auto rounded-md bg-[hsl(var(--notfair-ink)/0.04)] p-3">
                             <Markdown className="text-[12px]">{c.content}</Markdown>
                           </div>
                         )}
