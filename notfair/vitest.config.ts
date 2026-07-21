@@ -32,6 +32,10 @@ export default defineConfig({
         "src/**/*.d.ts",
         "src/types.ts",
       ],
+      thresholds: {
+        statements: 80,
+        lines: 80,
+      },
     },
   },
 });

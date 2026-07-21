@@ -1,10 +1,12 @@
 # NotFair
 
-## Unreleased
+## 0.9.7 — 2026-07-21
 
 **`notfair update` — one command from "there's a newer version" to running it.** Checks npm, installs globally, and restarts whatever is running: launchd-managed servers restart through the (freshly rewritten) LaunchAgent, background daemons are stopped and relaunched on the same port and data dir, and source checkouts are pointed at `git pull && pnpm build` instead of being paved over.
 
 **In-app updates actually work now — and finish with one click.** The sidebar's update check had been dead since the rebrand: it asked the npm registry for `NotFair`, but the registry is case-sensitive and the package is `notfair`, so the "update available" button never appeared. Fixed — and upgraded: after installing an update, background and launchd-managed servers now show **Restart now**, restart themselves, and reload the page on the new version. No more "go restart it in your terminal" (that note remains only for foreground/dev runs, which the app never kills).
+
+**Search Console setup now handles accounts with no reachable properties.** Empty `sites` and `siteEntry` responses are valid and render as an empty property list instead of being rejected as malformed. The test suite now covers 80%+ of executable statements and lines, with enforced coverage thresholds to prevent regression.
 
 ## 0.9.6 — 2026-07-21
 

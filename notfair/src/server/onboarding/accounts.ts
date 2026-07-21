@@ -381,17 +381,16 @@ function parseGscPropertiesPayload(
   }
 
   // Normalize all three accepted shapes down to a single row list.
-  const rows: GscSiteRow[] = Array.isArray(body)
+  const rows: GscSiteRow[] | null = Array.isArray(body)
     ? body
     : Array.isArray(body?.siteEntry)
       ? body.siteEntry
       : Array.isArray(body?.sites)
         ? body.sites
-        : [];
-  if (rows.length === 0 && !Array.isArray(body)) {
-    // Object with neither `siteEntry` nor `sites` — genuinely unexpected.
-    return null;
-  }
+        : null;
+  // Empty arrays are valid: a connected bearer can legitimately have no
+  // reachable properties. Only reject objects with neither supported key.
+  if (!rows) return null;
 
   const properties: GscProperty[] = [];
   for (const s of rows) {
