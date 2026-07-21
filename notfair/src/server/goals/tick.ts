@@ -20,6 +20,7 @@ import {
   listGatedActions,
   listGatedActionsForOtherAgents,
   listGoalLearnings,
+  listUserActionRequests,
   loggedSpendTotal,
   markGoalTicked,
   recordMetricSnapshot,
@@ -74,6 +75,8 @@ export type TickContext = {
   actionsDueForReview: GoalAction[];
   gatedActions: GoalAction[];
   gatedByOthers: Array<GoalAction & { agent_id: string }>;
+  /** Open USER ACTION REQUIRED escalations — the "Needs you" panel's list. */
+  userActionRequests: GoalAction[];
   loggedSpendUsd: number;
   recentLearnings: GoalLearning[];
   lastTick: GoalTick | null;
@@ -263,6 +266,23 @@ export function buildTickMessage(ctx: TickContext): string {
     );
     lines.push("");
   }
+
+  lines.push(
+    '## Needs you — open user asks (read from the "Needs you" panel just now; this list is the ONLY truth)',
+  );
+  if (ctx.userActionRequests.length === 0) {
+    lines.push(
+      "- none — do NOT repeat any earlier ask in your summary. An ask absent from this list was marked handled by the user or retired; if telemetry proves the problem persists, escalate a NEW `USER ACTION REQUIRED` decision action with the fresh evidence instead of re-raising from memory.",
+    );
+  } else {
+    for (const a of ctx.userActionRequests.slice(0, 10)) {
+      lines.push(`- [${a.id}] ${a.description}`);
+    }
+    lines.push(
+      "- Repeat exactly these asks in your diary summary — and only these. If one is obsolete, close it via review_goal_action rather than repeating it.",
+    );
+  }
+  lines.push("");
 
   lines.push("## Recent learnings");
   if (ctx.recentLearnings.length === 0) {
@@ -475,6 +495,7 @@ async function runClaimedTick(
     actionsDueForReview,
     gatedActions,
     gatedByOthers: listGatedActionsForOtherAgents(goal.project_slug, goal.id, nowIso),
+    userActionRequests: listUserActionRequests(goal.id),
     loggedSpendUsd: loggedSpendTotal(goal.id),
     recentLearnings: listGoalLearnings(goal.id, 8),
     lastTick: getLastAgentTick(goal.id),

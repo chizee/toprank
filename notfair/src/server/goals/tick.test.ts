@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { decideAgentTurn } from "@/server/goals/tick";
+import { buildTickMessage, decideAgentTurn, type TickContext } from "@/server/goals/tick";
+import type { Goal, GoalAction } from "@/server/db/goals";
 
 /** Baseline: the one situation that should NOT wake the agent — an
  *  achieve goal mid-flight with everything inside observation windows. */
@@ -63,5 +64,51 @@ describe("decideAgentTurn", () => {
     expect(
       decideAgentTurn({ ...observeOnly, gatedActions: 0, earliestGateEnd: null }).wake,
     ).toBe(true);
+  });
+});
+
+/** Minimal brief context: an achieve goal mid-flight with nothing pending. */
+const briefCtx: TickContext = {
+  goal: {
+    metric_name: "fixable-error rate",
+    baseline_value: 10,
+    target_value: 1,
+    metric_direction: "down",
+    mode: "achieve",
+    deadline: null,
+    spend_envelope_usd: null,
+  } as unknown as Goal,
+  tickNumber: 92,
+  nowIso: "2026-07-21T00:00:00.000Z",
+  measurement: { ok: true, value: 3 },
+  supportReadings: [],
+  targetMet: false,
+  pastDeadline: false,
+  actionsDueForReview: [],
+  gatedActions: [],
+  gatedByOthers: [],
+  userActionRequests: [],
+  loggedSpendUsd: 0,
+  recentLearnings: [],
+  lastTick: null,
+  pullRequests: [],
+};
+
+describe("buildTickMessage — Needs you section", () => {
+  it("mirrors the open escalations verbatim as the only asks to repeat", () => {
+    const ask = {
+      id: "act-1",
+      description: "USER ACTION REQUIRED: rotate the PostHog API key",
+    } as GoalAction;
+    const msg = buildTickMessage({ ...briefCtx, userActionRequests: [ask] });
+    expect(msg).toContain("## Needs you");
+    expect(msg).toContain("[act-1] USER ACTION REQUIRED: rotate the PostHog API key");
+    expect(msg).toContain("only these");
+  });
+
+  it("with no open asks, forbids repeating retired ones from memory", () => {
+    const msg = buildTickMessage(briefCtx);
+    expect(msg).toContain("## Needs you");
+    expect(msg).toContain("do NOT repeat any earlier ask");
   });
 });
