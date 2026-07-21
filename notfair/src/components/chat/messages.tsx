@@ -140,8 +140,6 @@ export function ToolGroup({
 
   return (
     <details
-      key={isLive ? "live" : "done"}
-      open={isLive}
       data-activity-kind={headMcp ? "mcp" : "tool"}
       className="group"
     >

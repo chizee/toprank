@@ -14,7 +14,10 @@ import {
   TranscriptEmptyState,
   UserBubble,
 } from "@/components/chat/messages";
-import { collapseEvents } from "@/components/chat/transcript-model";
+import {
+  collapseEvents,
+  toolGroupKey,
+} from "@/components/chat/transcript-model";
 import { useChatStream } from "@/components/chat/use-chat-stream";
 import type { McpCatalogEntryLite } from "@/components/chat/tool-intent";
 import {
@@ -242,7 +245,7 @@ export function LiveTranscript({
                 </li>
               )}
               {pendingTools.length > 0 && (
-                <li>
+                <li key={toolGroupKey(pendingTools[0]!.toolCallId)}>
                   <ToolGroup tools={pendingTools} mcpCatalog={mcpCatalog} />
                 </li>
               )}

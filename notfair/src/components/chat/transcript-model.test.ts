@@ -57,6 +57,7 @@ describe("collapseEvents", () => {
       ReturnType<typeof collapseEvents>[number],
       { kind: "tool_group" }
     >;
+    expect(group.key).toBe("tg:t1");
     expect(group.tools).toHaveLength(2);
     expect(group.tools[0]).toMatchObject({ toolCallId: "t1", done: true });
     expect(group.tools[1]).toMatchObject({ toolCallId: "t2", done: false });

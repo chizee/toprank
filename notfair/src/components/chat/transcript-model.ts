@@ -21,6 +21,11 @@ export type RenderedItem =
   | { kind: "tool_group"; key: string; tools: ToolEntry[] }
   | { kind: "system_unknown"; key: string; raw_type: string };
 
+/** Stable across the optimistic SSE row and its committed transcript copy. */
+export function toolGroupKey(toolCallId: string): string {
+  return `tg:${toolCallId}`;
+}
+
 /**
  * Content signature for cross-writer dedup. The id-based set in the
  * stream hook catches in-channel dups (e.g. polling racing itself);
@@ -58,7 +63,7 @@ export function eventSignature(e: TranscriptEvent): string {
  */
 export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
   type Step =
-    | { tag: "tool"; key: string; entry: ToolEntry }
+    | { tag: "tool"; entry: ToolEntry }
     | { tag: "msg"; item: RenderedItem };
   const steps: Step[] = [];
   const callIndex = new Map<string, number>();
@@ -67,7 +72,6 @@ export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
       callIndex.set(e.tool_call_id, steps.length);
       steps.push({
         tag: "tool",
-        key: e.id,
         entry: {
           toolCallId: e.tool_call_id,
           name: e.name,
@@ -93,7 +97,6 @@ export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
       }
       steps.push({
         tag: "tool",
-        key: e.id,
         entry: {
           toolCallId: e.tool_call_id,
           name: e.name,
@@ -129,16 +132,17 @@ export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
   }
   const out: RenderedItem[] = [];
   let buffer: ToolEntry[] = [];
-  let bufferKey: string | null = null;
   const flush = () => {
     if (buffer.length === 0) return;
-    out.push({ kind: "tool_group", key: `tg:${bufferKey}`, tools: buffer });
+    out.push({
+      kind: "tool_group",
+      key: toolGroupKey(buffer[0]!.toolCallId),
+      tools: buffer,
+    });
     buffer = [];
-    bufferKey = null;
   };
   for (const step of steps) {
     if (step.tag === "tool") {
-      if (bufferKey === null) bufferKey = step.key;
       buffer.push(step.entry);
     } else {
       flush();
