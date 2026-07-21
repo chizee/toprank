@@ -25,7 +25,7 @@ import {
 import { agentExistsOnDisk, listProjectAgents } from "@/server/agent-meta";
 import { runGoalIntake } from "@/server/goals/intake";
 import { runGoalTick } from "@/server/goals/tick";
-import { listCheckRows, type CheckRow } from "@/server/goals/checks";
+import { listCheckRows, type CheckFilter, type CheckRow } from "@/server/goals/checks";
 
 export type GoalActionResult = {
   ok: boolean;
@@ -267,15 +267,18 @@ export async function getAgentGoalAction(agent_id: string) {
 }
 
 /**
- * Older diary page for the goal screen's Checks list — checks strictly
- * older than `beforeTick`, newest first. Cursor pagination (not offset)
- * so rows never shift under the reader when a new check lands mid-scroll.
+ * Diary page for the goal screen's Checks list — checks strictly older
+ * than `beforeTick` (omit for the newest page), newest first. Cursor
+ * pagination (not offset) so rows never shift under the reader when a
+ * new check lands mid-scroll. `filter: "action"` keeps only checks that
+ * recorded an action or registered a PR.
  */
 export async function loadMoreGoalChecksAction(
   goal_id: string,
-  beforeTick: number,
+  beforeTick?: number,
+  filter?: CheckFilter,
 ): Promise<{ rows: CheckRow[]; hasMore: boolean }> {
   const goal = getGoal(goal_id);
   if (!goal) return { rows: [], hasMore: false };
-  return listCheckRows(goal.id, { beforeTick });
+  return listCheckRows(goal.id, { beforeTick, filter });
 }

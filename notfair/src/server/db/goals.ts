@@ -881,6 +881,21 @@ export function listGoalTicks(
     .all(goal_id, limit) as GoalTick[];
 }
 
+/** Specific ticks by number, newest first — backs the filtered checks list. */
+export function listGoalTicksByNumbers(
+  goal_id: string,
+  tickNumbers: number[],
+): GoalTick[] {
+  if (tickNumbers.length === 0) return [];
+  const placeholders = tickNumbers.map(() => "?").join(",");
+  return getDb()
+    .prepare(
+      `SELECT * FROM goal_ticks WHERE goal_id = ? AND tick_number IN (${placeholders})
+        ORDER BY tick_number DESC`,
+    )
+    .all(goal_id, ...tickNumbers) as GoalTick[];
+}
+
 /**
  * Most recent finished tick that carries context worth briefing the next
  * turn with: agent turns (session attached) and failures. Observe-only

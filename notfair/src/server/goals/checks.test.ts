@@ -74,6 +74,68 @@ describe("listCheckRows paging", () => {
   });
 });
 
+describe("listCheckRows action filter", () => {
+  it("annotates every row with its action count", () => {
+    seedTicks(3);
+    createGoalAction({
+      goal_id: goalId,
+      tick_number: 2,
+      kind: "mutation",
+      description: "Pause wasted keywords",
+      expected_effect: "less waste",
+      review_after: null,
+    });
+    createGoalAction({
+      goal_id: goalId,
+      tick_number: 2,
+      kind: "research",
+      description: "Read search terms",
+      expected_effect: "context",
+      review_after: null,
+    });
+    const { rows } = listCheckRows(goalId);
+    expect(rows.map((r) => [r.tick_number, r.actions_count])).toEqual([
+      [3, 0],
+      [2, 2],
+      [1, 0],
+    ]);
+  });
+
+  it("filter=action keeps only checks with actions or PRs, cursor-paged", () => {
+    seedTicks(6);
+    createGoalAction({
+      goal_id: goalId,
+      tick_number: 5,
+      kind: "mutation",
+      description: "Raise budget",
+      expected_effect: "more clicks",
+      review_after: null,
+    });
+    createGoalAction({
+      goal_id: goalId,
+      tick_number: 2,
+      kind: "decision",
+      description: "Hold steady",
+      expected_effect: "n/a",
+      review_after: null,
+    });
+    createGoalPr({
+      goal_id: goalId,
+      url: "https://github.com/acme/site/pull/7",
+      title: "Fix titles",
+      tick_number: 4,
+    });
+
+    const first = listCheckRows(goalId, { filter: "action", limit: 2 });
+    expect(first.rows.map((r) => r.tick_number)).toEqual([5, 4]);
+    expect(first.hasMore).toBe(true);
+
+    const next = listCheckRows(goalId, { filter: "action", limit: 2, beforeTick: 4 });
+    expect(next.rows.map((r) => r.tick_number)).toEqual([2]);
+    expect(next.hasMore).toBe(false);
+  });
+});
+
 describe("listCheckRows PR attachment", () => {
   it("attaches a PR to the check stamped on it at registration", () => {
     seedTicks(3);

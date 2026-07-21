@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GoalChecksList } from "@/components/goal-checks-list";
@@ -44,6 +44,7 @@ function row(tick_number: number, over: Partial<CheckRow> = {}): CheckRow {
     started_at: "2026-07-15T00:00:00.000Z",
     finished_at: "2026-07-15T00:01:00.000Z",
     prs: [],
+    actions_count: 0,
     ...over,
   } as CheckRow;
 }
@@ -103,7 +104,7 @@ describe("GoalChecksList", () => {
       />,
     );
     await tripSentinel();
-    expect(loadMore).toHaveBeenCalledWith("g1", 3); // strictly older than shown
+    expect(loadMore).toHaveBeenCalledWith("g1", 3, undefined); // strictly older than shown
     expect(screen.getByText("summary 1")).toBeInTheDocument();
     expect(screen.getAllByText(/^Check/)).toHaveLength(4);
   });
@@ -131,5 +132,65 @@ describe("GoalChecksList", () => {
     expect(screen.getAllByText(/^Check/)).toHaveLength(5);
     expect(screen.getByText("updated 4")).toBeInTheDocument();
     expect(screen.getByText("summary 1")).toBeInTheDocument(); // history kept
+  });
+
+  it("Action taken hides observe-only checks and fetches the filtered page", async () => {
+    loadMore.mockResolvedValueOnce({
+      rows: [row(1, { actions_count: 2 })],
+      hasMore: false,
+    });
+    render(
+      <GoalChecksList
+        {...baseProps}
+        initialRows={[
+          row(4),
+          row(3, { actions_count: 1 }),
+          row(2, {
+            prs: [
+              {
+                id: "pr1",
+                url: "https://github.com/acme/site/pull/9",
+                title: "Add FAQ",
+                state: "open",
+              },
+            ],
+          }),
+        ]}
+        initialHasMore={false}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Action taken" }));
+    });
+
+    // First toggle fetches the newest filtered page from the server.
+    expect(loadMore).toHaveBeenCalledWith("g1", undefined, "action");
+    // Observe-only check 4 is hidden; action check 3, PR check 2, and the
+    // server-fetched check 1 remain.
+    expect(screen.queryByText("summary 4")).not.toBeInTheDocument();
+    expect(screen.getByText("summary 3")).toBeInTheDocument();
+    expect(screen.getByText("summary 2")).toBeInTheDocument();
+    expect(screen.getByText("summary 1")).toBeInTheDocument();
+
+    // Switching back shows everything again without another fetch.
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(screen.getByText("summary 4")).toBeInTheDocument();
+    expect(loadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an empty message when no check took action", async () => {
+    loadMore.mockResolvedValueOnce({ rows: [], hasMore: false });
+    render(
+      <GoalChecksList
+        {...baseProps}
+        initialRows={[row(2), row(1)]}
+        initialHasMore={false}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Action taken" }));
+    });
+    expect(screen.getByText("No checks took action yet.")).toBeInTheDocument();
   });
 });
