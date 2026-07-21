@@ -1,26 +1,84 @@
-# NotFair (formerly Toprank)
+# NotFair
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/gVJCRczpps)
 
-**The official Google & Meta Ads + SEO plugin from [NotFair](https://notfair.co). Data-driven decisions, not dashboards.**
+**Goal-driven, loop-powered marketing agents — running on your local machine.**
 
-NotFair gives your AI agent direct access to Google Search Console, Google Ads, and Meta Ads (Facebook + Instagram). It analyzes your traffic, surfaces what's hurting your rankings, finds wasted ad spend, diagnoses creative fatigue and audience saturation, and tells you exactly what to fix. When you have access to the repo, it goes further: rewriting meta tags, fixing headings, adding structured data, and shipping the changes.
+State an ambition — *"cut CAC to $30"*, *"get organic clicks to 1,000/week"*, *"keep wasted ad spend at $0"* — and a dedicated agent turns it into a server-verified metric with a measured baseline, then runs a disciplined improvement loop against it: measure, review past moves, make at most one new move, log the prediction, repeat on your cadence. You watch the number move on a chart. Goals are the only thing you name, see, and manage.
 
-### CLI + web + local portal — same engine
+NotFair is two things that share one engine:
 
-The NotFair plugin is the CLI side — the skills that run inside Claude Code (and other AI agent hosts). [notfair.co](https://notfair.co) is the companion web app: sign in once, connect your Google Ads and Meta Ads accounts, and run audits through a browser UI. Both sides share the same engine, so an audit you run from the CLI uses the same tooling as the one on the web.
+1. **[The NotFair app](#the-notfair-app)** — a local web portal (npm: [`notfair`](https://www.npmjs.com/package/notfair)) that runs goal loops on top of the Claude Code or Codex login you already have.
+2. **[The NotFair plugin](#the-notfair-plugin--marketing-skills-for-your-ai-agent)** — SEO, Google Ads, and Meta Ads skills for Claude Code (and other AI agent hosts), for hands-on-keyboard marketing work in your terminal.
 
-There's also the **[NotFair app](#the-notfair-app--goal-driven-marketing-agents-in-your-browser)** — a local web portal where a goal-driven agent runs a measured improvement loop against one ambition ("cut CAC to $30") on top of your existing Claude Code or Codex login.
+Both talk to your real platforms through the same MCP servers: Google Ads, Meta Ads (Facebook + Instagram), and Google Search Console. [notfair.co](https://notfair.co) is the companion web service that hosts the ad-platform MCPs and the OAuth — sign in once per platform, no API keys to copy.
 
 > *"Am I wasting money on ads right now?"*
 > *"Why did my traffic drop and how do I fix it?"*
 > *"How do I get more conversions without spending more?"*
 
-Free, open-source. Install in 30 seconds.
+Free, open-source, MIT.
 
-## See It Work
+---
 
-### Google Ads
+## The NotFair app
+
+A local, single-user web app built around one idea: **state a goal, get a loop.** No dashboards to interpret, no task boards to groom, no approval inboxes. You describe what you want in plain language; an agent works out how to measure it, proves the measurement reproduces, and then improves the number check by check — with every move logged, predicted, and scored against what actually happened.
+
+### How a goal works
+
+1. **State the ambition.** Type it in your own words and optionally tag a platform focus (SEO, Google Ads, Meta Ads). NotFair provisions an anonymous agent for the goal — agent = goal, 1:1 — and drops you into a chat where it is *already working*.
+2. **The agent makes it measurable.** It explores your connected data sources, authors a metric query that returns one number, and tests it. Then the platform **re-runs the exact query server-side** — only a reproducible number with a measured baseline goes on the books. The agent also backfills ~30 days of history so your chart has context from day one.
+3. **You confirm the plan — the loop starts on the spot.** The agent reports the baseline and proposes a target, cadence, and spend envelope. The moment you confirm in chat, the goal goes live and the first check runs immediately. Two modes: **achieve** (reach the number, then done) and **maintain** (hold it there forever — a watchdog).
+4. **The loop runs on your cadence.** Each check, the platform measures the metric mechanically (the agent never self-reports the number it's judged on) and wakes the agent: it reviews past moves against their predicted effects, records what it learned, and the goal protocol allows at most **one** new move — logged with a falsifiable expected effect and an observation window that gates the touched resources until review.
+
+### What you get
+
+- **One screen per goal.** Chat on the left (where the goal is defined and steered), the loop's state on the right: a time-true progress chart with the target line, every action as a marker on the moment it happened, a tick-by-tick check diary, open actions with review dates, and the agent's accumulated memory.
+- **Autonomy with discipline, visibly.** Agents act inside the spend envelope you set, under observation-window rules, with a pause button for scheduled work and every recorded move visible in the app. These are behavioral guardrails for trusted local automation — not an OS-level sandbox.
+- **Code changes through pull requests.** Attach a GitHub-backed codebase and the agent works in its own branch, pushes, opens a PR, and registers it with NotFair. The app tracks PR state; merging stays yours.
+- **Shared context + private memory.** A workspace-wide `PROJECT.md` brief that every agent carries, plus a per-goal learnings ledger that compounds across checks.
+- **One-click platform connections.** The Connections page runs a PKCE OAuth flow for NotFair's hosted MCPs (Google Ads, Meta Ads, Search Console, and more) — pick the account or property once, and every goal agent in the project is wired automatically.
+
+### Install & run
+
+**Prerequisites:** an Apple Silicon Mac, Node 20+, and at least one harness installed and authenticated — [Codex CLI](https://github.com/openai/codex) (recommended) or [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview). NotFair brings no LLM keys of its own; it runs on the harness login you already pay for.
+
+```bash
+npx notfair@latest doctor   # preflight: Node, harnesses, data dir, port
+npx notfair@latest          # launch the UI at http://127.0.0.1:3327
+```
+
+Or install globally:
+
+```bash
+npm install -g notfair
+notfair
+```
+
+```
+notfair                 Launch local server + open UI (default)
+notfair start           Same, with --port <n>, --no-open, --data-dir <path>
+notfair doctor          Preflight checks with a Fix: line per failure
+```
+
+Then: create a project, pick your harness, connect the platforms a goal needs, and state your first ambition. Nothing runs — and nothing spends — until you confirm the plan the agent proposes in chat.
+
+### Where your data lives
+
+Everything is local: app state in `~/.notfair/db.sqlite`, agent workspaces in `~/.notfair/agents/<agent-id>/`. OAuth tokens for connected platforms live in that SQLite database (not yet encrypted at the application layer — protect your local user account accordingly).
+
+Full docs, CLI reference, and architecture notes: [`notfair/README.md`](notfair/README.md).
+
+---
+
+## The NotFair plugin — marketing skills for your AI agent
+
+The plugin is the hands-on side: skills that run inside Claude Code (and any host that reads [`AGENTS.md`](AGENTS.md)) for audits, campaign management, copywriting, and SEO work — you drive, the agent executes. It analyzes your traffic, surfaces what's hurting your rankings, finds wasted ad spend, diagnoses creative fatigue and audience saturation, and tells you exactly what to fix. When it has access to your repo, it goes further: rewriting meta tags, fixing headings, adding structured data, and shipping the changes.
+
+### See it work
+
+**Google Ads:**
 
 ```
 You:    /notfair:google-ads-audit
@@ -56,7 +114,7 @@ You:    Do it all.
         Done. All changes are reversible within 7 days.
 ```
 
-**Weekly review** — ask any time, or set it up as a recurring Coworker task:
+**Weekly review** — ask any time, or set it up as a recurring task:
 
 ```
 You:    /notfair:google-ads — "review last week's changes"
@@ -74,12 +132,9 @@ Claude: 12 changes in the last 7 days. 9 matured enough to judge.
         - Paused "project management tool" → lost 4 conversions/wk
 
         Too new to judge (3) — check back in 5 days.
-
-        Note: 2 changes had other edits on the same campaign within
-        7 days, so their direction is low-confidence.
 ```
 
-### SEO
+**SEO:**
 
 ```
 You:    /notfair:seo-analysis
@@ -103,15 +158,9 @@ Claude: Found your site at mystore.com — pulling Search Console data now.
         Here's your 30-day plan, most impactful first.
 ```
 
----
+### Install the plugin
 
-## Install
-
-NotFair is a **Claude Code plugin**. One-time setup, automatic updates.
-
-### Claude Code (recommended)
-
-Run these two commands in Claude Code:
+One-time setup in Claude Code, automatic updates:
 
 ```
 /plugin marketplace add nowork-studio/notfair
@@ -124,8 +173,6 @@ Run these two commands in Claude Code:
 That's it. All skills are now available as `/notfair:*` commands.
 
 **Google Ads + Meta Ads (optional):** The first time Claude Code connects to either NotFair MCP server (`NotFair-GoogleAds` or `NotFair-MetaAds`), it opens a browser tab and asks you to sign in to [notfair.co](https://notfair.co) — authorize once per platform and the token is stored in your OS keychain. No API key to copy, no `mcp-remote` bridge to install.
-
-### Manual Install
 
 <details>
 <summary>Prefer to edit settings.json directly?</summary>
@@ -150,7 +197,8 @@ Add the marketplace and enable the plugin in `~/.claude/settings.json`:
 
 </details>
 
-### Upgrading from `toprank@nowork-studio`
+<details>
+<summary>Upgrading from <code>toprank@nowork-studio</code>?</summary>
 
 The plugin was renamed `toprank` → `notfair` in v0.24.0. If you previously installed it as `toprank@nowork-studio`, uninstall the old entry and install the new one:
 
@@ -162,50 +210,27 @@ The plugin was renamed `toprank` → `notfair` in v0.24.0. If you previously ins
 
 Your data is preserved — the runtime state directory (`~/.toprank/`, holding portfolio state, change logs, business-context cache, audit history) is intentionally retained under its original name for this release. See `CHANGELOG.md` for details.
 
----
+</details>
 
-## The NotFair app — goal-driven marketing agents in your browser
+### Skills
 
-[NotFair](notfair/) is a local web portal built around one idea: state a goal, get a loop. A dedicated agent turns your ambition into a server-verified metric with a measured baseline, you confirm the target, and the agent runs a disciplined improvement cycle on your cadence — the platform measures the number mechanically each tick, the agent scores its past moves against their predictions, and the goal protocol limits it to one new move. The protocol requires mutations to be logged with observation windows that gate affected resources in future turns; code changes go through a branch and a GitHub pull request for you to review and merge. These are behavioral guardrails for trusted local automation, not an OS-level security sandbox. The Goal page shows the whole loop: metric sparkline vs. target, tick diary, open actions with review dates, and the learnings the agent accumulates.
-
-Open source, runs entirely on your machine, published to npm as [`notfair`](https://www.npmjs.com/package/notfair).
-
-### Get started
-
-**Prerequisites:** An Apple Silicon Mac, Node 20+, and at least one harness installed and authenticated — [Codex CLI](https://github.com/openai/codex) (recommended) or [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview). The published npm package currently declares support for macOS on ARM64 only.
-
-```bash
-npx notfair@latest doctor   # preflight: Node, harnesses, data dir, port
-npx notfair@latest          # launch the UI at http://127.0.0.1:3327
-```
-
-Or install globally with `npm install -g notfair`, then run `notfair`.
-
-The current `doctor` command reports each harness separately and exits non-zero when either Claude Code or Codex is absent, even though the app itself only requires the harness selected for that project.
-
-Create a project, optionally attach a codebase, pick your harness, connect platforms and choose the relevant account during onboarding, then state your first ambition. NotFair creates the goal's agent internally, works out how to measure the goal, and shows you the baseline and target before anything runs. The Codex sidebar reports the signed-in account's plan and usage, while model selectors show the configured model name instead of a generic default label.
-
-Full docs, CLI reference, and architecture notes: [`notfair/README.md`](notfair/README.md).
-
-## Skills
-
-### Google Ads
+#### Google Ads
 
 | Skill | What it does |
 |-------|-------------|
 | [`google-ads-audit`](google-ads/audit/) | Account audit + business context setup. Run this first. Scores 7 health dimensions, identifies wasted spend, builds business profile. |
-| [`google-ads`](google-ads/manage/) | Campaign management. Read performance, optimize keywords, adjust bids/budgets, add negatives, create campaigns. Ask for a **weekly review** and Claude scores every recent change (wins, losses, too-new-to-judge) — perfect for a Monday-morning Coworker task. |
+| [`google-ads`](google-ads/manage/) | Campaign management. Read performance, optimize keywords, adjust bids/budgets, add negatives, create campaigns. Ask for a **weekly review** and Claude scores every recent change (wins, losses, too-new-to-judge). |
 | [`google-ads-copy`](google-ads/copy/) | RSA copy generator + A/B testing. Data-driven headlines and descriptions with character counts and pin positions. |
 | [`google-ads-landing`](google-ads/landing/) | Landing page audit. Analyzes relevance between keywords, ads, and landing page content to improve Quality Score. |
 
-### Meta Ads (Facebook + Instagram)
+#### Meta Ads (Facebook + Instagram)
 
 | Skill | What it does |
 |-------|-------------|
 | [`meta-ads-audit`](meta-ads/audit/) | Account audit + business context setup. Run this first. Scores 7 health dimensions tuned for Meta (Pixel + CAPI Health, Attribution, Campaign Structure, Creative Health, Audience Strategy, Spend Efficiency, Scaling Readiness), persists creative inventory and persona data for downstream skills. |
-| [`meta-ads`](meta-ads/manage/) | Campaign management. ROAS analysis, frequency-first triage, creative fatigue diagnosis, Learning Phase / Learning Limited triage, audience overlap, CBO/ABO/Advantage+ Shopping structure. Mutations route through dedicated tools (`pause*`, `enable*`, `updateAdSetBudget`, `updateCampaignBudget`, `renameCampaign`); operations outside that surface route the user to Meta Ads Manager rather than improvising. |
+| [`meta-ads`](meta-ads/manage/) | Campaign management. ROAS analysis, frequency-first triage, creative fatigue diagnosis, Learning Phase / Learning Limited triage, audience overlap, CBO/ABO/Advantage+ Shopping structure. Mutations route through dedicated tools; operations outside that surface route the user to Meta Ads Manager rather than improvising. |
 
-### SEO
+#### SEO
 
 | Skill | What it does |
 |-------|-------------|
@@ -220,13 +245,13 @@ Full docs, CLI reference, and architecture notes: [`notfair/README.md`](notfair/
 | [`geo-optimizer`](seo/geo-optimizer/) | Generative Engine Optimization (GEO) for AI search engines. Audits content with a 0–100 GEO Score, rewrites for AI citation, and produces per-engine strategy for ChatGPT, Claude, Perplexity, Gemini, and Google AI Overviews. |
 | [`setup-cms`](seo/setup-cms/) | Connect WordPress, Strapi, Contentful, or Ghost for automated SEO field audits. |
 
-### Cross-Model
+#### Cross-Model
 
 | Skill | What it does |
 |-------|-------------|
 | [`gemini`](gemini/) | Second opinion from Google Gemini. Review (pass/fail gate), challenge (adversarial stress test), or consult (open Q&A). Especially strong on Google Ads and SEO decisions — Gemini has native Google ecosystem knowledge. |
 
-### Maintenance
+#### Maintenance
 
 | Skill | What it does |
 |-------|-------------|
@@ -236,9 +261,9 @@ All skills are namespaced: `/notfair:google-ads`, `/notfair:seo-analysis`, `/not
 
 ---
 
-## How It Works
+## How the repo fits together
 
-NotFair ships as a Claude Code plugin, while the skill directories themselves are host-agnostic and discoverable by compatible coding agents through [`AGENTS.md`](AGENTS.md). Each skill is a `SKILL.md` file with supporting reference documents, scripts, and eval tests.
+NotFair ships as a Claude Code plugin, while the skill directories themselves are host-agnostic and discoverable by compatible coding agents through [`AGENTS.md`](AGENTS.md). Each skill is a `SKILL.md` file with supporting reference documents, scripts, and eval tests. The app lives alongside the skills and is published to npm independently.
 
 ```
 notfair/
@@ -246,6 +271,7 @@ notfair/
 │   ├── plugin.json              <- plugin metadata (explicit skill paths)
 │   └── marketplace.json         <- registry entry
 ├── .mcp.json                    <- NotFair MCP servers (Google Ads + Meta Ads + Search Console)
+├── notfair/                     <- the goal-loop app (npm: notfair)
 ├── google-ads/
 │   ├── manage/                  <- campaign management (skill: google-ads)
 │   ├── audit/                   <- account audit + business context
@@ -267,7 +293,6 @@ notfair/
 │   ├── geo-optimizer/           <- GEO for AI search engines
 │   └── setup-cms/               <- CMS connector
 ├── gemini/                      <- cross-model review via Gemini CLI
-├── notfair/                     <- local goal-loop agent app (npm: notfair)
 ├── notfair-upgrade-skill/       <- self-updater
 ├── test/                        <- unit + LLM-judge eval tests
 └── VERSION
@@ -340,6 +365,8 @@ google-ads/               <- Google Ads skills go here
 **Scripts:** Python 3.8+ stdlib only (or `requests`). Accept `--output` for file output. stderr for progress, stdout for data.
 
 **Pull requests:** One skill per PR. Test your skill before submitting. Bump `VERSION` and update `CHANGELOG.md`.
+
+For the app, see [`notfair/CONTRIBUTING.md`](notfair/CONTRIBUTING.md) and [`notfair/ARCHITECTURE.md`](notfair/ARCHITECTURE.md).
 
 Questions? Open an issue.
 
