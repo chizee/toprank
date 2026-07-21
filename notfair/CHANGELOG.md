@@ -1,5 +1,9 @@
 # NotFair
 
+## Unreleased
+
+**Linux gets a native folder picker.** The Browse button now works on Linux desktops via zenity (GTK) with a kdialog (KDE/Plasma) fallback, and reports a clear error when neither is installed. Contributed by @RohithVangalla1 (#77), ported to the renamed app tree.
+
 ## 0.9.3 — 2026-07-20
 
 **Tagline refined.** "Goal-driven, loop-powered marketing agents that crush your business goals 24/7" — the identity and the hustle in one line, across npm, CLI `--help`, and the READMEs. First release published by the new auto-publish GitHub Action.
