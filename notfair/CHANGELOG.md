@@ -1,5 +1,9 @@
 # NotFair
 
+## 0.9.5 — 2026-07-21
+
+**The "Needs you" panel is now the single source of truth for repeated asks.** Agents were told to repeat user-action asks in every check summary, but nothing told them when an ask was closed — so asks you'd already handled kept echoing from summary to summary forever. Every tick brief now mirrors the panel's live list of open escalations: the agent repeats exactly those, and only those. A handled-but-still-broken problem comes back as a fresh escalation with new evidence, so the panel and the diary can never drift apart again.
+
 ## 0.9.4 — 2026-07-20
 
 **The working indicator's status text is visible again.** The shimmer gradient referenced a CSS token that doesn't exist, which invalidated the whole background — and with `background-clip: text` in play, the headline ("Calling the model", "Thinking", "Using N tools") rendered fully transparent, leaving a blank gap next to the spinner. The same undefined-token sweep restores the metric card's active-segment fill, the context dialog's content wells, chip hover colors, and the "Needs you" badge count.
