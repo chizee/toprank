@@ -30,7 +30,7 @@ Local ranking is driven by three pillars — **Relevance**, **Distance**, and
 (everything except the searcher's physical distance) and turns gaps into actions.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

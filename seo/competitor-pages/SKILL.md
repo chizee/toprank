@@ -25,7 +25,7 @@ against the pages outranking it for a specific query, find the concrete gaps, an
 hand back a brief that closes them.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

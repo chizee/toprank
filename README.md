@@ -352,7 +352,7 @@ notfair/
 │   ├── broken-link-checker/     <- broken link scanner
 │   ├── geo-optimizer/           <- GEO for AI search engines
 │   ├── local-seo/               <- local pack / Google Business Profile audit
-│   ├── hreflang-international/   <- hreflang / multilingual audit
+│   ├── hreflang-international/  <- hreflang / multilingual audit
 │   ├── sitemap-audit/           <- XML sitemap audit
 │   ├── image-seo/               <- image SEO audit
 │   ├── ecommerce-seo/           <- e-commerce store SEO audit

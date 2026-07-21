@@ -11,7 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.25.7] — 2026-06-29
+## [0.25.8] — 2026-07-21
 
 ### Added — ten new SEO skills (local, international, technical, commerce, off-page)
 

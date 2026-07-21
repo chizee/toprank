@@ -26,7 +26,7 @@ Majestic, DataForSEO). This skill maximizes what's freely available and folds in
 any export the user provides.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

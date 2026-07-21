@@ -26,7 +26,7 @@ visitor so they don't bounce back to Google. Rankings get the click; experience
 keeps it.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 
@@ -54,7 +54,7 @@ problem on the page.
 
 - **Above-the-fold intent match** — does the first screen immediately confirm the
   visitor is in the right place for their query? Mismatch = instant back-button.
-- **Core Web Vitals as experience** — LCP/INP/CLS; a slow or shifting page bleaks
+- **Core Web Vitals as experience** — LCP/INP/CLS; a slow or shifting page bleeds
   users regardless of content. (Cross-ref `/seo-analysis` for raw metrics.)
 - **Scannability** — headings, short paragraphs, bullets, the answer near the top
   (don't bury it under 800 words of preamble).

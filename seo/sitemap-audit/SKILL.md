@@ -28,7 +28,7 @@ and wastes crawl budget. A sitemap missing important pages slows their discovery
 Both are common; both are fixable.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

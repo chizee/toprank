@@ -25,7 +25,7 @@ the user can catch a CMS overwrite, a botched migration, or a slow ranking decli
 before it costs traffic.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

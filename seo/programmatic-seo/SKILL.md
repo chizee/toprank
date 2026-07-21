@@ -26,7 +26,7 @@ earns a manual action. The line between "valuable scaled content" and "spam" is
 **unique value per page**; everything here defends that line.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

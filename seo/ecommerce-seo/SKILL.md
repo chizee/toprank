@@ -25,7 +25,7 @@ content issues costing an online store organic revenue — wasted crawl budget,
 duplicate/thin pages, missing rich results — and return a prioritized fix plan.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

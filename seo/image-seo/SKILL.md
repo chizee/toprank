@@ -23,7 +23,7 @@ performance. Your job is to find why a site's images aren't earning Google Image
 traffic and where they're hurting page experience — then return concrete fixes.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 

@@ -30,7 +30,7 @@ Hreflang is unforgiving: a single broken return tag silently drops the whole
 cluster's hreflang benefit. This skill is mechanical and precise.
 
 > Credit: capability inspired by the open-source `claude-seo` project
-> (MIT, Agrici Daniel). Implementation is original to Toprank/NotFair.
+> (MIT, Agrici Daniel). Implementation is original to NotFair.
 
 ---
 
