@@ -8,7 +8,6 @@ import {
   getLatestGoalForAgent,
   listGoalLearnings,
 } from "@/server/db/goals";
-import { listSessionsForAgent } from "@/server/sessions/view";
 import { readTranscriptTail } from "@/server/sessions/transcript-tail";
 import { getMcpCatalog } from "@/server/mcp-catalog";
 import { DEFAULT_HARNESS_ADAPTER, requireAdapter } from "@/server/adapters/registry";
@@ -38,8 +37,6 @@ export default async function CheckTranscriptPage({
   const goal =
     getGoalForAgent(resolved.agent_id) ?? getLatestGoalForAgent(resolved.agent_id);
 
-  const sessions = listSessionsForAgent(slug, resolved.agent_id);
-  const existing = sessions.find((s) => s.sessionId === threadId);
   const { events: initialEvents, cursor: initialCursor } = readTranscriptTail(
     slug,
     resolved.agent_id,

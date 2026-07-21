@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   getGoalForAgent: vi.fn(),
   getLatestGoalForAgent: vi.fn(),
   listGoalLearnings: vi.fn(),
-  listSessionsForAgent: vi.fn(),
   readTranscriptTail: vi.fn(),
   getMcpCatalog: vi.fn(),
   listModels: vi.fn(),
@@ -31,7 +30,6 @@ vi.mock("@/server/db/goals", () => ({
   getLatestGoalForAgent: mocks.getLatestGoalForAgent,
   listGoalLearnings: mocks.listGoalLearnings,
 }));
-vi.mock("@/server/sessions/view", () => ({ listSessionsForAgent: mocks.listSessionsForAgent }));
 vi.mock("@/server/sessions/transcript-tail", () => ({ readTranscriptTail: mocks.readTranscriptTail }));
 vi.mock("@/server/mcp-catalog", () => ({ getMcpCatalog: mocks.getMcpCatalog }));
 vi.mock("@/server/adapters/registry", () => ({
@@ -72,7 +70,6 @@ beforeEach(() => {
   mocks.getGoalForAgent.mockReturnValue({ id: "goal-1" });
   mocks.getLatestGoalForAgent.mockReturnValue(null);
   mocks.listGoalLearnings.mockReturnValue([]);
-  mocks.listSessionsForAgent.mockReturnValue([{ sessionId: "tick-11" }]);
   mocks.readTranscriptTail.mockReturnValue({ events: [], cursor: 17 });
   mocks.getMcpCatalog.mockReturnValue([]);
   mocks.listModels.mockResolvedValue([
