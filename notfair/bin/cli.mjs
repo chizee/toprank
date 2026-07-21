@@ -29,7 +29,7 @@ const DATA_DIR = resolve(process.env.NOTFAIR_DATA_DIR ?? join(homedir(), ".notfa
 const program = new Command();
 program
   .name("notfair")
-  .description("Goal-driven, loop-powered marketing agents that run at your business goals 24/7 — on top of Claude Code or Codex.")
+  .description("Goal-driven, loop-powered marketing agents that crush your business goals 24/7 — on top of Claude Code or Codex.")
   .version(readPackageVersion());
 
 program

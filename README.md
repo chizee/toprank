@@ -2,7 +2,7 @@
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/gVJCRczpps)
 
-**Goal-driven, loop-powered marketing agents that run at your business goals 24/7 — on your own machine.**
+**Goal-driven, loop-powered marketing agents that crush your business goals 24/7 — on your own machine.**
 
 Stop babysitting dashboards. State an ambition in plain language:
 
