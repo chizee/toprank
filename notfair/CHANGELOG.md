@@ -1,5 +1,11 @@
 # NotFair
 
+## 0.9.13 — 2026-07-21
+
+**Adding a server now opens the connector catalog immediately.** The Connections page and onboarding’s **More tools** tile skip the extra menu and go straight to **Browse connectors**, where **Add custom connector** is always the final option—even when every trusted connector is already connected.
+
+**The goal sidebar is quieter and easier to control.** Goal rows no longer carry redundant status dots, group rows match the same visual style with an inline disclosure chevron instead of a count, nested action menus align with their parent, and hovering one goal reveals only that goal’s actions.
+
 ## 0.9.12 — 2026-07-21
 
 **All goals now opens as a grouped metrics dashboard.** Every goal card leads with its live value, target or hold threshold, health, recent history, and check freshness; groups structure the page, pinned and live goals stay prominent, and every card opens the selected goal's full dashboard and chat. The layout works from mobile through wide desktop and refreshes active goal data automatically.
