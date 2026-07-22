@@ -1,5 +1,9 @@
 # NotFair
 
+## 0.9.10 — 2026-07-21
+
+**Fresh installs now start cleanly on every supported Node.js version.** The CLI refreshes Next.js's bundled `better-sqlite3` copies from npm's locally built dependency before each server start, so installing a release built with Node 24 no longer produces a database-module error when the user's active runtime is Node 20, 22, 25, or 26.
+
 ## 0.9.9 — 2026-07-21
 
 **Sidebar upgrades no longer fail with `npm exited with code 7`.** NotFair now launches npm and its restart helper from the user's stable home directory, so rebuilding or replacing the standalone app cannot strand the updater inside a directory that no longer exists.
