@@ -43,12 +43,18 @@ export function RenderItem({
     // not something the user typed — render a compact system line so the
     // chat reads as "the agent got to work", not "who wrote this?".
     if (item.system) {
-      const label = item.body.startsWith("[TICK]")
-        ? "Heartbeat tick — brief delivered to the agent"
+      const isCheckPrompt = item.body.startsWith("[TICK]");
+      const label = isCheckPrompt
+        ? "Check started — prompt delivered to the agent"
         : item.body.startsWith("[INTAKE]")
           ? "Goal created — your ambition was handed to the agent"
           : "Scheduled brief delivered to the agent";
-      return <SystemLine label={label} />;
+      return (
+        <SystemLine
+          label={label}
+          prompt={isCheckPrompt ? item.body : undefined}
+        />
+      );
     }
     return <UserBubble body={item.body} />;
   }
@@ -61,7 +67,41 @@ export function RenderItem({
   return null;
 }
 
-export function SystemLine({ label }: { label: string }) {
+export function SystemLine({
+  label,
+  prompt,
+}: {
+  label: string;
+  /** Verbatim platform prompt that initiated this check. */
+  prompt?: string;
+}) {
+  if (prompt) {
+    return (
+      <details className="group/check-prompt mx-auto w-full max-w-2xl">
+        <summary className="flex cursor-pointer list-none justify-center rounded-full ring-offset-background select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--notfair-surface-2))] px-3.5 py-1 text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
+            <span>{label}</span>
+            <span className="font-medium text-[hsl(var(--notfair-accent))]">
+              View exact prompt
+            </span>
+            <ChevronRight
+              className="size-3.5 transition-transform group-open/check-prompt:rotate-90"
+              aria-hidden
+            />
+          </span>
+        </summary>
+        <div className="mt-3 flex justify-end">
+          <div
+            data-check-trigger-prompt
+            className="max-h-96 max-w-[88%] overflow-y-auto rounded-[20px] rounded-br-md bg-[hsl(var(--notfair-surface-2))] px-4 py-3 text-foreground/95 shadow-sm"
+          >
+            <Markdown>{prompt}</Markdown>
+          </div>
+        </div>
+      </details>
+    );
+  }
+
   return (
     <div className="flex justify-center">
       <span className="rounded-full bg-[hsl(var(--notfair-surface-2))] px-3.5 py-1 text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
@@ -128,7 +168,7 @@ export function ToolGroup({
     >
       <summary
         className={cn(
-          "group/summary flex min-h-8 cursor-pointer list-none select-none items-center gap-2 py-0.5 text-[15px] leading-6",
+          "group/summary relative flex min-h-8 cursor-pointer list-none select-none items-center gap-2 py-0.5 text-[15px] leading-6",
           "text-[hsl(var(--notfair-ink-3))] focus-visible:outline-none [&::-webkit-details-marker]:hidden",
         )}
       >
@@ -195,7 +235,7 @@ function ToolRow({
     <div
       data-tool-row
       data-tool-status={statusLabel.toLowerCase()}
-      className="flex min-h-7 items-center gap-2 py-0.5"
+      className="relative flex min-h-7 items-center gap-2 py-0.5"
       title={entry.label ?? rowLabel}
     >
       <span className="flex size-4 shrink-0 items-center justify-center">
