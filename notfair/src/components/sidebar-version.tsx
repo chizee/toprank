@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,18 +12,25 @@ type VersionInfo = {
   has_update: boolean;
 };
 
-type Phase = "idle" | "upgrading" | "restartable" | "restarting" | "manual";
+type Phase =
+  | "idle"
+  | "downloading"
+  | "ready"
+  | "restarting"
+  | "manual"
+  | "failed";
 
 /**
  * Sidebar footer: current version + the update flow. When npm reports a
- * newer version an Update button appears; clicking it runs
- * `npm i -g notfair@latest` via /api/upgrade. Background/launchd servers
- * then offer one-click Restart (/api/restart) and the page reloads on the
- * new version; foreground/dev runs are told to restart from the terminal.
+ * newer version, it installs automatically through /api/upgrade. Once ready,
+ * the Update button restarts background/launchd servers through /api/restart
+ * and reloads on the new version. Foreground/dev runs are told to restart
+ * from the terminal because the app does not own those processes.
  */
 export function SidebarVersion() {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
+  const autoDownloadVersion = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,9 +47,16 @@ export function SidebarVersion() {
     };
   }, []);
 
-  async function upgrade() {
-    if (!info?.has_update || phase !== "idle") return;
-    setPhase("upgrading");
+  useEffect(() => {
+    if (!info?.has_update || !info.latest) return;
+    if (autoDownloadVersion.current === info.latest) return;
+    autoDownloadVersion.current = info.latest;
+    void downloadUpdate(info);
+  }, [info]);
+
+  async function downloadUpdate(version: VersionInfo) {
+    if (!version.has_update) return;
+    setPhase("downloading");
     try {
       const res = await fetch("/api/upgrade", { method: "POST" });
       const body = (await res.json()) as
@@ -58,12 +72,12 @@ export function SidebarVersion() {
         } else {
           toast.error(msg, { duration: 8_000 });
         }
-        setPhase("idle");
+        setPhase("failed");
         return;
       }
       if (body.can_restart) {
-        setPhase("restartable");
-        toast.success(`v${info.latest} installed — restart to apply.`, {
+        setPhase("ready");
+        toast.success(`v${version.latest} installed — click Update to apply.`, {
           duration: 10_000,
         });
       } else {
@@ -75,12 +89,12 @@ export function SidebarVersion() {
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
-      setPhase("idle");
+      setPhase("failed");
     }
   }
 
   async function restart() {
-    if (phase !== "restartable") return;
+    if (phase !== "ready") return;
     setPhase("restarting");
     try {
       const res = await fetch("/api/restart", { method: "POST" });
@@ -137,35 +151,39 @@ export function SidebarVersion() {
         NotFair v{info.current}
       </span>
 
-      {info.has_update && (phase === "idle" || phase === "upgrading") && (
+      {info.has_update && (phase === "idle" || phase === "downloading") && (
         <Button
           size="sm"
           variant="outline"
-          disabled={phase === "upgrading"}
-          onClick={upgrade}
-          title={`Update available: v${info.latest}`}
+          disabled
+          title={`Downloading update v${info.latest}`}
           className="h-6 gap-1 px-2 text-[10.5px] font-medium"
         >
-          {phase === "upgrading" ? (
-            <>
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Updating…
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-3 w-3" />
-              v{info.latest} available
-            </>
-          )}
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Downloading…
         </Button>
       )}
 
-      {(phase === "restartable" || phase === "restarting") && (
+      {phase === "failed" && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void downloadUpdate(info)}
+          title={`Retry update v${info.latest}`}
+          className="h-6 gap-1 px-2 text-[10.5px] font-medium"
+        >
+          <Sparkles className="h-3 w-3" />
+          Retry update
+        </Button>
+      )}
+
+      {(phase === "ready" || phase === "restarting") && (
         <Button
           size="sm"
           variant="outline"
           disabled={phase === "restarting"}
           onClick={restart}
+          title={`Restart and update to v${info.latest}`}
           className="h-6 gap-1 px-2 text-[10.5px] font-medium"
         >
           {phase === "restarting" ? (
@@ -175,8 +193,8 @@ export function SidebarVersion() {
             </>
           ) : (
             <>
-              <RefreshCw className="h-3 w-3" />
-              Restart now
+              <Sparkles className="h-3 w-3" />
+              Update to v{info.latest}
             </>
           )}
         </Button>
