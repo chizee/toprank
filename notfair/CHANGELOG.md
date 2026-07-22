@@ -1,5 +1,13 @@
 # NotFair
 
+## 0.9.14 — 2026-07-21
+
+**Goal chat now reflects Codex’s real model defaults and reasoning controls.** The model menu no longer duplicates the configured default, and each provider-supported reasoning effort can be selected per goal and carried safely through the chat API to the Codex CLI.
+
+**Every check exposes the prompt that started it.** The trigger appears as a normal user-style message, expands into fully rendered Markdown, and stays contained within the transcript so long activity labels cannot make the whole workspace scroll.
+
+**Updates download before you ask to apply them.** When a release is available, NotFair downloads it automatically; the visible update button then restarts the managed server and applies the release immediately instead of presenting a second restart step.
+
 ## 0.9.13 — 2026-07-21
 
 **Adding a server now opens the connector catalog immediately.** The Connections page and onboarding’s **More tools** tile skip the extra menu and go straight to **Browse connectors**, where **Add custom connector** is always the final option—even when every trusted connector is already connected.
