@@ -90,6 +90,12 @@ export interface HarnessExecuteContext {
    * they reach the adapter.
    */
   model?: string | null;
+  /**
+   * Per-turn reasoning effort override from the composer. Adapters that
+   * expose effort metadata validate it in the chat route before execution.
+   * Absent/null = the CLI's own configured default.
+   */
+  reasoningEffort?: string | null;
   /** Optional cancellation. When aborted the adapter kills its subprocess. */
   signal?: AbortSignal;
 }
@@ -141,6 +147,19 @@ export interface HarnessModelOption {
    * publishes it in models_cache.json). Absent when unknown.
    */
   context_window?: number;
+  /** Reasoning efforts this model supports, sourced from the provider. */
+  reasoning_efforts?: HarnessReasoningEffortOption[];
+  /** Effort used when NotFair omits a per-turn override. */
+  default_reasoning_effort?: string;
+}
+
+export interface HarnessReasoningEffortOption {
+  /** Identifier passed to the harness's effort configuration. */
+  value: string;
+  /** Human label for the dropdown. */
+  label: string;
+  /** Provider-supplied explanation of the speed/depth tradeoff. */
+  description?: string;
 }
 
 export interface HarnessAdapter {

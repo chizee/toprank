@@ -29,6 +29,7 @@ export function useChatStream({
   initialEvents,
   initialCursor,
   model,
+  reasoningEffort,
 }: {
   projectSlug: string;
   agentSlug: string;
@@ -37,6 +38,8 @@ export function useChatStream({
   initialCursor: number;
   /** Composer model override value ("" = harness default). */
   model: string;
+  /** Composer effort override value ("" = harness default). */
+  reasoningEffort: string;
 }) {
   const [events, setEvents] = useState<TranscriptEvent[]>(initialEvents);
   const [cursor, setCursor] = useState(initialCursor);
@@ -238,6 +241,7 @@ export function useChatStream({
             project: projectSlug,
             thread: threadId,
             ...(model ? { model } : {}),
+            ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
           }),
           signal: ctrl.signal,
         });
@@ -318,7 +322,7 @@ export function useChatStream({
       }
       return { error: null } as const;
     },
-    [agentSlug, model, pollOnce, projectSlug, sendingChat, threadId],
+    [agentSlug, model, pollOnce, projectSlug, reasoningEffort, sendingChat, threadId],
   );
 
   /** Local-view reset for the /clear slash command. */

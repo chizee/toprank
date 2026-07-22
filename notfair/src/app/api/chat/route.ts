@@ -34,6 +34,8 @@ type ChatPostBody = {
    * else is a 400 (values become CLI spawn args, so no passthrough).
    */
   model?: string;
+  /** Provider-supported per-turn reasoning effort override. */
+  reasoning_effort?: string;
 };
 
 export async function POST(request: Request) {
@@ -70,12 +72,41 @@ export async function POST(request: Request) {
   // Whitelist the model against the adapter's provider-fed list — the
   // value becomes a CLI spawn arg, so arbitrary client strings never
   // pass through unchecked.
+  if (body.model !== undefined && typeof body.model !== "string") {
+    return NextResponse.json({ error: "model must be a string" }, { status: 400 });
+  }
+  if (
+    body.reasoning_effort !== undefined &&
+    typeof body.reasoning_effort !== "string"
+  ) {
+    return NextResponse.json(
+      { error: "reasoning_effort must be a string" },
+      { status: 400 },
+    );
+  }
   const model = body.model?.trim() || null;
-  if (model) {
+  const reasoningEffort = body.reasoning_effort?.trim() || null;
+  if (model || reasoningEffort) {
     const available = await requireAdapter(project.harness_adapter).listModels();
-    if (!available.some((m) => m.value === model)) {
+    if (model && !available.some((m) => m.value === model)) {
       return NextResponse.json(
         { error: `Unknown model '${model}' for adapter '${project.harness_adapter}'` },
+        { status: 400 },
+      );
+    }
+    const selectedModel = model
+      ? available.find((option) => option.value === model)
+      : available.find((option) => option.is_default) ?? available[0];
+    if (
+      reasoningEffort &&
+      !selectedModel?.reasoning_efforts?.some(
+        (option) => option.value === reasoningEffort,
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error: `Unknown reasoning effort '${reasoningEffort}' for model '${selectedModel?.value ?? "default"}'`,
+        },
         { status: 400 },
       );
     }
@@ -131,6 +162,7 @@ export async function POST(request: Request) {
           threadId: session.id,
           harnessSessionId: session.harness_session_id,
           model,
+          reasoningEffort,
           signal: ctrl.signal,
         })) {
           if (evt.kind === "session") {

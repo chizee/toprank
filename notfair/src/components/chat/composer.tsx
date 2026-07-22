@@ -6,8 +6,10 @@ import { ArrowUp, ChevronDown, StopCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RunningDot } from "@/components/running-dot";
@@ -17,7 +19,17 @@ import {
   type SlashCommand,
 } from "@/lib/slash-commands";
 
-export type ModelOption = { value: string; label: string; is_default?: boolean };
+export type ModelOption = {
+  value: string;
+  label: string;
+  is_default?: boolean;
+  reasoning_efforts?: Array<{
+    value: string;
+    label: string;
+    description?: string;
+  }>;
+  default_reasoning_effort?: string;
+};
 
 /**
  * The chat composer: one floating rounded well with a borderless
@@ -35,7 +47,9 @@ export function ChatComposer({
   placeholder,
   modelOptions = [],
   model,
+  reasoningEffort,
   onPickModel,
+  onPickReasoningEffort,
   onSubmit,
   onStop,
 }: {
@@ -47,7 +61,9 @@ export function ChatComposer({
   placeholder: string;
   modelOptions?: ModelOption[];
   model: string;
+  reasoningEffort: string;
   onPickModel: (value: string) => void;
+  onPickReasoningEffort: (value: string) => void;
   /** Dispatch a user submission (slash routing happens upstream). */
   onSubmit: (text: string) => void;
   onStop: () => void;
@@ -56,11 +72,17 @@ export function ChatComposer({
   const [slashIndex, setSlashIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const defaultModelLabel =
-    modelOptions.find((option) => option.is_default)?.label ?? "Default";
-  const selectedModelLabel =
-    modelOptions.find((option) => option.value === model)?.label ??
-    defaultModelLabel;
+  const defaultModel = modelOptions.find((option) => option.is_default);
+  const selectedModel =
+    modelOptions.find((option) => option.value === model) ?? defaultModel;
+  const selectedModelLabel = selectedModel?.label ?? "Default";
+  const effortOptions = selectedModel?.reasoning_efforts ?? [];
+  const defaultEffort =
+    selectedModel?.default_reasoning_effort ?? effortOptions[0]?.value;
+  const selectedEffort =
+    effortOptions.find((option) => option.value === reasoningEffort) ??
+    effortOptions.find((option) => option.value === defaultEffort) ??
+    effortOptions[0];
 
   // Slash command autocomplete: open while input starts with "/" and the
   // user is still composing the command name (no space yet). After they
@@ -179,25 +201,52 @@ export function ChatComposer({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Model"
+                  aria-label="Model and effort"
                   disabled={disabled || sendingChat}
                   className="inline-flex max-w-44 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span className="truncate">{selectedModelLabel}</span>
+                  <span className="truncate">
+                    {selectedModelLabel}
+                    {selectedEffort ? ` · ${selectedEffort.label}` : ""}
+                  </span>
                   <ChevronDown className="size-3 shrink-0" aria-hidden />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top">
+                <DropdownMenuLabel>Model</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={model} onValueChange={onPickModel}>
-                  <DropdownMenuRadioItem value="">
-                    {defaultModelLabel} (default)
-                  </DropdownMenuRadioItem>
+                  {!defaultModel && (
+                    <DropdownMenuRadioItem value="">Default</DropdownMenuRadioItem>
+                  )}
                   {modelOptions.map((m) => (
-                    <DropdownMenuRadioItem key={m.value} value={m.value}>
+                    <DropdownMenuRadioItem
+                      key={m.value}
+                      value={m.is_default ? "" : m.value}
+                    >
                       {m.label}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
+                {effortOptions.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Reasoning effort</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup
+                      value={reasoningEffort}
+                      onValueChange={onPickReasoningEffort}
+                    >
+                      {effortOptions.map((option) => (
+                        <DropdownMenuRadioItem
+                          key={option.value}
+                          value={option.value === defaultEffort ? "" : option.value}
+                          title={option.description}
+                        >
+                          {option.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

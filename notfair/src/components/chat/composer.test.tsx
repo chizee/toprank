@@ -28,8 +28,10 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
   DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuRadioGroup: ({ children, value }: { children: React.ReactNode; value: string }) => <div data-value={value}>{children}</div>,
-  DropdownMenuRadioItem: ({ children, value }: { children: React.ReactNode; value: string }) => <span data-value={value}>{children}</span>,
+  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuSeparator: () => <hr />,
+  DropdownMenuRadioGroup: ({ children, value }: { children: React.ReactNode; value: string }) => <div data-testid="radio-group" data-value={value}>{children}</div>,
+  DropdownMenuRadioItem: ({ children, value }: { children: React.ReactNode; value: string }) => <span data-testid="radio-item" data-value={value}>{children}</span>,
 }));
 
 import { ChatComposer } from "./composer";
@@ -39,7 +41,9 @@ const props = {
   sendingChat: false,
   placeholder: "Message agent",
   model: "",
+  reasoningEffort: "",
   onPickModel: vi.fn(),
+  onPickReasoningEffort: vi.fn(),
   onSubmit: vi.fn(),
   onStop: vi.fn(),
 };
@@ -87,11 +91,38 @@ it("shows model labels for selected, default, and stale values", () => {
     { value: "deep", label: "Deep" },
   ];
   const { rerender } = render(<ChatComposer {...props} modelOptions={options} model="deep" />);
-  expect(screen.getByRole("button", { name: "Model" })).toHaveTextContent("Deep");
+  expect(screen.getByRole("button", { name: "Model and effort" })).toHaveTextContent("Deep");
   rerender(<ChatComposer {...props} modelOptions={options} model="missing" />);
-  expect(screen.getByRole("button", { name: "Model" })).toHaveTextContent("Fast");
+  expect(screen.getByRole("button", { name: "Model and effort" })).toHaveTextContent("Fast");
   rerender(<ChatComposer {...props} modelOptions={[{ value: "x", label: "X" }]} model="" />);
-  expect(screen.getByRole("button", { name: "Model" })).toHaveTextContent("Default");
+  expect(screen.getByRole("button", { name: "Model and effort" })).toHaveTextContent("Default");
+});
+
+it("renders the provider default model once and exposes its dynamic effort choices", () => {
+  const options = [
+    {
+      value: "fast",
+      label: "Fast",
+      is_default: true,
+      default_reasoning_effort: "low",
+      reasoning_efforts: [
+        { value: "low", label: "Low", description: "Faster" },
+        { value: "high", label: "High", description: "Deeper" },
+      ],
+    },
+    { value: "deep", label: "Deep" },
+  ];
+
+  render(<ChatComposer {...props} modelOptions={options} />);
+
+  expect(screen.queryByText("Fast (default)")).not.toBeInTheDocument();
+  const items = screen.getAllByTestId("radio-item");
+  expect(items.filter((item) => item.textContent === "Fast")).toHaveLength(1);
+  expect(items.filter((item) => item.textContent === "Low")).toHaveLength(1);
+  expect(items.filter((item) => item.textContent === "High")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Model and effort" })).toHaveTextContent(
+    "Fast · Low",
+  );
 });
 
 it("navigates slash matches with arrows and inserts via Tab", () => {

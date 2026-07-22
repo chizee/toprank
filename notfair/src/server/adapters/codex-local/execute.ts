@@ -44,6 +44,12 @@ export async function* executeCodexLocal(
   if (ctx.model) {
     args.push("-m", ctx.model);
   }
+  if (ctx.reasoningEffort) {
+    args.push(
+      "-c",
+      `model_reasoning_effort=${JSON.stringify(ctx.reasoningEffort)}`,
+    );
+  }
 
   // Resume only when we have a real codex thread id from a prior turn.
   // NotFair's session UUID is not a codex thread id — passing it would

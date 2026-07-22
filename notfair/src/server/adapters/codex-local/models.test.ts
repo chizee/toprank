@@ -34,6 +34,35 @@ describe("listCodexModels", () => {
     });
   });
 
+  it("carries provider reasoning levels and marks the configured effort dynamically", async () => {
+    const files = await fixture(
+      'model = "gpt-5.6-sol"\nmodel_reasoning_effort = "xhigh"\n',
+      [
+        {
+          slug: "gpt-5.6-sol",
+          display_name: "GPT-5.6-Sol",
+          priority: 1,
+          default_reasoning_level: "low",
+          supported_reasoning_levels: [
+            { effort: "low", description: "Faster" },
+            { effort: "xhigh", description: "Deeper" },
+          ],
+        },
+      ],
+    );
+
+    const models = await listCodexModels(files.cacheFile, files.configFile);
+
+    expect(models[0]).toMatchObject({
+      value: "gpt-5.6-sol",
+      default_reasoning_effort: "xhigh",
+      reasoning_efforts: [
+        { value: "low", label: "Low", description: "Faster" },
+        { value: "xhigh", label: "Extra high", description: "Deeper" },
+      ],
+    });
+  });
+
   it("keeps a configured model visible when the provider cache is stale", async () => {
     const files = await fixture('model = "gpt-custom"\n', [
       { slug: "gpt-5.4", display_name: "GPT-5.4", priority: 1 },

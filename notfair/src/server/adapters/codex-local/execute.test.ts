@@ -133,6 +133,17 @@ describe("executeCodexLocal — argv and env wiring", () => {
     expect(args.slice(-3)).toEqual(["resume", uuid, "-"]);
   });
 
+  it("passes a whitelisted reasoning effort as a Codex config override", async () => {
+    scriptSpawn({ stdout: completedTurn });
+    await collect(ctx({ reasoningEffort: "xhigh" }));
+
+    const args = mocks.spawn.mock.calls[0]![1] as string[];
+    expect(args.slice(args.indexOf("-c"), args.indexOf("-c") + 2)).toEqual([
+      "-c",
+      'model_reasoning_effort="xhigh"',
+    ]);
+  });
+
   it("does not resume with a non-codex session id", async () => {
     scriptSpawn({ stdout: completedTurn });
     await collect(ctx({ harnessSessionId: "sess-not-uuid" }));

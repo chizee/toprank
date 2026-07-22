@@ -12,6 +12,7 @@ const base = {
   initialEvents: [] as TranscriptEvent[],
   initialCursor: 0,
   model: "",
+  reasoningEffort: "",
 };
 
 class FakeEventSource {
@@ -172,7 +173,9 @@ it("streams text, tools, lifecycle, error, meta, and perf events", async () => {
     if (url === "/api/chat") return Promise.resolve(streamResponse([sse], blocked) as never);
     return Promise.resolve(pollResponse() as never);
   });
-  const { result } = renderHook(() => useChatStream({ ...base, model: "gpt-test" }));
+  const { result } = renderHook(() =>
+    useChatStream({ ...base, model: "gpt-test", reasoningEffort: "xhigh" }),
+  );
   let sendPromise!: ReturnType<typeof result.current.send>;
   act(() => { sendPromise = result.current.send("hello"); });
   await waitFor(() => expect(result.current.pendingAssistant).toBe("Hello world"));
@@ -184,6 +187,7 @@ it("streams text, tools, lifecycle, error, meta, and perf events", async () => {
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls.find(([u]) => u === "/api/chat")?.[1]?.body))).toMatchObject({
     message: "hello",
     model: "gpt-test",
+    reasoning_effort: "xhigh",
   });
   finish();
   await act(async () => {

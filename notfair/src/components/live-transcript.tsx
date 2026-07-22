@@ -89,20 +89,47 @@ export function LiveTranscript({
   // per project+agent in localStorage; loaded after mount so SSR and the
   // first client render agree (no hydration mismatch).
   const modelStorageKey = `NotFair:model:${projectSlug}:${agentSlug}`;
+  const effortStorageKey = `NotFair:effort:${projectSlug}:${agentSlug}`;
   const [model, setModel] = useState("");
+  const [reasoningEffort, setReasoningEffort] = useState("");
   useEffect(() => {
     const stored = window.localStorage.getItem(modelStorageKey);
-    if (stored && modelOptions.some((m) => m.value === stored)) {
-      setModel(stored);
+    const storedOption = modelOptions.find((m) => m.value === stored);
+    if (storedOption && !storedOption.is_default) {
+      setModel(storedOption.value);
+    } else if (storedOption?.is_default) {
+      window.localStorage.removeItem(modelStorageKey);
     }
     // modelOptions is a fresh array per render from the server page —
     // key its identity by content to avoid effect churn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelStorageKey, JSON.stringify(modelOptions)]);
+  const defaultModel = modelOptions.find((option) => option.is_default);
+  const selectedModel =
+    modelOptions.find((option) => option.value === model) ?? defaultModel;
+  useEffect(() => {
+    const stored = window.localStorage.getItem(effortStorageKey);
+    const supported = selectedModel?.reasoning_efforts ?? [];
+    if (
+      stored &&
+      stored !== selectedModel?.default_reasoning_effort &&
+      supported.some((option) => option.value === stored)
+    ) {
+      setReasoningEffort(stored);
+    } else {
+      setReasoningEffort("");
+      if (stored) window.localStorage.removeItem(effortStorageKey);
+    }
+  }, [effortStorageKey, selectedModel]);
   function onPickModel(value: string) {
     setModel(value);
     if (value) window.localStorage.setItem(modelStorageKey, value);
     else window.localStorage.removeItem(modelStorageKey);
+  }
+  function onPickReasoningEffort(value: string) {
+    setReasoningEffort(value);
+    if (value) window.localStorage.setItem(effortStorageKey, value);
+    else window.localStorage.removeItem(effortStorageKey);
   }
   const defaultModelLabel =
     modelOptions.find((option) => option.is_default)?.label ?? "Default";
@@ -117,6 +144,7 @@ export function LiveTranscript({
     initialEvents,
     initialCursor,
     model,
+    reasoningEffort,
   });
   const {
     events,
@@ -151,7 +179,7 @@ export function LiveTranscript({
           case "set-model": {
             const wanted = action.value.toLowerCase();
             const names = [
-              `${defaultModelLabel} (default)`,
+              ...(defaultModel ? [] : ["Default"]),
               ...modelOptions.map((m) => m.label),
             ].join(", ");
             if (!wanted) {
@@ -295,7 +323,9 @@ export function LiveTranscript({
             }
             modelOptions={modelOptions}
             model={model}
+            reasoningEffort={reasoningEffort}
             onPickModel={onPickModel}
+            onPickReasoningEffort={onPickReasoningEffort}
             onSubmit={(text) => void onSubmit(text)}
             onStop={stream.stopTurn}
           />
