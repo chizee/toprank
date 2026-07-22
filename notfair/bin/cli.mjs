@@ -27,6 +27,8 @@ import { createServer } from "node:net";
 import { Command } from "commander";
 import open from "open";
 
+import { syncStandaloneNativeBindings } from "./native-bindings.mjs";
+
 const CLI_PATH = fileURLToPath(import.meta.url);
 const __dirname = dirname(CLI_PATH);
 const PKG_ROOT = dirname(__dirname);
@@ -92,6 +94,7 @@ program
     // Next.js standalone output omits .next/static and public by default; copy
     // them in if they're missing so the server can serve CSS/JS chunks.
     ensureStandaloneAssets();
+    syncStandaloneNativeBindings(PKG_ROOT);
 
     const url = `http://127.0.0.1:${port}`;
     const env = {
