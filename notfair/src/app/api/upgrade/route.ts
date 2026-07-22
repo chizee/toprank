@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { copyFile, readdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { NextResponse } from "next/server";
 
 import { _resetLatestCache, getCurrentVersion, getLatestVersion } from "@/server/version";
@@ -22,13 +25,16 @@ const TAIL_BYTES = 4_000;
  * the client can show the copyable command instead.
  */
 export async function POST() {
-  // Use a login shell so the npm install runs against the user's actual
-  // PATH (Homebrew Node etc.). `-l` ensures their shell profile is read.
+  // A running standalone bundle can be replaced by a source rebuild or by
+  // the upgrade itself. Never let npm inherit that now-missing directory:
+  // Node aborts in process.cwd() with ENOENT (`npm` exit code 7) before the
+  // install even starts. The user's home directory is stable across both.
   return new Promise<Response>((resolve) => {
     const startedAt = Date.now();
     const child = spawn("npm", ["i", "-g", "notfair@latest"], {
       stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
+      cwd: homedir(),
     });
 
     let stdout = "";
@@ -72,6 +78,22 @@ export async function POST() {
       clearTimeout(killTimer);
       const elapsed_ms = Date.now() - startedAt;
       if (code === 0) {
+        try {
+          await syncGlobalNativeBindings();
+        } catch (error) {
+          resolve(
+            NextResponse.json(
+              {
+                ok: false,
+                error: "NotFair was installed, but its native database module could not be prepared for this Node.js version.",
+                hint: error instanceof Error ? error.message : String(error),
+                command: "npm i -g notfair@latest",
+              },
+              { status: 500 },
+            ),
+          );
+          return;
+        }
         _resetLatestCache();
         // Confirm by refreshing the version snapshot. The current version
         // is still the old one (we're still running) — but `latest` from
@@ -111,4 +133,69 @@ export async function POST() {
       }
     });
   });
+}
+
+async function syncGlobalNativeBindings() {
+  const root = await npmGlobalRoot();
+  await syncInstalledNativeBindings(join(root, "notfair"));
+}
+
+async function npmGlobalRoot(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    const child = spawn("npm", ["root", "-g"], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+      cwd: homedir(),
+    });
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      const root = stdout.trim();
+      if (code === 0 && root) {
+        resolve(root);
+      } else {
+        reject(new Error(`Could not locate npm's global package directory (exit ${code}).`));
+      }
+    });
+  });
+}
+
+/**
+ * Next.js standalone output contains a traced copy of better-sqlite3. That
+ * copy was compiled on the release builder, while npm installs the package's
+ * top-level dependency for the user's current Node ABI. Replace every traced
+ * native binding with that runtime-correct copy before restarting the server.
+ */
+export async function syncInstalledNativeBindings(packageRoot: string) {
+  const runtimeBinding = join(
+    packageRoot,
+    "node_modules",
+    "better-sqlite3",
+    "build",
+    "Release",
+    "better_sqlite3.node",
+  );
+  const standaloneRoot = join(packageRoot, ".next", "standalone");
+  const targets = await findNativeBindings(standaloneRoot);
+
+  if (targets.length === 0) return 0;
+
+  await Promise.all(targets.map((target) => copyFile(runtimeBinding, target)));
+  return targets.length;
+}
+
+async function findNativeBindings(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map(async (entry): Promise<string[]> => {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) return findNativeBindings(path);
+      if (entry.isFile() && entry.name === "better_sqlite3.node") return [path];
+      return [];
+    }),
+  );
+  return nested.flat();
 }

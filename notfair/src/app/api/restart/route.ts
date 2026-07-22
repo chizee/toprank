@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
 
@@ -63,7 +64,7 @@ export async function POST() {
     spawn(
       process.execPath,
       ["-e", waiter, String(process.pid), cli, port, dataDir],
-      { detached: true, stdio: "ignore" },
+      { cwd: homedir(), detached: true, stdio: "ignore" },
     ).unref();
     scheduleExit();
     return NextResponse.json({ ok: true, note: "Restarting…" });
@@ -89,7 +90,10 @@ async function globalCliPath(): Promise<string | null> {
     let out = "";
     let child;
     try {
-      child = spawn("npm", ["root", "-g"], { stdio: ["ignore", "pipe", "ignore"] });
+      child = spawn("npm", ["root", "-g"], {
+        cwd: homedir(),
+        stdio: ["ignore", "pipe", "ignore"],
+      });
     } catch {
       resolve(null);
       return;
