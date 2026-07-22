@@ -1,5 +1,11 @@
 # NotFair
 
+## 0.9.9 — 2026-07-21
+
+**Sidebar upgrades no longer fail with `npm exited with code 7`.** NotFair now launches npm and its restart helper from the user's stable home directory, so rebuilding or replacing the standalone app cannot strand the updater inside a directory that no longer exists.
+
+**Restarting after an upgrade uses the correct native database binary.** Before offering **Restart now**, the updater synchronizes Next.js's traced `better-sqlite3` copies with the dependency npm built for the user's active Node.js version. This prevents the upgraded app from landing on a server-error screen when the release builder and local Node versions use different native ABIs.
+
 ## 0.9.8 — 2026-07-21
 
 **Completed checks stay fully conversational.** Opening a finished check from the goal rail now keeps its composer and model picker active, so you can ask follow-up questions or give the agent more work in that check's original context instead of being sent back to the main goal chat.
