@@ -63,8 +63,8 @@ type LiveStatus = "intake" | "proposed" | "active" | "paused";
 /**
  * One goal row in the sidebar rail: link to the goal screen plus a ⋮ menu
  * (pin, rename, move to group, pause/resume, delete). Rows are draggable onto
- * group headers. Server sidebar computes the display bits (dot/label classes);
- * this component owns the interactions.
+ * group headers. Server sidebar computes the label color; this component owns
+ * the interactions.
  */
 export function SidebarGoalItem({
   href,
@@ -73,7 +73,6 @@ export function SidebarGoalItem({
   label,
   status,
   pinned,
-  dotClass,
   labelClass,
   projectSlug,
   groups,
@@ -87,7 +86,6 @@ export function SidebarGoalItem({
   label: string;
   status: LiveStatus;
   pinned: boolean;
-  dotClass: string;
   labelClass: string;
   projectSlug: string;
   /** Every group in the project — targets for "Move to group". */
@@ -149,7 +147,6 @@ export function SidebarGoalItem({
             e.dataTransfer.effectAllowed = "move";
           }}
         >
-          <span className={cn("ns-dot", dotClass)} aria-hidden />
           <span className={cn("truncate", labelClass)}>{label}</span>
           {needsAttention && (
             <TriangleAlert

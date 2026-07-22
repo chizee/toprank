@@ -23,7 +23,6 @@ import {
   getPinnedGoalIds,
   listGoals,
   listLiveGoals,
-  type GoalStatus,
 } from "@/server/db/goals";
 import { colorForAgentSlug } from "@/lib/agent-colors";
 import { SidebarGoalItem } from "@/components/sidebar-goal-item";
@@ -49,15 +48,6 @@ const NAV: NavItem[] = [
   { href: "/connections", label: "Connections", icon: Plug },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
-
-/** Compact status dot per live goal state — the rail's only status signal.
- *  Closed goals never render here; their outcomes live on the board. */
-const GOAL_DOT: Partial<Record<GoalStatus, string>> = {
-  intake: "ns-dot-warn",
-  proposed: "ns-dot-warn",
-  active: "ns-dot-live",
-  paused: "ns-dot-mute",
-};
 
 export async function AppSidebar() {
   const projects = listProjects();
@@ -163,7 +153,6 @@ export async function AppSidebar() {
                       label={goalLabel(goal)}
                       status={goal.status as "intake" | "proposed" | "active" | "paused"}
                       pinned={pinnedIds.has(goal.id)}
-                      dotClass={GOAL_DOT[goal.status] ?? "ns-dot-mute"}
                       labelClass={color.label}
                       projectSlug={active.slug}
                       groups={groupTargets}
@@ -180,7 +169,6 @@ export async function AppSidebar() {
                       groupId={group.id}
                       name={group.name}
                       href={projectHref(active.slug, `/groups/${group.id}`)}
-                      liveCount={groupGoals.length}
                     >
                       {groupGoals.map((goal) => {
                         const agent = agentBySlug.get(goal.agent_id);
@@ -195,7 +183,6 @@ export async function AppSidebar() {
                             label={goalLabel(goal)}
                             status={goal.status as "intake" | "proposed" | "active" | "paused"}
                             pinned={pinnedIds.has(goal.id)}
-                            dotClass={GOAL_DOT[goal.status] ?? "ns-dot-mute"}
                             labelClass={color.label}
                             projectSlug={active.slug}
                             groups={groupTargets}

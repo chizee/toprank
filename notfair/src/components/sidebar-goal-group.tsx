@@ -45,22 +45,20 @@ import { cn } from "@/lib/utils";
 export const GOAL_DRAG_TYPE = "application/x-notfair-goal";
 
 /**
- * One goal group in the sidebar rail: a collapsible header (chevron + name +
- * live-goal count) with its member goals nested beneath, a ⋮ menu (dashboard,
- * rename, delete), and a drop target for goal rows dragged from the rail.
+ * One goal group in the sidebar rail: a goal-style collapsible row with its
+ * member goals nested beneath, a ⋮ menu (dashboard, rename, delete), and a
+ * drop target for goal rows dragged from the rail.
  */
 export function SidebarGoalGroup({
   groupId,
   name,
   href,
-  liveCount,
   children,
 }: {
   groupId: string;
   name: string;
   /** Group dashboard route. */
   href: string;
-  liveCount: number;
   children?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -134,17 +132,15 @@ export function SidebarGoalGroup({
           dragOver && "bg-sidebar-accent ring-2 ring-sidebar-ring",
         )}
       >
+        <span className="truncate">{name}</span>
         <ChevronRight
+          data-group-chevron
           aria-hidden
           className={cn(
             "!size-3.5 shrink-0 text-[hsl(var(--notfair-ink-4))] transition-transform",
             !collapsed && "rotate-90",
           )}
         />
-        <span className="truncate font-medium">{name}</span>
-        <span className="ml-auto text-[11px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
-          {liveCount}
-        </span>
       </SidebarMenuButton>
 
       <DropdownMenu>
@@ -183,7 +179,9 @@ export function SidebarGoalGroup({
       </DropdownMenu>
 
       {/* Members stay mounted while collapsed so their dialog state survives. */}
-      <SidebarMenuSub hidden={collapsed}>{children}</SidebarMenuSub>
+      <SidebarMenuSub className="mr-0 pr-0" hidden={collapsed}>
+        {children}
+      </SidebarMenuSub>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="max-w-sm">
