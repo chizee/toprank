@@ -27,25 +27,24 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function openMenu() {
-  fireEvent.keyDown(screen.getByRole("button", { name: /add server/i }), {
-    key: "Enter",
-  });
+function openBrowser() {
+  fireEvent.click(screen.getByRole("button", { name: /add server/i }));
 }
 
 describe("AddMcpServerMenu", () => {
-  it("offers Browse and Custom paths from the default trigger", () => {
+  it("opens Browse connectors directly from the default trigger", () => {
     render(<AddMcpServerMenu />);
-    openMenu();
+    openBrowser();
     expect(
-      screen.getByRole("menuitem", { name: /browse connectors/i }),
+      screen.getByRole("heading", { name: "Browse connectors" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("menuitem", { name: /add custom connector/i }),
+      screen.getByRole("button", { name: /add custom connector/i }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("renders a custom trigger node instead of the default pill", () => {
+  it("opens Browse connectors directly from a custom trigger", () => {
     render(
       <AddMcpServerMenu
         trigger={<button type="button">More tools</button>}
@@ -53,24 +52,17 @@ describe("AddMcpServerMenu", () => {
     );
     expect(screen.getByRole("button", { name: "More tools" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add server/i })).toBeNull();
-  });
-
-  it("opens the Browse connectors grid from the menu", async () => {
-    render(<AddMcpServerMenu />);
-    openMenu();
-    fireEvent.click(screen.getByRole("menuitem", { name: /browse connectors/i }));
+    fireEvent.click(screen.getByRole("button", { name: "More tools" }));
     expect(
-      await screen.findByRole("heading", { name: "Browse connectors" }),
+      screen.getByRole("heading", { name: "Browse connectors" }),
     ).toBeInTheDocument();
   });
 
   it("adds a custom OAuth connector and refreshes on success", async () => {
     addServer.mockResolvedValue({ ok: true, key: "stripe" });
     render(<AddMcpServerMenu />);
-    openMenu();
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: /add custom connector/i }),
-    );
+    openBrowser();
+    fireEvent.click(screen.getByRole("button", { name: /add custom connector/i }));
     fireEvent.change(await screen.findByLabelText("Name"), {
       target: { value: "Stripe" },
     });
@@ -94,10 +86,8 @@ describe("AddMcpServerMenu", () => {
   it("shows the probe failure inline and keeps the dialog open", async () => {
     addServer.mockResolvedValue({ ok: false, error: "No OAuth discovery." });
     render(<AddMcpServerMenu />);
-    openMenu();
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: /add custom connector/i }),
-    );
+    openBrowser();
+    fireEvent.click(screen.getByRole("button", { name: /add custom connector/i }));
     fireEvent.change(await screen.findByLabelText("Name"), {
       target: { value: "Broken" },
     });

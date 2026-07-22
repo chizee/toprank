@@ -31,7 +31,13 @@ const ALL_IDS = TRUSTED_CONNECTORS.map((c) => c.id);
 
 describe("BrowseConnectorsDialog", () => {
   it("lists every trusted connector that is not yet connected", () => {
-    render(<BrowseConnectorsDialog open onOpenChange={vi.fn()} />);
+    render(
+      <BrowseConnectorsDialog
+        open
+        onOpenChange={vi.fn()}
+        onAddCustom={vi.fn()}
+      />,
+    );
     expect(screen.getByText("NotFair Google Ads")).toBeInTheDocument();
     expect(screen.getByText("Stripe")).toBeInTheDocument();
   });
@@ -41,6 +47,7 @@ describe("BrowseConnectorsDialog", () => {
       <BrowseConnectorsDialog
         open
         onOpenChange={vi.fn()}
+        onAddCustom={vi.fn()}
         connectedKeys={["notfair-googleads"]}
         // Trailing slash + uppercase host still match after normalization.
         connectedResourceUrls={["https://mcp.stripe.com"]}
@@ -56,12 +63,39 @@ describe("BrowseConnectorsDialog", () => {
       <BrowseConnectorsDialog
         open
         onOpenChange={vi.fn()}
+        onAddCustom={vi.fn()}
         hideKeys={ALL_IDS}
       />,
     );
     expect(
       screen.getByText("All available connectors are already connected."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /add custom connector/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the custom connector path after the trusted connectors", () => {
+    const onAddCustom = vi.fn();
+    render(
+      <BrowseConnectorsDialog
+        open
+        onOpenChange={vi.fn()}
+        onAddCustom={onAddCustom}
+      />,
+    );
+
+    const stripe = screen.getByRole("button", { name: /Stripe/ });
+    const custom = screen.getByRole("button", {
+      name: /add custom connector/i,
+    });
+    expect(
+      stripe.compareDocumentPosition(custom) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText("Paste an OAuth 2.0 MCP URL")).toBeInTheDocument();
+
+    fireEvent.click(custom);
+    expect(onAddCustom).toHaveBeenCalledOnce();
   });
 
   it("adds with the canonical key and passes return_to into OAuth", async () => {
@@ -69,7 +103,13 @@ describe("BrowseConnectorsDialog", () => {
     // Fail the connect step so the test never assigns window.location.href.
     startConnect.mockResolvedValue({ ok: false, error: "issuer down" });
     const onOpenChange = vi.fn();
-    render(<BrowseConnectorsDialog open onOpenChange={onOpenChange} />);
+    render(
+      <BrowseConnectorsDialog
+        open
+        onOpenChange={onOpenChange}
+        onAddCustom={vi.fn()}
+      />,
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: /NotFair Google Ads/ }),
@@ -92,7 +132,13 @@ describe("BrowseConnectorsDialog", () => {
     addServer.mockResolvedValue({ ok: true, key: "notfair-googleads" });
     startConnect.mockResolvedValue({ ok: false, error: "issuer down" });
     const onOpenChange = vi.fn();
-    render(<BrowseConnectorsDialog open onOpenChange={onOpenChange} />);
+    render(
+      <BrowseConnectorsDialog
+        open
+        onOpenChange={onOpenChange}
+        onAddCustom={vi.fn()}
+      />,
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: /NotFair Google Ads/ }),
@@ -109,7 +155,13 @@ describe("BrowseConnectorsDialog", () => {
 
   it("surfaces an add failure without starting OAuth", async () => {
     addServer.mockResolvedValue({ ok: false, error: "probe failed" });
-    render(<BrowseConnectorsDialog open onOpenChange={vi.fn()} />);
+    render(
+      <BrowseConnectorsDialog
+        open
+        onOpenChange={vi.fn()}
+        onAddCustom={vi.fn()}
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /Stripe/ }));
 

@@ -534,12 +534,10 @@ function ConnectStep({
           </li>
         ))}
         <li>
-          {/* Reuse the connections-page Add-MCP menu so onboarding gets the
-              same Browse + Custom paths. The trigger is a tile-shaped
-              button so it sits naturally as the last row of the grouped
-              list; the dropdown opens from there. */}
+          {/* Reuse the connections-page Add-MCP flow so onboarding gets the
+              same connector browser and final custom-connector option. The
+              trigger is tile-shaped so it sits naturally as the last row. */}
           <AddMcpServerMenu
-            align="start"
             // Hide the always-visible recommended MCPs from Browse — they
             // each have their own row above already.
             hideKeys={RECOMMENDED_MCP_KEYS}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 import {
   Dialog,
@@ -39,6 +39,9 @@ type Props = {
    * dialog would render duplicates of the tiles the user already sees.
    */
   hideKeys?: string[];
+  /** Opens the custom MCP URL flow. This is always the final option in the
+   *  connector grid, including when every trusted connector is connected. */
+  onAddCustom: () => void;
 };
 
 /**
@@ -59,6 +62,7 @@ export function BrowseConnectorsDialog({
   connectedKeys = [],
   connectedResourceUrls = [],
   hideKeys = [],
+  onAddCustom,
 }: Props) {
   const connectedKeySet = new Set(connectedKeys);
   const connectedUrlSet = new Set(connectedResourceUrls);
@@ -79,21 +83,38 @@ export function BrowseConnectorsDialog({
             flow in one step.
           </DialogDescription>
         </DialogHeader>
-        {availableConnectors.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            All available connectors are already connected.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {availableConnectors.map((c) => (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {availableConnectors.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground sm:col-span-2">
+              All available connectors are already connected.
+            </p>
+          ) : (
+            availableConnectors.map((c) => (
               <ConnectorTile
                 key={c.id}
                 connector={c}
                 onAdded={() => onOpenChange(false)}
               />
-            ))}
-          </div>
-        )}
+            ))
+          )}
+          <button
+            type="button"
+            onClick={onAddCustom}
+            className="flex items-start gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3 text-left transition-colors hover:bg-muted/50 sm:col-span-2"
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <Plus className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">
+                Add custom connector
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Paste an OAuth 2.0 MCP URL
+              </span>
+            </span>
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -1,8 +1,9 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactElement, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, BookOpenText, MoreHorizontal } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
+import { Slot } from "radix-ui";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,19 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { addUserMcpServerAction } from "@/server/actions/mcp";
 import { BrowseConnectorsDialog } from "@/components/browse-connectors-dialog";
 
 /**
- * "Add server" dropdown trigger for the Connections page header. Two
- * paths:
+ * "Add server" trigger for the Connections page header. It opens the
+ * connector browser directly, where users can choose either path:
  *
  *  - **Browse connectors** → curated grid of trusted MCPs (Stripe,
  *    PostHog, NotFair, etc.). Click adds it to this project via the
@@ -44,7 +39,6 @@ export function AddMcpServerMenu({
   connectedResourceUrls = [],
   hideKeys = [],
   trigger,
-  align = "end",
 }: {
   /** Catalog keys whose runtime status is `connected`. Browse tiles for
    *  these are filtered out of the grid entirely. */
@@ -61,51 +55,25 @@ export function AddMcpServerMenu({
    *  "Add server" button used by the Connections page header. Pass a
    *  custom button-shaped node when slotting this into a list row,
    *  grouped list, or other in-line surface. */
-  trigger?: ReactNode;
-  /** Radix `align` for the dropdown content. */
-  align?: "start" | "center" | "end";
+  trigger?: ReactElement;
 }) {
   const [browseOpen, setBrowseOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          {trigger ?? (
-            <button type="button" className="ns-btn ns-btn-primary">
-              <Plus className="size-3.5" />
-              Add server
-            </button>
-          )}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align={align} className="w-60">
-          <DropdownMenuItem
-            onSelect={() => setBrowseOpen(true)}
-            className="gap-2 py-2.5"
-          >
-            <BookOpenText className="size-4 text-muted-foreground" />
-            <div className="flex flex-col">
-              <span className="text-sm">Browse connectors</span>
-              <span className="text-[11px] text-muted-foreground">
-                Stripe, PostHog, and more
-              </span>
-            </div>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => setCustomOpen(true)}
-            className="gap-2 py-2.5"
-          >
-            <MoreHorizontal className="size-4 text-muted-foreground" />
-            <div className="flex flex-col">
-              <span className="text-sm">Add custom connector</span>
-              <span className="text-[11px] text-muted-foreground">
-                Paste an OAuth 2.0 MCP URL
-              </span>
-            </div>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {trigger ? (
+        <Slot.Root onClick={() => setBrowseOpen(true)}>{trigger}</Slot.Root>
+      ) : (
+        <button
+          type="button"
+          className="ns-btn ns-btn-primary"
+          onClick={() => setBrowseOpen(true)}
+        >
+          <Plus className="size-3.5" />
+          Add server
+        </button>
+      )}
 
       <BrowseConnectorsDialog
         open={browseOpen}
@@ -113,6 +81,10 @@ export function AddMcpServerMenu({
         connectedKeys={connectedKeys}
         connectedResourceUrls={connectedResourceUrls}
         hideKeys={hideKeys}
+        onAddCustom={() => {
+          setBrowseOpen(false);
+          setCustomOpen(true);
+        }}
       />
       <CustomConnectorDialog open={customOpen} onOpenChange={setCustomOpen} />
     </>
