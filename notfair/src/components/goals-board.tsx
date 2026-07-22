@@ -1,14 +1,13 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
-import { Pin } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowUpRight, Pin } from "lucide-react";
+import { GoalSparkline } from "@/components/goal-sparkline";
 import { formatMetric } from "@/lib/format-metric";
+import { goalGroupHealth, type GoalGroupHealth } from "@/lib/goal-group-health";
 import { timeAgo } from "@/lib/time-ago";
+import { cn } from "@/lib/utils";
 
-// Local copy of the status union — this component is client-side and takes
-// plain JSON props; importing from the server db module would be noise.
+// Plain JSON is passed from the server route so this dashboard stays cheap to
+// render and every card can be a normal link, with no client hydration needed.
 type GoalStatus =
   | "intake"
   | "proposed"
@@ -26,215 +25,242 @@ export type BoardGoal = {
   status: GoalStatus;
   status_reason: string | null;
   metric_name: string | null;
-  baseline_value: number | null;
   current_value: number | null;
   target_value: number | null;
   metric_direction: "increase" | "decrease" | null;
   mode: "achieve" | "maintain";
   tick_count: number;
   pinned: boolean;
-  created_at: string;
   updated_at: string;
+  snapshots: number[];
 };
 
-type GroupKey = "setup" | "running" | "paused" | "achieved" | "failed" | "closed";
-
-/**
- * Board columns. Intake and proposed share a column — both are "the goal
- * isn't running yet"; the card chip tells them apart (and flags the one
- * waiting on the user's confirm in chat). The three terminal states each get
- * their own column so an achieved goal reads as a win, not just "gone".
- */
-const GROUPS: Array<{
-  key: GroupKey;
-  title: string;
-  statuses: GoalStatus[];
-  dot: string;
-}> = [
-  { key: "setup", title: "Setting up", statuses: ["intake", "proposed"], dot: "ns-dot-warn" },
-  { key: "running", title: "Running", statuses: ["active"], dot: "ns-dot-live" },
-  { key: "paused", title: "Paused", statuses: ["paused"], dot: "ns-dot-mute" },
-  { key: "achieved", title: "Achieved", statuses: ["achieved"], dot: "ns-dot-on" },
-  { key: "failed", title: "Failed", statuses: ["failed"], dot: "ns-dot-err" },
-  { key: "closed", title: "Closed", statuses: ["killed"], dot: "ns-dot-mute" },
-];
+export type GoalDashboardSection = {
+  id: string;
+  name: string;
+  description: string;
+  href: string | null;
+  goals: BoardGoal[];
+};
 
 const TERMINAL: GoalStatus[] = ["achieved", "failed", "killed"];
 
+const HEALTH_COPY: Record<
+  GoalGroupHealth,
+  { label: string; dot: string; text: string }
+> = {
+  healthy: {
+    label: "on target",
+    dot: "ns-dot-live",
+    text: "text-[hsl(var(--notfair-accent))]",
+  },
+  attention: {
+    label: "needs attention",
+    dot: "ns-dot-err",
+    text: "text-[hsl(var(--destructive))]",
+  },
+  waiting: {
+    label: "waiting for data",
+    dot: "ns-dot-warn",
+    text: "text-[hsl(var(--notfair-warn))]",
+  },
+  paused: {
+    label: "paused",
+    dot: "ns-dot-mute",
+    text: "text-[hsl(var(--notfair-ink-4))]",
+  },
+  closed: {
+    label: "closed",
+    dot: "ns-dot-mute",
+    text: "text-[hsl(var(--notfair-ink-4))]",
+  },
+};
+
 /**
- * Jira-style board of every goal in the project, one column per lifecycle
- * group, with toggleable status filters. Read-only: cards link to the goal
- * screen where the real controls live.
+ * Workspace-level metric dashboard. Groups provide the page structure and
+ * every raised surface is a real navigation target: clicking any metric card
+ * opens that goal's full history and chat.
  */
-export function GoalsBoard({ goals }: { goals: BoardGoal[] }) {
-  const [visible, setVisible] = useState<Set<GroupKey>>(
-    () => new Set(GROUPS.map((g) => g.key)),
-  );
-
-  function toggle(key: GroupKey) {
-    setVisible((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  const columns = GROUPS.map((group) => {
-    const items = goals
-      .filter((g) => group.statuses.includes(g.status))
-      .sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        // Closed columns: most recently closed first. Live columns: newest first.
-        const key = TERMINAL.includes(a.status) ? "updated_at" : "created_at";
-        return b[key].localeCompare(a[key]);
-      });
-    return { ...group, items };
-  });
-
-  const shown = columns.filter((c) => visible.has(c.key));
+export function GoalsBoard({ sections }: { sections: GoalDashboardSection[] }) {
+  const allGoals = sections.flatMap((section) => section.goals);
+  const running = allGoals.filter((goal) => goal.status === "active").length;
+  const paused = allGoals.filter((goal) => goal.status === "paused").length;
+  const closed = allGoals.filter((goal) => TERMINAL.includes(goal.status)).length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter goals by status">
-        {columns.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => toggle(c.key)}
-            aria-pressed={visible.has(c.key)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors",
-              visible.has(c.key)
-                ? "bg-[hsl(var(--notfair-accent-soft))] text-[hsl(var(--notfair-accent))] shadow-[var(--notfair-shadow-sm)]"
-                : "bg-[hsl(var(--notfair-surface-2)/0.6)] text-[hsl(var(--notfair-ink-3))] hover:bg-[hsl(var(--notfair-surface-2))]",
-            )}
-          >
-            <span className={cn("ns-dot", c.dot)} aria-hidden />
-            {c.title}
-            <span className="tabular-nums opacity-70">{c.items.length}</span>
-          </button>
-        ))}
+    <div>
+      <div
+        className="mb-9 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-[hsl(var(--notfair-ink-4))]"
+        aria-label="Goals summary"
+      >
+        <span className="font-mono tabular-nums">
+          {allGoals.length} goal{allGoals.length === 1 ? "" : "s"}
+        </span>
+        {running > 0 && (
+          <span className="flex items-center gap-1.5 text-[hsl(var(--notfair-accent))]">
+            <span className="ns-dot ns-dot-live" aria-hidden />
+            {running} running
+          </span>
+        )}
+        {paused > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="ns-dot ns-dot-mute" aria-hidden />
+            {paused} paused
+          </span>
+        )}
+        {closed > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="ns-dot ns-dot-mute" aria-hidden />
+            {closed} closed
+          </span>
+        )}
       </div>
 
-      {shown.length === 0 ? (
-        <p className="m-0 py-10 text-center text-[13px] text-[hsl(var(--notfair-ink-4))]">
-          Every status is filtered out — turn one back on above.
-        </p>
-      ) : (
-        <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto pb-4">
-          {shown.map((c) => (
-            <section
-              key={c.key}
-              aria-label={c.title}
-              className="flex max-h-full w-[280px] shrink-0 flex-col rounded-xl bg-[hsl(var(--notfair-surface-2)/0.5)]"
-            >
-              <header className="flex items-center gap-2 px-3 pt-3 pb-2">
-                <span className={cn("ns-dot", c.dot)} aria-hidden />
-                <h2 className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--notfair-ink-3))]">
-                  {c.title}
-                </h2>
-                <span className="text-[11px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
-                  {c.items.length}
-                </span>
-              </header>
-              <div className="flex min-h-0 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                {c.items.length === 0 ? (
-                  <p className="m-0 px-1.5 py-6 text-center text-[12px] text-[hsl(var(--notfair-ink-4))]">
-                    No goals here
+      <div className="flex flex-col gap-12">
+        {sections.map((section) => {
+          const goals = [...section.goals].sort((a, b) => {
+            if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+            if (TERMINAL.includes(a.status) !== TERMINAL.includes(b.status)) {
+              return TERMINAL.includes(a.status) ? 1 : -1;
+            }
+            return b.updated_at.localeCompare(a.updated_at);
+          });
+          const headingId = `goal-section-${section.id}`;
+
+          return (
+            <section key={section.id} aria-labelledby={headingId}>
+              <header className="mb-4 flex items-end justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <h2
+                      id={headingId}
+                      className="m-0 text-[16px] font-semibold tracking-[-0.018em] text-[hsl(var(--notfair-ink-2))]"
+                    >
+                      {section.name}
+                    </h2>
+                    <span className="font-mono text-[10.5px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
+                      {goals.length} goal{goals.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <p className="m-0 mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-[hsl(var(--notfair-ink-4))]">
+                    {section.description}
                   </p>
-                ) : (
-                  c.items.map((g) => <GoalCard key={g.id} goal={g} />)
+                </div>
+                {section.href && (
+                  <Link
+                    href={section.href}
+                    className="group/link flex shrink-0 items-center gap-1 text-[11.5px] text-[hsl(var(--notfair-ink-4))] transition-colors hover:text-[hsl(var(--notfair-ink-2))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Open group
+                    <ArrowUpRight className="size-3 transition-transform group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5" />
+                  </Link>
                 )}
-              </div>
+              </header>
+
+              {goals.length === 0 ? (
+                <div className="rounded-xl bg-[hsl(var(--notfair-surface-2)/0.42)] px-5 py-8 text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+                  No goals in this group yet. Use <span className="text-[hsl(var(--notfair-ink-3))]">Manage group</span> to add one.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                  {goals.map((goal) => (
+                    <GoalMetricCard key={goal.id} goal={goal} />
+                  ))}
+                </div>
+              )}
             </section>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-/** Direction-agnostic progress toward target, 0..1, or null when unknowable. */
-function progressFraction(g: BoardGoal): number | null {
-  if (
-    g.baseline_value === null ||
-    g.current_value === null ||
-    g.target_value === null ||
-    g.target_value === g.baseline_value
-  ) {
-    return null;
-  }
-  const f = (g.current_value - g.baseline_value) / (g.target_value - g.baseline_value);
-  return Math.min(1, Math.max(0, f));
-}
-
-function GoalCard({ goal }: { goal: BoardGoal }) {
-  const closed = TERMINAL.includes(goal.status);
-  const progress =
-    goal.status === "active" || goal.status === "paused" ? progressFraction(goal) : null;
+function GoalMetricCard({ goal }: { goal: BoardGoal }) {
+  const health = goalGroupHealth(goal);
+  const healthCopy = HEALTH_COPY[health];
+  const comparator = goal.metric_direction === "decrease" ? "≤" : "≥";
+  const metricReady = goal.metric_name !== null;
+  const hasChart = goal.snapshots.length >= 2;
+  const accessibleTarget =
+    goal.target_value === null
+      ? ""
+      : `, ${goal.mode === "maintain" ? "hold" : "target"} ${comparator} ${formatMetric(goal.target_value)}`;
 
   return (
     <Link
       href={goal.href}
-      className="ns-card block p-3 no-underline transition-shadow hover:shadow-[var(--notfair-shadow)]"
+      aria-label={`Open ${goal.label}, current ${formatMetric(goal.current_value)}${accessibleTarget}`}
+      className="group ns-card flex min-h-[250px] flex-col overflow-hidden p-5 no-underline transition-[transform,box-shadow,background-color] duration-150 hover:-translate-y-0.5 hover:shadow-[var(--notfair-shadow-lg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 flex-1 text-[13px] leading-snug font-semibold text-foreground">
-          {goal.label}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={cn("ns-dot", healthCopy.dot)} aria-hidden />
+            <h3 className="m-0 truncate text-[14px] font-semibold tracking-[-0.012em] text-foreground">
+              {goal.label}
+            </h3>
+            {goal.pinned && (
+              <Pin
+                aria-label="Pinned"
+                className="size-3 shrink-0 text-[hsl(var(--notfair-ink-4))]"
+              />
+            )}
+          </div>
+          <p className="m-0 mt-1 truncate text-[11.5px] text-[hsl(var(--notfair-ink-4))]">
+            {goal.metric_name ?? "Main metric is being defined"}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 text-[10.5px] font-medium lowercase",
+            healthCopy.text,
+          )}
+        >
+          {healthCopy.label}
         </span>
-        {goal.pinned && (
-          <Pin
-            aria-label="Pinned"
-            className="mt-0.5 size-3 shrink-0 text-[hsl(var(--notfair-ink-4))]"
-          />
+      </div>
+
+      <div className="mt-5 flex items-end gap-2">
+        <span className="text-[28px] leading-none font-semibold tabular-nums tracking-[-0.035em] text-foreground">
+          {formatMetric(goal.current_value)}
+        </span>
+        {goal.target_value !== null && (
+          <span className="pb-0.5 font-mono text-[10.5px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
+            {goal.mode === "maintain" ? "hold " : "target "}
+            {comparator} {formatMetric(goal.target_value)}
+          </span>
         )}
       </div>
 
-      {goal.status === "proposed" && (
-        <span className="ns-tag-accent mt-1.5 inline-block">confirm the plan in chat</span>
-      )}
-      {goal.status === "intake" && (
-        <span className="ns-tag mt-1.5 inline-block">defining metric</span>
-      )}
-
-      <p className="m-0 mt-1.5 line-clamp-2 text-[12px] leading-snug text-[hsl(var(--notfair-ink-3))]">
-        {goal.statement}
-      </p>
-
-      {goal.metric_name && goal.target_value !== null && (
-        <p className="m-0 mt-2 text-[11.5px] tabular-nums text-[hsl(var(--notfair-ink-4))]">
-          <span className="text-[hsl(var(--notfair-ink-3))]">{goal.metric_name}</span>{" "}
-          {formatMetric(goal.current_value)} / {formatMetric(goal.target_value)}
-          {goal.mode === "maintain" ? " (hold)" : ""}
-        </p>
-      )}
-
-      {progress !== null && (
-        <div
-          className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-[hsl(var(--notfair-ink-4)/0.12)]"
-          role="progressbar"
-          aria-valuenow={Math.round(progress * 100)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <div
-            className="h-full rounded-full bg-[hsl(var(--notfair-accent))]"
-            style={{ width: `${Math.round(progress * 100)}%` }}
+      <div className="mt-4 flex min-h-[92px] flex-1 items-center rounded-[10px] bg-[hsl(var(--notfair-surface-2)/0.46)] px-2.5 py-2">
+        {hasChart ? (
+          <GoalSparkline
+            values={goal.snapshots}
+            target={goal.target_value}
+            direction={goal.metric_direction}
+            width={520}
+            height={76}
           />
-        </div>
-      )}
+        ) : (
+          <div className="flex h-[76px] w-full items-center justify-center text-center text-[11.5px] leading-relaxed text-[hsl(var(--notfair-ink-4))]">
+            {metricReady
+              ? "Trend appears after the next reading"
+              : goal.statement}
+          </div>
+        )}
+      </div>
 
-      {closed && goal.status_reason && (
-        <p className="m-0 mt-1.5 line-clamp-2 text-[11.5px] leading-snug text-[hsl(var(--notfair-ink-4))]">
-          {goal.status_reason}
-        </p>
-      )}
+      <div className="mt-4 flex items-center justify-between gap-3 font-mono text-[10.5px] text-[hsl(var(--notfair-ink-4))]">
+        <span>
+          {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} · {timeAgo(goal.updated_at)}
+        </span>
+        <ArrowUpRight className="size-3.5 shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+      </div>
 
-      <p className="m-0 mt-2 text-[11px] text-[hsl(var(--notfair-ink-4))]">
-        {goal.tick_count} check{goal.tick_count === 1 ? "" : "s"} ·{" "}
-        {closed ? `closed ${timeAgo(goal.updated_at)}` : `updated ${timeAgo(goal.updated_at)}`}
-      </p>
+      {TERMINAL.includes(goal.status) && goal.status_reason && (
+        <span className="sr-only">{goal.status_reason}</span>
+      )}
     </Link>
   );
 }

@@ -3,12 +3,12 @@
 import { useState } from "react";
 import {
   AlertCircle,
-  CheckCircle2,
+  BookOpen,
   ChevronRight,
-  Loader2,
   MessageCircle,
+  Search,
+  Terminal,
   Wrench,
-  XCircle,
 } from "lucide-react";
 
 import { Markdown } from "@/components/markdown";
@@ -17,8 +17,8 @@ import { cn } from "@/lib/utils";
 import {
   humanizeTool,
   iconForTool,
+  looksLikeShellInvocation,
   matchMcpServerKey,
-  formatToolName,
   type McpCatalogEntryLite,
 } from "./tool-intent";
 import type { RenderedItem, ToolEntry } from "./transcript-model";
@@ -111,79 +111,57 @@ export function ToolGroup({
 }) {
   const inFlightCount = tools.filter((t) => !t.done).length;
   const isLive = inFlightCount > 0;
-  const headline = tools.find((t) => !t.done) ?? tools[tools.length - 1] ?? null;
-  // Group status reflects the FINAL outcome, not "any error ever". When the
-  // agent retried a failed call and the retry succeeded, the user sees
-  // green — only expanding the card reveals the intermediate stumble.
-  // Matches Claude.ai's pattern of grading by "did this turn ultimately
-  // work" rather than punishing every recoverable hiccup.
   const lastDone = [...tools].reverse().find((t) => t.done);
   const hasError = !!(lastDone && !lastDone.ok);
-  const intent = headline
-    ? humanizeTool(headline.name, headline.label)
-    : { verb: "Tool call" };
-  const headMcp = headline ? matchMcpServerKey(headline.name, mcpCatalog) : null;
-  const HeadIcon = headline ? iconForTool(headline.name) : Wrench;
-  const mcpCount = tools.filter((tool) =>
-    matchMcpServerKey(tool.name, mcpCatalog),
-  ).length;
-  const StatusIcon = isLive ? Loader2 : hasError ? XCircle : CheckCircle2;
-  const statusClass = isLive
-    ? "text-[hsl(var(--notfair-accent))] motion-safe:animate-spin"
-    : hasError
-      ? "text-destructive"
-      : "text-emerald-500";
-  const summaryLabel =
-    tools.length === 1
-      ? intent.verb
-      : `${isLive ? "Using" : "Used"} ${tools.length} tools`;
+  const headline = representativeTool(tools);
+  const headMcp = headline
+    ? matchMcpServerKey(headline.name, mcpCatalog)
+    : null;
+  const HeadIcon = headline ? iconForSummary(headline) : Wrench;
+  const summaryLabel = summarizeTools(tools);
+  const statusLabel = isLive ? "Running" : hasError ? "Failed" : "Complete";
 
   return (
     <details
       data-activity-kind={headMcp ? "mcp" : "tool"}
-      className="group"
+      className="group/details"
     >
       <summary
         className={cn(
-          "-mx-2 flex min-h-8 cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1 text-xs",
-          "transition-colors hover:bg-[hsl(var(--notfair-hover))] [&::-webkit-details-marker]:hidden",
+          "group/summary flex min-h-8 cursor-pointer list-none select-none items-center gap-2 py-0.5 text-[15px] leading-6",
+          "text-[hsl(var(--notfair-ink-3))] focus-visible:outline-none [&::-webkit-details-marker]:hidden",
         )}
       >
-        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60 transition-transform group-open:rotate-90" />
-        {headMcp ? (
-          <ToolBrandFavicon
-            resourceUrl={headMcp.resource_url}
-            alt={headMcp.display_name}
-          />
-        ) : (
-          <HeadIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {headMcp ? (
+            <ToolBrandFavicon
+              resourceUrl={headMcp.resource_url}
+              alt={headMcp.display_name}
+            />
+          ) : (
+            <HeadIcon className="size-4" aria-hidden />
+          )}
+        </span>
         <span
+          data-tool-summary
           className={cn(
-            "font-medium",
-            isLive ? "ns-shimmer-text" : "text-foreground/80",
+            "min-w-0 truncate",
+            isLive && "ns-shimmer-text",
           )}
         >
           {summaryLabel}
         </span>
-        {tools.length === 1 && intent.target && (
-          <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-muted-foreground/80">
-            {intent.target}
-          </span>
-        )}
-        {tools.length === 1 && headMcp && (
-          <span className="truncate text-[10.5px] text-muted-foreground/80">
-            {headMcp.display_name} MCP
-          </span>
-        )}
-        {tools.length > 1 && mcpCount > 0 && (
-          <span className="text-[10.5px] text-muted-foreground/80">
-            {mcpCount} MCP {mcpCount === 1 ? "call" : "calls"}
-          </span>
-        )}
-        <StatusIcon className={cn("ml-auto size-3.5 shrink-0", statusClass)} />
+        <ChevronRight
+          data-tool-toggle
+          className="size-4 shrink-0 opacity-0 transition-[transform,opacity] group-hover/summary:opacity-100 group-focus-visible/summary:opacity-100 group-open/details:rotate-90 group-open/details:opacity-100"
+          aria-hidden
+        />
+        <span className="sr-only">{statusLabel}</span>
       </summary>
-      <div className="mt-1.5 divide-y divide-border/30 rounded-xl bg-[hsl(var(--notfair-surface-2)/0.5)] px-3.5 py-1">
+      <div
+        data-tool-list
+        className="mt-1 max-h-64 overflow-y-auto overscroll-contain text-[15px] leading-6 text-[hsl(var(--notfair-ink-3))]"
+      >
         {tools.map((t, index) => (
           <ToolRow
             key={`${t.toolCallId}:${index}`}
@@ -205,59 +183,122 @@ function ToolRow({
 }) {
   const intent = humanizeTool(entry.name, entry.label);
   const mcp = matchMcpServerKey(entry.name, mcpCatalog);
-  const Icon = iconForTool(entry.name);
-  const StatusIcon = entry.done
-    ? entry.ok
-      ? CheckCircle2
-      : XCircle
-    : Loader2;
-  const statusClass = entry.done
-    ? entry.ok
-      ? "text-emerald-500"
-      : "text-destructive"
-    : "text-[hsl(var(--notfair-accent))] motion-safe:animate-spin";
-  // Show the raw command/label only when it actually adds information —
-  // i.e. it's not redundant with the intent target the header already
-  // surfaces (path/url/etc.). Keeps simple tool rows tight while still
-  // exposing shell command lines and other raw invocations in full.
-  const showRawLabel =
-    !!entry.label &&
-    entry.label.trim() !== "" &&
-    entry.label.trim() !== intent.target?.trim();
+  const Icon = iconForActivity(entry);
+  const rowLabel = formatActivityLabel(intent.verb, intent.target);
+  const statusLabel = !entry.done
+    ? "Running"
+    : entry.ok
+      ? "Complete"
+      : "Failed";
+
   return (
-    <div className="space-y-1.5 py-2.5">
-      <div className="flex items-center gap-2 text-xs">
-        <StatusIcon className={cn("size-3.5 shrink-0", statusClass)} />
-        <span className="font-medium text-foreground/90">{intent.verb}</span>
-        {intent.target && (
-          <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-muted-foreground">
-            {intent.target}
-          </span>
-        )}
-        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">
-          {mcp ? `${mcp.display_name} MCP` : "Local tool"}
-        </span>
-      </div>
-      <div className="ml-5 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground/60">
+    <div
+      data-tool-row
+      data-tool-status={statusLabel.toLowerCase()}
+      className="flex min-h-7 items-center gap-2 py-0.5"
+      title={entry.label ?? rowLabel}
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center">
         {mcp ? (
-          <ToolBrandFavicon resourceUrl={mcp.resource_url} alt={mcp.display_name} />
+          <ToolBrandFavicon
+            resourceUrl={mcp.resource_url}
+            alt={mcp.display_name}
+          />
         ) : (
-          <Icon className="size-3 shrink-0" />
+          <Icon className="size-4" aria-hidden />
         )}
-        <span>{formatToolName(entry.name)}</span>
-      </div>
-      {showRawLabel && (
-        <pre className="ml-5 max-h-40 overflow-auto rounded-lg bg-[hsl(var(--notfair-surface-2))] px-3 py-2 font-mono text-[10.5px] leading-relaxed text-foreground/75 whitespace-pre-wrap break-all">
-          {entry.label}
-        </pre>
-      )}
-      {entry.done && entry.result && (
-        <div className="ml-5 text-[11px] leading-relaxed text-muted-foreground/90">
-          <span className="break-words">{entry.result}</span>
-        </div>
-      )}
+      </span>
+      <span className="min-w-0 truncate">{rowLabel}</span>
+      <span className="sr-only">{statusLabel}</span>
     </div>
   );
+}
+
+type ActivityCategory = "edit" | "read" | "command" | "other";
+
+function activityCategory(entry: ToolEntry): ActivityCategory {
+  const name = entry.name.toLowerCase();
+  if (name === "write" || name === "edit" || name === "patch") return "edit";
+  if (name === "read" || name === "cat" || name === "open") return "read";
+  if (
+    name === "shell" ||
+    name === "bash" ||
+    name === "exec" ||
+    looksLikeShellInvocation(entry.name) ||
+    looksLikeShellInvocation(entry.label ?? "")
+  ) {
+    return "command";
+  }
+  return "other";
+}
+
+/**
+ * Use the same quiet, category-level summary as the reference transcript:
+ * "Edited files, read files, ran commands" rather than a tool count.
+ */
+function summarizeTools(tools: ToolEntry[]): string {
+  if (tools.length === 0) return "Tool activity";
+  const phrases: string[] = [];
+  const editCount = tools.filter(
+    (tool) => activityCategory(tool) === "edit",
+  ).length;
+  const readCount = tools.filter(
+    (tool) => activityCategory(tool) === "read",
+  ).length;
+  const commandCount = tools.filter(
+    (tool) => activityCategory(tool) === "command",
+  ).length;
+
+  if (editCount > 0)
+    phrases.push(editCount === 1 ? "Edited file" : "Edited files");
+  if (readCount > 0)
+    phrases.push(readCount === 1 ? "Read file" : "Read files");
+  if (commandCount > 0)
+    phrases.push(commandCount === 1 ? "Ran command" : "Ran commands");
+
+  for (const tool of tools) {
+    if (activityCategory(tool) !== "other") continue;
+    const verb = humanizeTool(tool.name, tool.label).verb;
+    if (!phrases.some((phrase) => phrase.toLowerCase() === verb.toLowerCase())) {
+      phrases.push(verb);
+    }
+  }
+
+  return phrases
+    .map((phrase, index) =>
+      index === 0 ? phrase : phrase.charAt(0).toLowerCase() + phrase.slice(1),
+    )
+    .join(", ");
+}
+
+function representativeTool(tools: ToolEntry[]): ToolEntry | null {
+  for (const category of ["edit", "read", "command", "other"] as const) {
+    const match = tools.find((tool) => activityCategory(tool) === category);
+    if (match) return match;
+  }
+  return null;
+}
+
+function iconForActivity(entry: ToolEntry) {
+  const verb = humanizeTool(entry.name, entry.label).verb.toLowerCase();
+  if (verb.startsWith("searched")) return Search;
+  if (verb.startsWith("read")) return BookOpen;
+  return iconForTool(entry.name);
+}
+
+function iconForSummary(entry: ToolEntry) {
+  const category = activityCategory(entry);
+  if (category === "read") return BookOpen;
+  if (category === "command") return Terminal;
+  return iconForActivity(entry);
+}
+
+function formatActivityLabel(verb: string, target?: string): string {
+  if (!target) return verb;
+  // The intent already supplies the noun through the target, so avoid
+  // stilted rows such as "Read file DESIGN.md".
+  const compactVerb = verb.replace(/\s+(?:file|url)$/i, "");
+  return `${compactVerb} ${target}`;
 }
 
 /**

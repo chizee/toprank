@@ -18,7 +18,10 @@ export function GoalSparkline({
 }) {
   if (values.length < 2) {
     return (
-      <div className="flex h-24 items-center justify-center text-[12.5px] text-[hsl(var(--notfair-ink-4))]">
+      <div
+        className="flex items-center justify-center text-[12.5px] text-[hsl(var(--notfair-ink-4))]"
+        style={{ height }}
+      >
         Not enough readings yet — the sparkline appears after a couple of ticks.
       </div>
     );
@@ -43,7 +46,7 @@ export function GoalSparkline({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      style={{ height: `${height <= 40 ? height : 96}px` }}
+      style={{ height }}
       className="w-full"
       role="img"
       aria-label={`Metric trend: ${first} → ${last}${target !== null ? `, target ${target}` : ""}`}

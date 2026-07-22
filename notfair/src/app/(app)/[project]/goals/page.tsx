@@ -3,26 +3,26 @@ import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getProject } from "@/server/db/projects";
 import { listProjectAgents } from "@/server/agent-meta";
-import { getPinnedGoalIds, listGoals } from "@/server/db/goals";
+import { getPinnedGoalIds, listGoals, listMetricSnapshots } from "@/server/db/goals";
 import { projectHref } from "@/lib/project-href";
 import { goalLabel } from "@/lib/goal-label";
-import { GoalsBoard, type BoardGoal } from "@/components/goals-board";
+import {
+  GoalsBoard,
+  type BoardGoal,
+  type GoalDashboardSection,
+} from "@/components/goals-board";
 import {
   listGoalGroupMemberships,
   listGoalGroups,
-  listGoalsInGroup,
 } from "@/server/db/goal-groups";
-import { countGoalGroupHealth } from "@/lib/goal-group-health";
-import { GoalGroupsOverview, type GoalGroupOverviewRow } from "@/components/goal-groups-overview";
 import { GoalGroupEditor, type GoalGroupEditorGoal } from "@/components/goal-group-editor";
+import { GoalAutoRefresh } from "@/components/goal-auto-refresh";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The All-goals board: every goal in the workspace across its whole
- * lifecycle, one column per state. The sidebar rail only carries live
- * goals — this page is where closed goals (achieved, failed, or closed by
- * hand) remain browsable.
+ * The workspace goal dashboard: every main metric and its history, arranged
+ * into the same goal groups users manage in the sidebar.
  */
 export default async function AllGoalsPage({
   params,
@@ -43,8 +43,8 @@ export default async function AllGoalsPage({
   );
   const groupById = new Map(groups.map((group) => [group.id, group.name]));
 
-  // Plain-JSON card props for the client board. Goals whose agent sidecar
-  // is missing (half-deleted workspace) have no page to link to — skip.
+  // Plain-JSON card props for the dashboard. Goals whose agent sidecar is
+  // missing (half-deleted workspace) have no page to link to, so skip them.
   const goals = projectGoals.flatMap<BoardGoal>((g) => {
     const agent = agentById.get(g.agent_id);
     if (!agent) return [];
@@ -57,33 +57,44 @@ export default async function AllGoalsPage({
         status: g.status,
         status_reason: g.status_reason,
         metric_name: g.metric_name,
-        baseline_value: g.baseline_value,
         current_value: g.current_value,
         target_value: g.target_value,
         metric_direction: g.metric_direction,
         mode: g.mode,
         tick_count: g.tick_count,
         pinned: pinnedIds.has(g.id),
-        created_at: g.created_at,
         updated_at: g.updated_at,
+        snapshots: listMetricSnapshots(g.id, 120).map((snapshot) => snapshot.value),
       },
     ];
   });
 
-  const groupRows: GoalGroupOverviewRow[] = groups.map((group) => {
-    const members = listGoalsInGroup(group.id);
-    const counts = countGoalGroupHealth(members);
-    return {
-      id: group.id,
-      href: projectHref(slug, `/groups/${group.id}`),
-      name: group.name,
-      description: group.description,
-      goal_count: members.length,
-      healthy_count: counts.healthy,
-      attention_count: counts.attention,
-      waiting_count: counts.waiting + counts.paused,
-    };
-  });
+  const goalById = new Map(goals.map((goal) => [goal.id, goal]));
+  const goalsByGroup = new Map<string, BoardGoal[]>();
+  for (const [goalId, groupId] of membershipByGoal) {
+    const goal = goalById.get(goalId);
+    if (!goal) continue;
+    const groupGoals = goalsByGroup.get(groupId) ?? [];
+    groupGoals.push(goal);
+    goalsByGroup.set(groupId, groupGoals);
+  }
+  const sections: GoalDashboardSection[] = groups.map((group) => ({
+    id: group.id,
+    href: projectHref(slug, `/groups/${group.id}`),
+    name: group.name,
+    description: group.description || "A shared dashboard for related goals.",
+    goals: goalsByGroup.get(group.id) ?? [],
+  }));
+  const ungroupedGoals = goals.filter((goal) => !membershipByGoal.has(goal.id));
+  if (ungroupedGoals.length > 0) {
+    sections.push({
+      id: "ungrouped",
+      href: null,
+      name: "Ungrouped",
+      description: "Independent goals that are not part of a shared dashboard.",
+      goals: ungroupedGoals,
+    });
+  }
   const editorGoals: GoalGroupEditorGoal[] = projectGoals.map((goal) => {
     const groupId = membershipByGoal.get(goal.id) ?? null;
     return {
@@ -95,53 +106,48 @@ export default async function AllGoalsPage({
     };
   });
 
-  // Anchored to the viewport region (like the goal screen) so the column
-  // strip scrolls inside the page instead of stretching SidebarInset — a
-  // flex item with no min-width — and dragging the whole body sideways.
   return (
-    <div className="absolute inset-0 flex flex-col overflow-y-auto px-7 pt-8 pb-4">
-      <header className="ns-page-head shrink-0">
-        <div className="ns-page-head-stack">
-          <h1 className="ns-page-title">All goals</h1>
-          <p className="ns-page-sub">
-            Every goal in {project.display_name}, across its whole life —
-            filter by status, click through for the full story.
-          </p>
-        </div>
-        <div className="ns-page-actions">
-          <GoalGroupEditor projectSlug={slug} goals={editorGoals} />
-          <Link href={projectHref(slug, "")} className="ns-btn ns-btn-ghost shrink-0">
-            <Plus className="size-3.5" />
-            New goal
-          </Link>
-        </div>
-      </header>
-
-      <section className="mb-7" aria-labelledby="goal-groups-heading">
-        <h2 id="goal-groups-heading" className="ns-h2 mt-0">
-          <span>Groups</span>
-          <span className="ns-h2-meta">Dashboards for related goals</span>
-        </h2>
-        <GoalGroupsOverview groups={groupRows} />
-      </section>
-
-      {goals.length === 0 ? (
-        <div className="ns-card p-8 text-center">
-          <p className="m-0 text-[13.5px] text-[hsl(var(--notfair-ink-3))]">
-            No goals yet. State an ambition and NotFair will figure out how to
-            measure and chase it.
-          </p>
-          <Link
-            href={projectHref(slug, "")}
-            className="ns-btn ns-btn-primary mt-4 inline-flex"
-          >
-            <Plus className="size-3.5" />
-            Create your first goal
-          </Link>
-        </div>
-      ) : (
-        <GoalsBoard goals={goals} />
+    <>
+      {goals.some((goal) => goal.status === "active") && (
+        <GoalAutoRefresh intervalMs={60_000} />
       )}
-    </div>
+      <div className="absolute inset-0 overflow-y-auto">
+        <main className="mx-auto w-full max-w-[1320px] px-4 pt-8 pb-20 sm:px-7">
+          <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="ns-page-head-stack">
+              <h1 className="ns-page-title">Goals dashboard</h1>
+              <p className="ns-page-sub">
+                Every main metric in {project.display_name}, grouped by the work it belongs to.
+              </p>
+            </div>
+            <div className="ns-page-actions">
+              <GoalGroupEditor projectSlug={slug} goals={editorGoals} />
+              <Link href={projectHref(slug, "")} className="ns-btn ns-btn-ghost shrink-0">
+                <Plus className="size-3.5" />
+                New goal
+              </Link>
+            </div>
+          </header>
+
+          {goals.length === 0 ? (
+            <div className="ns-card p-8 text-center">
+              <p className="m-0 text-[13.5px] text-[hsl(var(--notfair-ink-3))]">
+                No goals yet. State an ambition and NotFair will figure out how to
+                measure and chase it.
+              </p>
+              <Link
+                href={projectHref(slug, "")}
+                className="ns-btn ns-btn-primary mt-4 inline-flex"
+              >
+                <Plus className="size-3.5" />
+                Create your first goal
+              </Link>
+            </div>
+          ) : (
+            <GoalsBoard sections={sections} />
+          )}
+        </main>
+      </div>
+    </>
   );
 }
