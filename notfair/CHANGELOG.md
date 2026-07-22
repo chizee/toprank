@@ -1,5 +1,13 @@
 # NotFair
 
+## 0.9.12 — 2026-07-21
+
+**All goals now opens as a grouped metrics dashboard.** Every goal card leads with its live value, target or hold threshold, health, recent history, and check freshness; groups structure the page, pinned and live goals stay prominent, and every card opens the selected goal's full dashboard and chat. The layout works from mobile through wide desktop and refreshes active goal data automatically.
+
+**Expanded tool activity is calmer and easier to scan.** Tool groups summarize work in plain language, keep their disclosure control stable through streaming updates, and expand into a compact, scrollable activity list without nested result boxes or layout jumps.
+
+**Metric history renders at the requested size.** Goal sparklines now honor their height in both measured and empty states, keeping dashboard cards aligned while readings arrive.
+
 ## 0.9.11 — 2026-07-21
 
 **Needs You requests now open the conversation that raised them.** Every escalation includes a **Details** link to its originating check, where completed checks remain fully conversational so you can ask follow-up questions or give the agent more work in the right context.
