@@ -1,5 +1,13 @@
 # NotFair
 
+## 0.9.11 — 2026-07-21
+
+**Needs You requests now open the conversation that raised them.** Every escalation includes a **Details** link to its originating check, where completed checks remain fully conversational so you can ask follow-up questions or give the agent more work in the right context.
+
+**The Checks rail now owns its schedule and trigger context.** The next-check countdown (or running state) lives in the section heading, while manual and heartbeat checks use compact, accessible icons with full labels on hover or keyboard focus.
+
+**Long chats keep repeated messages and tool activity stable.** Transcript merging now deduplicates only by durable event IDs, and reused harness tool IDs receive occurrence-aware UI keys, preventing dropped repeated turns, key collisions, and tool-list flicker.
+
 ## 0.9.10 — 2026-07-21
 
 **Fresh installs now start cleanly on every supported Node.js version.** The CLI refreshes Next.js's bundled `better-sqlite3` copies from npm's locally built dependency before each server start, so installing a release built with Node 24 no longer produces a database-module error when the user's active runtime is Node 20, 22, 25, or 26.
