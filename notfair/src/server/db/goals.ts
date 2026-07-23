@@ -121,6 +121,7 @@ export type GoalTick = {
   goal_id: string;
   tick_number: number;
   trigger_kind: GoalTickTrigger;
+  owner_pid: number | null;
   session_id: string | null;
   metric_value: number | null;
   metric_error: string | null;
@@ -831,9 +832,9 @@ export function createGoalTick(input: {
   const ts = now();
   db.prepare(
     `INSERT INTO goal_ticks
-       (id, goal_id, tick_number, trigger_kind, status, started_at)
-     VALUES (?, ?, ?, ?, 'running', ?)`,
-  ).run(id, input.goal_id, input.tick_number, input.trigger_kind, ts);
+       (id, goal_id, tick_number, trigger_kind, owner_pid, status, started_at)
+     VALUES (?, ?, ?, ?, ?, 'running', ?)`,
+  ).run(id, input.goal_id, input.tick_number, input.trigger_kind, process.pid, ts);
   return getGoalTick(id)!;
 }
 
@@ -867,6 +868,22 @@ export function finishGoalTick(
       "UPDATE goal_ticks SET status = ?, summary = ?, finished_at = ? WHERE id = ?",
     )
     .run(status, summary ?? null, now(), id);
+}
+
+/** Terminal transition used by crash recovery; never overwrite live progress. */
+export function finishRunningGoalTick(
+  id: string,
+  status: Extract<GoalTickStatus, "done" | "failed">,
+  summary?: string | null,
+): boolean {
+  const result = getDb()
+    .prepare(
+      `UPDATE goal_ticks
+          SET status = ?, summary = ?, finished_at = ?
+        WHERE id = ? AND status = 'running'`,
+    )
+    .run(status, summary ?? null, now(), id);
+  return result.changes === 1;
 }
 
 export function listGoalTicks(

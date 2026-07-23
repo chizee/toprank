@@ -80,6 +80,14 @@ function seedTickToolCalls(tick_number: number, toolNames: string[]): void {
 }
 
 describe("listCheckRows paging", () => {
+  it("records the process that owns a running tick", () => {
+    seedTicks(1);
+    const row = getDb()
+      .prepare("SELECT owner_pid FROM goal_ticks WHERE goal_id = ?")
+      .get(goalId) as { owner_pid: number };
+    expect(row.owner_pid).toBe(process.pid);
+  });
+
   it("returns the newest page with hasMore when older checks exist", () => {
     seedTicks(CHECKS_PAGE_SIZE + 2);
     const { rows, hasMore } = listCheckRows(goalId);

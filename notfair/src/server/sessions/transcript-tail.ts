@@ -26,7 +26,7 @@ export type TranscriptEvent =
       summary: string | null;
       ok: boolean;
     }
-  | { kind: "lifecycle"; id: string; ts: number; phase: string }
+  | { kind: "lifecycle"; id: string; ts: number; phase: string; ok?: boolean }
   | { kind: "unknown"; id: string; ts: number; raw_type: string };
 
 /**
@@ -118,11 +118,12 @@ export function readTranscriptTail(
       }
     } else if (row.kind === "lifecycle") {
       const phase = typeof payload.phase === "string" ? payload.phase : "unknown";
-      events.push({ kind: "lifecycle", id, ts, phase });
+      const ok = typeof payload.ok === "boolean" ? payload.ok : undefined;
+      events.push({ kind: "lifecycle", id, ts, phase, ok });
     } else if (row.kind === "final") {
       // Already covered by the accumulated delta stream; surface as a no-op
       // lifecycle so clients can show "done" if they want.
-      events.push({ kind: "lifecycle", id, ts, phase: "done" });
+      events.push({ kind: "lifecycle", id, ts, phase: "done", ok: true });
     } else if (row.kind === "error") {
       const text = typeof payload.message === "string" ? payload.message : "";
       events.push({ kind: "assistant_text", id, ts, body: `⚠ ${text}` });
@@ -130,7 +131,13 @@ export function readTranscriptTail(
       // its final, so no lifecycle "done" will ever come. Emit a synthetic
       // boundary so the client's open-turn detection closes immediately
       // instead of showing "still working" until the staleness cutoff.
-      events.push({ kind: "lifecycle", id: `${id}:done`, ts, phase: "done" });
+      events.push({
+        kind: "lifecycle",
+        id: `${id}:done`,
+        ts,
+        phase: "done",
+        ok: false,
+      });
     } else {
       events.push({ kind: "unknown", id, ts, raw_type: row.kind });
     }

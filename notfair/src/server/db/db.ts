@@ -22,6 +22,7 @@ export function getDb(): Database.Database {
   db.pragma("busy_timeout = 5000");
 
   db.exec(SCHEMA);
+  ensureGoalTickOwnerColumn(db);
 
   cached = db;
   return db;
@@ -29,4 +30,21 @@ export function getDb(): Database.Database {
 
 export function getDbPath(): string {
   return DB_PATH;
+}
+
+function ensureGoalTickOwnerColumn(db: Database.Database): void {
+  const hasOwnerPid = () =>
+    (
+      db.pragma("table_info(goal_ticks)") as Array<{ name: string }>
+    ).some((column) => column.name === "owner_pid");
+  if (hasOwnerPid()) return;
+
+  try {
+    db.exec("ALTER TABLE goal_ticks ADD COLUMN owner_pid INTEGER");
+  } catch (error) {
+    // Two local processes can open the same data directory concurrently.
+    // Treat a raced migration as success only when the other process
+    // actually installed the column.
+    if (!hasOwnerPid()) throw error;
+  }
 }

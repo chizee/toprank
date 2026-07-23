@@ -38,6 +38,17 @@ const result = (id: string, tcid: string, ok = true): TranscriptEvent => ({
   summary: null,
   ok,
 });
+const lifecycle = (
+  id: string,
+  phase: string,
+  ok?: boolean,
+): TranscriptEvent => ({
+  kind: "lifecycle",
+  id,
+  ts: t,
+  phase,
+  ok,
+});
 
 describe("collapseEvents", () => {
   it("pairs calls with results and groups contiguous tools", () => {
@@ -100,6 +111,78 @@ describe("collapseEvents", () => {
       { kind: "tool_group" }
     >;
     expect(group.tools[0]).toMatchObject({ toolCallId: "t9", done: true, ok: false });
+  });
+
+  it("closes an unmatched tool call when the turn reaches a terminal boundary", () => {
+    const items = collapseEvents([
+      call("c1", "t1"),
+      text("a1", "finished"),
+      lifecycle("done-1", "done"),
+    ]);
+    const group = items[0] as Extract<
+      ReturnType<typeof collapseEvents>[number],
+      { kind: "tool_group" }
+    >;
+    expect(group.tools[0]).toMatchObject({ toolCallId: "t1", done: true });
+  });
+
+  it("marks an unmatched tool failed when the terminal boundary is an error", () => {
+    const items = collapseEvents([
+      call("c1", "t1"),
+      text("err-1", "⚠ harness crashed"),
+      lifecycle("done-1", "done", false),
+    ]);
+    const group = items[0] as Extract<
+      ReturnType<typeof collapseEvents>[number],
+      { kind: "tool_group" }
+    >;
+    expect(group.tools[0]).toMatchObject({
+      toolCallId: "t1",
+      done: true,
+      ok: false,
+    });
+  });
+
+  it("closes abandoned tools before a later turn reuses their id", () => {
+    const items = collapseEvents([
+      call("c1", "item_1"),
+      user("u2", "try again"),
+      lifecycle("start-2", "start"),
+      call("c2", "item_1"),
+    ]);
+    const groups = items.filter((item) => item.kind === "tool_group");
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.tools[0]).toMatchObject({
+      toolCallId: "item_1",
+      done: true,
+      ok: false,
+    });
+    expect(groups[1]!.tools[0]).toMatchObject({
+      toolCallId: "item_1",
+      done: false,
+    });
+  });
+
+  it("closes an unmatched tool when a fresh lifecycle starts without a user row", () => {
+    const items = collapseEvents([
+      call("c1", "item_1"),
+      lifecycle("start-2", "start"),
+      call("c2", "item_1"),
+    ]);
+    const group = items[0] as Extract<
+      ReturnType<typeof collapseEvents>[number],
+      { kind: "tool_group" }
+    >;
+    expect(group.tools).toHaveLength(2);
+    expect(group.tools[0]).toMatchObject({
+      toolCallId: "item_1",
+      done: true,
+      ok: false,
+    });
+    expect(group.tools[1]).toMatchObject({
+      toolCallId: "item_1",
+      done: false,
+    });
   });
 });
 

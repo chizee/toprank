@@ -61,6 +61,15 @@ export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
     | { tag: "msg"; item: RenderedItem };
   const steps: Step[] = [];
   const callIndex = new Map<string, number>();
+  const closeOpenTools = (ok: boolean) => {
+    for (const idx of callIndex.values()) {
+      const step = steps[idx];
+      if (step?.tag === "tool" && !step.entry.done) {
+        step.entry = { ...step.entry, done: true, ok };
+      }
+    }
+    callIndex.clear();
+  };
   for (const e of events) {
     if (e.kind === "tool_call") {
       callIndex.set(e.tool_call_id, steps.length);
@@ -87,6 +96,7 @@ export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
           ok: e.ok,
           done: true,
         };
+        callIndex.delete(e.tool_call_id);
         continue;
       }
       steps.push({
@@ -103,6 +113,11 @@ export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
       continue;
     }
     if (e.kind === "user_message") {
+      // A new user turn is a hard boundary. If the previous harness turn
+      // vanished before emitting a tool result, keep that historical row
+      // static and failed instead of animating it forever or pairing a
+      // later turn's reused tool id with it.
+      closeOpenTools(false);
       steps.push({
         tag: "msg",
         item: { kind: "user_message", key: e.id, body: e.body, system: e.system },
@@ -114,6 +129,17 @@ export function collapseEvents(events: TranscriptEvent[]): RenderedItem[] {
         tag: "msg",
         item: { kind: "assistant_text", key: e.id, body: e.body },
       });
+      continue;
+    }
+    if (e.kind === "lifecycle") {
+      if (e.phase === "done") {
+        // A final/error event is surfaced as lifecycle "done" by
+        // transcript-tail. The turn is terminal even if a harness omitted
+        // one tool-result event, so no tool from it may remain "live".
+        closeOpenTools(e.ok !== false);
+      } else if (e.phase === "start") {
+        closeOpenTools(false);
+      }
       continue;
     }
     if (e.kind === "unknown") {

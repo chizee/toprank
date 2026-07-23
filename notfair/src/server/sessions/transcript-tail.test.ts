@@ -57,9 +57,19 @@ it("normalizes every transcript event kind and advances the cursor", () => {
     expect.objectContaining({ kind: "tool_call", id: "tc2", name: "tool", label: null }),
     expect.objectContaining({ kind: "tool_result", id: "tr", ok: true, summary: null }),
     expect.objectContaining({ kind: "lifecycle", id: "life", phase: "unknown" }),
-    expect.objectContaining({ kind: "lifecycle", id: "fin", phase: "done" }),
+    expect.objectContaining({
+      kind: "lifecycle",
+      id: "fin",
+      phase: "done",
+      ok: true,
+    }),
     expect.objectContaining({ kind: "assistant_text", id: "err", body: "⚠ boom" }),
-    expect.objectContaining({ kind: "lifecycle", id: "err:done", phase: "done" }),
+    expect.objectContaining({
+      kind: "lifecycle",
+      id: "err:done",
+      phase: "done",
+      ok: false,
+    }),
     expect.objectContaining({ kind: "unknown", id: "x", raw_type: "other" }),
   ]));
   expect(result.events).toHaveLength(13);

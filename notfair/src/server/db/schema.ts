@@ -299,6 +299,7 @@ CREATE TABLE IF NOT EXISTS goal_ticks (
   tick_number  INTEGER NOT NULL,
   trigger_kind TEXT NOT NULL DEFAULT 'heartbeat'
                CHECK (trigger_kind IN ('heartbeat','manual','approval','intake')),
+  owner_pid    INTEGER,
   session_id   TEXT,
   metric_value REAL,
   metric_error TEXT,

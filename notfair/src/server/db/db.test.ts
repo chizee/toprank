@@ -31,6 +31,10 @@ describe("getDb", () => {
     expect(names).toContain("projects");
     expect(names).toContain("sessions");
     expect(names).toContain("transcript_events");
+    const tickColumns = db.pragma("table_info(goal_ticks)") as Array<{
+      name: string;
+    }>;
+    expect(tickColumns.map((column) => column.name)).toContain("owner_pid");
   });
 
   it("configures WAL journaling and foreign keys", () => {

@@ -1,5 +1,6 @@
 import { runDueGoalTicks } from "@/server/goals/tick";
 import { syncDueGoalPrs } from "@/server/goals/pr-sync";
+import { recoverInterruptedGoalTicks } from "@/server/goals/recovery";
 
 /**
  * The heartbeat loop. Started once on boot (src/instrumentation.ts); a
@@ -28,6 +29,22 @@ function sweep(): void {
 export function ensureSchedulerRunning(): void {
   if (started) return;
   started = true;
+  try {
+    const recovered = recoverInterruptedGoalTicks();
+    if (recovered.recovered > 0) {
+      console.warn(
+        `[scheduler] recovered ${recovered.recovered} interrupted goal tick(s): ` +
+          `${recovered.completed} completed, ${recovered.failed} failed` +
+          (recovered.active > 0
+            ? `; left ${recovered.active} owned by a live process`
+            : ""),
+      );
+    }
+  } catch (err) {
+    // Recovery must never prevent future heartbeats from starting. Any
+    // untouched rows remain "running" and will be retried at next boot.
+    console.error("[scheduler] interrupted tick recovery failed:", err);
+  }
   timer = setInterval(sweep, TICK_INTERVAL_MS);
   // First sweep on the next event-loop turn so callers return immediately.
   setImmediate(sweep);
