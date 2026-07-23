@@ -4,10 +4,9 @@ import { join } from "node:path";
 import type { HarnessEvent, HarnessExecuteContext } from "../types";
 import { makeCodexStreamState, parseCodexLine } from "./parse";
 import { bearerEnvVarForServer } from "./mcp";
+import { resolveCodexBinary } from "./binary";
 import { getOrCreateMcpServerSecret } from "@/server/mcp-server/secret";
 import { listProjectMcpTokens } from "@/server/mcp/tokens";
-
-const CODEX_BIN = process.env.NOTFAIR_CODEX_BIN?.trim() || "codex";
 
 /**
  * Stream one chat turn through the Codex CLI.
@@ -79,7 +78,7 @@ export async function* executeCodexLocal(
   for (const token of listProjectMcpTokens(ctx.projectSlug)) {
     mcpEnv[bearerEnvVarForServer(token.server_name)] = token.access_token_enc;
   }
-  const child = spawn(CODEX_BIN, args, {
+  const child = spawn(resolveCodexBinary(), args, {
     cwd: ctx.workspaceDir,
     env: {
       ...process.env,

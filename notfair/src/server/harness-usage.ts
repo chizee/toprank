@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { resolveCodexBinary } from "@/server/adapters/codex-local/binary";
 
 /**
  * Read what each local AI-agent harness exposes about the user's account
@@ -85,7 +86,6 @@ export type HarnessUsage =
 type CacheEntry = { until: number; value: HarnessUsage };
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60_000;
-const CODEX_BIN = process.env.NOTFAIR_CODEX_BIN?.trim() || "codex";
 
 export async function readHarnessUsage(
   adapter: "claude-code-local" | "codex-local",
@@ -271,7 +271,7 @@ async function readCodexLoginStatus(): Promise<CodexAuthStatus> {
   return new Promise((resolve) => {
     let output = "";
     let settled = false;
-    const child = spawn(CODEX_BIN, ["login", "status"], {
+    const child = spawn(resolveCodexBinary(), ["login", "status"], {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const finish = () => {

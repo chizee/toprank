@@ -9,11 +9,15 @@ import type { HarnessEvent, HarnessExecuteContext } from "../types";
 
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
+  resolveCodexBinary: vi.fn(() => "codex"),
   getOrCreateMcpServerSecret: vi.fn(() => "machine-secret"),
   listProjectMcpTokens: vi.fn(() => [] as { server_name: string; access_token_enc: string }[]),
 }));
 
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
+vi.mock("./binary", () => ({
+  resolveCodexBinary: mocks.resolveCodexBinary,
+}));
 vi.mock("@/server/mcp-server/secret", () => ({
   getOrCreateMcpServerSecret: mocks.getOrCreateMcpServerSecret,
 }));

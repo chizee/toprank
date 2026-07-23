@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { getProject } from "@/server/db/projects";
 import { resolveAgentBySlug } from "@/server/agent-meta";
 import {
   getGoalForAgent,
   getLatestGoalForAgent,
+  isGoalArchived,
   listGoalActions,
   listOpenGoalActions,
   listUserActionRequests,
@@ -54,6 +56,7 @@ import { type MoveRow } from "@/components/goal-moves";
 import { GoalPrsDialog, type PrRow } from "@/components/goal-prs-dialog";
 import { maybeSyncGoalPrs } from "@/server/goals/pr-sync";
 import { buildCheckSquares, currentStreak } from "@/lib/goal-streak";
+import { GoalCompletionDialog } from "@/components/goal-completion-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +131,8 @@ export default async function GoalPage({
   }));
 
   const live = goal.status === "intake" || goal.status === "proposed" || goal.status === "active" || goal.status === "paused";
+  const achievementArchived =
+    goal.status === "achieved" ? isGoalArchived(goal.id) : false;
   const learnings = listGoalLearnings(goal.id, 100);
 
   // Header dialogs: the moves journal (every open action, whatever its
@@ -218,6 +223,28 @@ export default async function GoalPage({
             <GoalControls
               goalId={goal.id}
               status={goal.status as "intake" | "proposed" | "active" | "paused"}
+            />
+          )}
+          {goal.status === "achieved" && !achievementArchived && (
+            <GoalCompletionDialog
+              goalId={goal.id}
+              label={goalLabel(goal)}
+              metricName={goal.metric_name}
+              currentValue={goal.current_value}
+              targetValue={goal.target_value}
+              metricDirection={goal.metric_direction}
+              completionReason={goal.status_reason}
+              completedAt={goal.updated_at}
+              trigger={
+                <button
+                  type="button"
+                  className="ns-chip ns-completed-badge bg-[hsl(var(--notfair-accent-soft))] font-medium text-[hsl(var(--notfair-accent))] shadow-[inset_0_0_0_1px_hsl(var(--notfair-accent-border))] hover:text-[hsl(var(--notfair-accent))]"
+                  aria-label="Celebrate this completed goal"
+                >
+                  <Sparkles aria-hidden />
+                  Celebrate
+                </button>
+              }
             />
           )}
         </div>

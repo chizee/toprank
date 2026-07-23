@@ -115,6 +115,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_one_live_per_agent
   ON goals(agent_id)
   WHERE status IN ('intake','proposed','active','paused');
 
+-- Completing and archiving are deliberately separate moments. An achieved
+-- goal remains in the sidebar until the user celebrates it and chooses to
+-- archive it; archiving only hides it from daily navigation and preserves
+-- the goal, agent, chat, checks, and evidence.
+CREATE TABLE IF NOT EXISTS goal_archives (
+  goal_id     TEXT PRIMARY KEY REFERENCES goals(id) ON DELETE CASCADE,
+  archived_at TEXT NOT NULL
+);
+
 -- Goal groups are dashboard/navigation containers. Membership is kept in a
 -- separate table so existing CREATE-IF-NOT-EXISTS databases gain grouping
 -- without altering the goals table. goal_id is the primary key, enforcing

@@ -1,5 +1,11 @@
 # NotFair
 
+## 0.9.17 — 2026-07-22
+
+**Completed goals now get the celebration they deserve.** Achievements stay visible in the sidebar with a sparkling **Completed** badge until you open the congratulations experience, where you can set a more ambitious next milestone or archive the goal without losing its chat, checks, metrics, or evidence.
+
+**Background NotFair servers can reliably launch Codex.** Codex discovery no longer depends entirely on an interactive shell’s `PATH`; chat execution, health checks, login, and usage status now find standard installations and the executable bundled with the ChatGPT desktop app while still honoring `NOTFAIR_CODEX_BIN`.
+
 ## 0.9.16 — 2026-07-22
 
 **NotFair now starts with the Node.js runtime that matches its installed native database module.** Global installs no longer land on a server-error page when the shell and npm installation use different Node.js versions.

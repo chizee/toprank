@@ -13,16 +13,24 @@ vi.hoisted(() => {
 
 import { getDb } from "./db";
 import {
+  archiveAchievedGoal,
+  continueAchievedGoal,
   createGoal,
   createGoalAction,
   deleteGoalsForAgent,
   endActionObservation,
   getGoal,
   getPinnedGoalIds,
+  isGoalArchived,
   listGatedActions,
+  listSidebarGoals,
+  proposeTarget,
   recordMetricSnapshot,
   renameGoal,
+  setGoalMetric,
   setGoalPinned,
+  setGoalStatus,
+  updateGoalCurrentValue,
 } from "./goals";
 
 const SLUG = "proj";
@@ -67,6 +75,70 @@ describe("goal pins", () => {
     setGoalPinned(goal.id, true);
     expect(getPinnedGoalIds(SLUG).has(goal.id)).toBe(false);
     expect(getPinnedGoalIds("other").has(goal.id)).toBe(true);
+  });
+});
+
+describe("completed-goal handoff", () => {
+  it("keeps an achievement in the sidebar until archive, then can continue it", () => {
+    const goal = createGoal({
+      project_slug: SLUG,
+      agent_id: "a-achieved",
+      statement: "Reach 100 qualified visits",
+    });
+    setGoalMetric(goal.id, {
+      metric_name: "Qualified visits",
+      metric_source_key: "local",
+      metric_source_tool: "shell",
+      metric_source_args_json: "{}",
+      metric_direction: "increase",
+      baseline_value: 50,
+    });
+    proposeTarget(goal.id, { target_value: 100 });
+    updateGoalCurrentValue(goal.id, 112);
+    setGoalStatus(goal.id, "achieved", "Measured 112 qualified visits.");
+
+    expect(listSidebarGoals(SLUG).map((item) => item.id)).toContain(goal.id);
+    expect(isGoalArchived(goal.id)).toBe(false);
+
+    expect(archiveAchievedGoal(goal.id)?.status).toBe("achieved");
+    expect(isGoalArchived(goal.id)).toBe(true);
+    expect(listSidebarGoals(SLUG).map((item) => item.id)).not.toContain(goal.id);
+
+    const continued = continueAchievedGoal(goal.id, {
+      target_value: 150,
+      deadline: "2030-12-31",
+      short_label: "Qualified visits → 150",
+    });
+    expect(continued).toMatchObject({
+      status: "active",
+      target_value: 150,
+      deadline: "2030-12-31",
+      status_reason: null,
+      short_label: "Qualified visits → 150",
+    });
+    expect(continued?.next_tick_at).not.toBeNull();
+    expect(isGoalArchived(goal.id)).toBe(false);
+    expect(listSidebarGoals(SLUG).map((item) => item.id)).toContain(goal.id);
+  });
+
+  it("requires a next target beyond the completed value", () => {
+    const goal = createGoal({
+      project_slug: SLUG,
+      agent_id: "a-achieved-direction",
+      statement: "Reduce errors",
+    });
+    getDb()
+      .prepare(
+        `UPDATE goals
+            SET status = 'achieved', metric_direction = 'decrease',
+                current_value = 4, target_value = 5
+          WHERE id = ?`,
+      )
+      .run(goal.id);
+
+    expect(() =>
+      continueAchievedGoal(goal.id, { target_value: 6, deadline: null }),
+    ).toThrow(/below the completed value/i);
   });
 });
 

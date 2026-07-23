@@ -5,11 +5,15 @@ const mocks = vi.hoisted(() => ({
   homedir: vi.fn(() => "/home/user"),
   spawn: vi.fn(),
   refreshUsage: vi.fn(),
+  resolveCodexBinary: vi.fn(() => "codex"),
 }));
 
 vi.mock("node:os", () => ({ default: { homedir: mocks.homedir } }));
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
 vi.mock("@/server/harness-usage", () => ({ refreshHarnessUsage: mocks.refreshUsage }));
+vi.mock("@/server/adapters/codex-local/binary", () => ({
+  resolveCodexBinary: mocks.resolveCodexBinary,
+}));
 
 import { refreshCodexUsageAction, startCodexLoginAction } from "./harness";
 

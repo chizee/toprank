@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  archiveAchievedGoal: vi.fn(),
+  continueAchievedGoal: vi.fn(),
   revalidatePath: vi.fn(),
   createGoal: vi.fn(),
   deleteGoalsForAgent: vi.fn(),
@@ -15,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   cascadeDeleteAgentArtifacts: vi.fn(),
   getProject: vi.fn(),
   provisionGoalAgent: vi.fn(),
+  syncGoalIdentity: vi.fn(),
   agentExistsOnDisk: vi.fn(),
   listProjectAgents: vi.fn(),
   runGoalIntake: vi.fn(),
@@ -24,6 +27,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/server/db/goals", () => ({
+  archiveAchievedGoal: mocks.archiveAchievedGoal,
+  continueAchievedGoal: mocks.continueAchievedGoal,
   createGoal: mocks.createGoal,
   deleteGoalsForAgent: mocks.deleteGoalsForAgent,
   endActionObservation: mocks.endActionObservation,
@@ -44,6 +49,7 @@ vi.mock("@/server/goals/provision", () => ({
   goalAgentIdFor: (slug: string, n: number) => `${slug}--goal-${n}`,
   goalAgentUrlSlug: (n: number) => `goal-${n}`,
   provisionGoalAgent: mocks.provisionGoalAgent,
+  syncGoalIdentity: mocks.syncGoalIdentity,
 }));
 vi.mock("@/server/agent-meta", () => ({
   agentExistsOnDisk: mocks.agentExistsOnDisk,
@@ -54,6 +60,8 @@ vi.mock("@/server/goals/tick", () => ({ runGoalTick: mocks.runGoalTick }));
 vi.mock("@/server/goals/checks", () => ({ listCheckRows: mocks.listCheckRows }));
 
 import {
+  archiveCompletedGoalAction,
+  continueCompletedGoalAction,
   createGoalAgentAction,
   deleteGoalAction,
   getAgentGoalAction,
@@ -82,7 +90,10 @@ beforeEach(() => {
   mocks.listProjectAgents.mockResolvedValue([]);
   mocks.agentExistsOnDisk.mockResolvedValue(false);
   mocks.createGoal.mockReturnValue(goal);
+  mocks.archiveAchievedGoal.mockReturnValue({ ...goal, status: "achieved" });
+  mocks.continueAchievedGoal.mockReturnValue(goal);
   mocks.provisionGoalAgent.mockResolvedValue(undefined);
+  mocks.syncGoalIdentity.mockResolvedValue(undefined);
   mocks.runGoalIntake.mockResolvedValue(undefined);
   mocks.runGoalTick.mockResolvedValue(undefined);
   mocks.getGoal.mockReturnValue(goal);
@@ -182,6 +193,36 @@ describe("goal lifecycle actions", () => {
     mocks.getGoal.mockReturnValue({ ...goal, status: "paused" });
     await expect(resumeGoalAction(goal.id)).resolves.toEqual({ ok: true });
     expect(mocks.setGoalStatus).toHaveBeenCalledWith(goal.id, "active", "resumed by user");
+  });
+
+  it("archives an achievement without deleting it", async () => {
+    await expect(archiveCompletedGoalAction(goal.id)).resolves.toEqual({ ok: true });
+    expect(mocks.archiveAchievedGoal).toHaveBeenCalledWith(goal.id);
+    expect(mocks.deleteGoalsForAgent).not.toHaveBeenCalled();
+
+    mocks.archiveAchievedGoal.mockReturnValue(null);
+    await expect(archiveCompletedGoalAction(goal.id)).resolves.toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("continues an achievement with a new milestone and immediate check", async () => {
+    const continued = { ...goal, target_value: 150 };
+    mocks.continueAchievedGoal.mockReturnValue(continued);
+    await expect(
+      continueCompletedGoalAction(goal.id, {
+        target_value: 150,
+        deadline: "2030-12-31",
+        label: "Qualified visits → 150",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(mocks.continueAchievedGoal).toHaveBeenCalledWith(goal.id, {
+      target_value: 150,
+      deadline: "2030-12-31",
+      short_label: "Qualified visits → 150",
+    });
+    expect(mocks.syncGoalIdentity).toHaveBeenCalledWith(continued);
+    expect(mocks.runGoalTick).toHaveBeenCalledWith(continued, "manual");
   });
 });
 

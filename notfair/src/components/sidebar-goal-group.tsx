@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition, type DragEvent } from "react";
 import { toast } from "sonner";
 import {
   ChevronRight,
+  CircleCheck,
   LayoutDashboard,
   MoreVertical,
   Pencil,
@@ -53,12 +54,15 @@ export function SidebarGoalGroup({
   groupId,
   name,
   href,
+  completedCount = 0,
   children,
 }: {
   groupId: string;
   name: string;
   /** Group dashboard route. */
   href: string;
+  /** Unarchived achievements inside a collapsed group remain discoverable. */
+  completedCount?: number;
   children?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -133,6 +137,15 @@ export function SidebarGoalGroup({
         )}
       >
         <span className="truncate">{name}</span>
+        {completedCount > 0 && (
+          <span
+            aria-label={`${completedCount} completed goal${completedCount === 1 ? "" : "s"}`}
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-[hsl(var(--notfair-accent-soft))] px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[hsl(var(--notfair-accent))]"
+          >
+            <CircleCheck className="!size-3" />
+            {completedCount}
+          </span>
+        )}
         <ChevronRight
           data-group-chevron
           aria-hidden

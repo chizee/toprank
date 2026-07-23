@@ -22,7 +22,7 @@ import {
   countUserActionRequests,
   getPinnedGoalIds,
   listGoals,
-  listLiveGoals,
+  listSidebarGoals,
 } from "@/server/db/goals";
 import { colorForAgentSlug } from "@/lib/agent-colors";
 import { SidebarGoalItem } from "@/components/sidebar-goal-item";
@@ -53,12 +53,15 @@ export async function AppSidebar() {
   const projects = listProjects();
   const active = await getActiveProject();
   const agentEntries = active ? await listProjectAgents(active.slug) : [];
-  // The rail shows only non-closed goals — an achieved/failed/closed goal
-  // moves to the All-goals board instead of lingering in daily nav.
-  // Pinned goals float to the top; the rest keep creation order.
-  const liveGoals = active ? listLiveGoals(active.slug) : [];
+  // Achievements remain in the rail until the user explicitly chooses to
+  // archive or continue them. Pinned live goals float within the live set;
+  // newly completed goals stay first so the payoff cannot be missed.
+  const sidebarGoals = active ? listSidebarGoals(active.slug) : [];
   const pinnedIds = active ? getPinnedGoalIds(active.slug) : new Set<string>();
+  const completedGoals = sidebarGoals.filter((goal) => goal.status === "achieved");
+  const liveGoals = sidebarGoals.filter((goal) => goal.status !== "achieved");
   const railGoals = [
+    ...completedGoals,
     ...liveGoals.filter((g) => pinnedIds.has(g.id)),
     ...liveGoals.filter((g) => !pinnedIds.has(g.id)),
   ];
@@ -151,13 +154,25 @@ export async function AppSidebar() {
                       homeHref={projectHref(active.slug, "")}
                       goalId={goal.id}
                       label={goalLabel(goal)}
-                      status={goal.status as "intake" | "proposed" | "active" | "paused"}
+                      status={goal.status as "intake" | "proposed" | "active" | "paused" | "achieved"}
                       pinned={pinnedIds.has(goal.id)}
                       labelClass={color.label}
                       projectSlug={active.slug}
                       groups={groupTargets}
                       groupId={null}
                       needsAttention={(attentionByGoal.get(goal.id) ?? 0) > 0}
+                      completion={
+                        goal.status === "achieved"
+                          ? {
+                              metricName: goal.metric_name,
+                              currentValue: goal.current_value,
+                              targetValue: goal.target_value,
+                              metricDirection: goal.metric_direction,
+                              completionReason: goal.status_reason,
+                              completedAt: goal.updated_at,
+                            }
+                          : undefined
+                      }
                     />
                   );
                 })}
@@ -169,6 +184,7 @@ export async function AppSidebar() {
                       groupId={group.id}
                       name={group.name}
                       href={projectHref(active.slug, `/groups/${group.id}`)}
+                      completedCount={groupGoals.filter((goal) => goal.status === "achieved").length}
                     >
                       {groupGoals.map((goal) => {
                         const agent = agentBySlug.get(goal.agent_id);
@@ -181,13 +197,25 @@ export async function AppSidebar() {
                             homeHref={projectHref(active.slug, "")}
                             goalId={goal.id}
                             label={goalLabel(goal)}
-                            status={goal.status as "intake" | "proposed" | "active" | "paused"}
+                            status={goal.status as "intake" | "proposed" | "active" | "paused" | "achieved"}
                             pinned={pinnedIds.has(goal.id)}
                             labelClass={color.label}
                             projectSlug={active.slug}
                             groups={groupTargets}
                             groupId={group.id}
                             needsAttention={(attentionByGoal.get(goal.id) ?? 0) > 0}
+                            completion={
+                              goal.status === "achieved"
+                                ? {
+                                    metricName: goal.metric_name,
+                                    currentValue: goal.current_value,
+                                    targetValue: goal.target_value,
+                                    metricDirection: goal.metric_direction,
+                                    completionReason: goal.status_reason,
+                                    completedAt: goal.updated_at,
+                                  }
+                                : undefined
+                            }
                           />
                         );
                       })}

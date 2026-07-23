@@ -13,6 +13,8 @@ import { getDb } from "./db";
  *                              │
  *                              ▼
  *                 achieved | failed | killed   (terminal)
+ *                    │
+ *                    └── user sets next milestone ──▶ active
  *
  * intake   — goal agent is authoring + testing the metric query
  * proposed — metric verified server-side, baseline measured; awaiting the
@@ -229,6 +231,114 @@ export function listLiveGoals(project_slug: string): Goal[] {
         ORDER BY created_at ASC`,
     )
     .all(project_slug) as Goal[];
+}
+
+/**
+ * Goals shown in daily navigation. Achievements remain visible until the user
+ * explicitly archives them, which prevents the completion moment from
+ * silently disappearing between sidebar refreshes.
+ */
+export function listSidebarGoals(project_slug: string): Goal[] {
+  return getDb()
+    .prepare(
+      `SELECT g.* FROM goals g
+        LEFT JOIN goal_archives a ON a.goal_id = g.id
+        WHERE g.project_slug = ?
+          AND (
+            g.status IN ('intake','proposed','active','paused')
+            OR (g.status = 'achieved' AND a.goal_id IS NULL)
+          )
+        ORDER BY
+          CASE WHEN g.status = 'achieved' THEN 0 ELSE 1 END,
+          CASE WHEN g.status = 'achieved' THEN g.updated_at END DESC,
+          g.created_at ASC`,
+    )
+    .all(project_slug) as Goal[];
+}
+
+/** Whether an achieved goal has been dismissed from daily navigation. */
+export function isGoalArchived(id: string): boolean {
+  return Boolean(
+    getDb().prepare("SELECT 1 FROM goal_archives WHERE goal_id = ?").get(id),
+  );
+}
+
+/**
+ * Archive an achievement without changing its historical status. Idempotent
+ * so a double click cannot corrupt or rewrite the completion record.
+ */
+export function archiveAchievedGoal(id: string): Goal | null {
+  const goal = getGoal(id);
+  if (!goal || goal.status !== "achieved") return null;
+  getDb()
+    .prepare(
+      "INSERT OR IGNORE INTO goal_archives (goal_id, archived_at) VALUES (?, ?)",
+    )
+    .run(id, now());
+  return goal;
+}
+
+/**
+ * Turn a completed achievement into the next measurable milestone. This is
+ * the one intentional terminal → live transition: it keeps the same metric,
+ * evidence, chat, and agent, but requires a target beyond the freshly
+ * completed value.
+ */
+export function continueAchievedGoal(
+  id: string,
+  input: {
+    target_value: number;
+    deadline: string | null;
+    short_label?: string | null;
+  },
+): Goal | null {
+  const goal = getGoal(id);
+  if (!goal || goal.status !== "achieved") return null;
+  if (goal.current_value === null || goal.metric_direction === null) {
+    throw new Error("This goal has no current measured value to continue from.");
+  }
+  if (!Number.isFinite(input.target_value)) {
+    throw new Error("Enter a valid target.");
+  }
+  const movesForward =
+    goal.metric_direction === "increase"
+      ? input.target_value > goal.current_value
+      : input.target_value < goal.current_value;
+  if (!movesForward) {
+    const direction = goal.metric_direction === "increase" ? "above" : "below";
+    throw new Error(
+      `Set the next target ${direction} the completed value (${goal.current_value}).`,
+    );
+  }
+  const nextTick = computeNextTick(goal.cadence_cron);
+  if (!nextTick) {
+    throw new Error(`Invalid cadence cron expression: '${goal.cadence_cron}'`);
+  }
+
+  const db = getDb();
+  const update = db.transaction(() => {
+    const result = db
+      .prepare(
+        `UPDATE goals
+            SET target_value = ?, deadline = ?,
+                short_label = COALESCE(?, short_label), status = 'active',
+                status_reason = NULL, next_tick_at = ?, updated_at = ?
+          WHERE id = ? AND status = 'achieved'`,
+      )
+      .run(
+        input.target_value,
+        input.deadline,
+        input.short_label?.trim() || null,
+        nextTick,
+        now(),
+        id,
+      );
+    if (result.changes === 0) return false;
+    db.prepare("DELETE FROM goal_archives WHERE goal_id = ?").run(id);
+    return true;
+  });
+  if (!update()) return null;
+  return getGoal(id);
 }
 
 /**
@@ -482,8 +592,9 @@ export function listGatedActionsForOtherAgents(
 
 /**
  * Status transitions outside the intake→proposed→active happy path:
- * pause/resume and the three terminal states. Terminal states are
- * one-way — a closed goal is history, not a resumable draft.
+ * pause/resume and the three terminal states. This generic transition stays
+ * one-way; the explicit achieved → active continuation is isolated in
+ * continueAchievedGoal so a failed or closed goal can never be revived.
  */
 export function setGoalStatus(
   id: string,

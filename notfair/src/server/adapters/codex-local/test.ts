@@ -1,15 +1,15 @@
 import { spawn } from "node:child_process";
 import type { HarnessEnvironmentHealth } from "../types";
-
-const CODEX_BIN = process.env.NOTFAIR_CODEX_BIN?.trim() || "codex";
+import { resolveCodexBinary } from "./binary";
 
 export async function testCodexLocalEnvironment(): Promise<HarnessEnvironmentHealth> {
-  const versionResult = await runCmd(CODEX_BIN, ["--version"]);
+  const codexBin = resolveCodexBinary();
+  const versionResult = await runCmd(codexBin, ["--version"]);
   if (versionResult.code !== 0) {
     return {
       ok: false,
       auth: "unknown",
-      message: `\`${CODEX_BIN}\` not found on PATH. Install: https://github.com/openai/codex`,
+      message: `Codex CLI check failed for \`${codexBin}\`. Install Codex or set NOTFAIR_CODEX_BIN to its executable path.`,
     };
   }
   return {

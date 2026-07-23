@@ -6,8 +6,7 @@ import {
   refreshHarnessUsage,
   type HarnessUsage,
 } from "@/server/harness-usage";
-
-const CODEX_BIN = process.env.NOTFAIR_CODEX_BIN?.trim() || "codex";
+import { resolveCodexBinary } from "@/server/adapters/codex-local/binary";
 
 export type StartCodexLoginResult =
   | { ok: true; alreadySignedIn: boolean }
@@ -29,7 +28,7 @@ export async function startCodexLoginAction(): Promise<StartCodexLoginResult> {
   }
 
   try {
-    const child = spawn(CODEX_BIN, ["login"], {
+    const child = spawn(resolveCodexBinary(), ["login"], {
       cwd: os.homedir(),
       detached: true,
       stdio: "ignore",

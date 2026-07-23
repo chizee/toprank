@@ -2,8 +2,14 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ spawn: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  spawn: vi.fn(),
+  resolveCodexBinary: vi.fn(() => "codex"),
+}));
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
+vi.mock("./binary", () => ({
+  resolveCodexBinary: mocks.resolveCodexBinary,
+}));
 
 import { testCodexLocalEnvironment } from "./test";
 
@@ -61,7 +67,7 @@ describe("testCodexLocalEnvironment", () => {
     scriptVersionCmd({ spawnError: true });
     const health = await testCodexLocalEnvironment();
     expect(health.ok).toBe(false);
-    expect(health.message).toContain("`codex` not found on PATH");
+    expect(health.message).toContain("Codex CLI check failed for `codex`");
   });
 
   it("times out a hung probe instead of waiting forever", async () => {

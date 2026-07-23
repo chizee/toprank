@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  archiveAchievedGoal,
+  continueAchievedGoal,
   createGoal,
   deleteGoalsForAgent,
   endActionObservation,
@@ -24,6 +26,7 @@ import {
 import { agentExistsOnDisk, listProjectAgents } from "@/server/agent-meta";
 import { runGoalIntake } from "@/server/goals/intake";
 import { runGoalTick } from "@/server/goals/tick";
+import { syncGoalIdentity } from "@/server/goals/provision";
 import { listCheckRows, type CheckFilter, type CheckRow } from "@/server/goals/checks";
 
 export type GoalActionResult = {
@@ -136,6 +139,80 @@ export async function killGoalAction(
 ): Promise<GoalActionResult> {
   const goal = setGoalStatus(goal_id, "killed", reason?.trim() || "closed by user");
   if (!goal) return { ok: false, error: "Goal not found." };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * Remove a completed goal from daily navigation while preserving its
+ * achievement, agent workspace, conversation, checks, and evidence.
+ */
+export async function archiveCompletedGoalAction(
+  goal_id: string,
+): Promise<GoalActionResult> {
+  const goal = archiveAchievedGoal(goal_id);
+  if (!goal) {
+    return { ok: false, error: "Only a completed goal can be archived." };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * Continue an achieved goal with a more ambitious target. The metric and
+ * history stay intact, the heartbeat restarts, and an immediate check lets
+ * the same agent re-anchor on the new milestone.
+ */
+export async function continueCompletedGoalAction(
+  goal_id: string,
+  input: {
+    target_value: number;
+    deadline?: string | null;
+    label?: string | null;
+  },
+): Promise<GoalActionResult> {
+  const deadline = input.deadline?.trim() || null;
+  if (
+    deadline &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(deadline) ||
+      Number.isNaN(new Date(`${deadline}T23:59:59`).getTime()))
+  ) {
+    return { ok: false, error: "Enter a valid deadline." };
+  }
+  if (
+    deadline &&
+    new Date(`${deadline}T23:59:59`).getTime() < Date.now()
+  ) {
+    return { ok: false, error: "Choose today or a future deadline." };
+  }
+  const label = input.label?.trim() || null;
+  if (label && label.length > 120) {
+    return { ok: false, error: "Keep the goal name to 120 characters." };
+  }
+
+  let goal;
+  try {
+    goal = continueAchievedGoal(goal_id, {
+      target_value: input.target_value,
+      deadline,
+      short_label: label,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+  if (!goal) {
+    return { ok: false, error: "This goal is no longer awaiting a next step." };
+  }
+
+  void syncGoalIdentity(goal).catch((err) =>
+    console.warn("[goal-actions] continued-goal identity sync failed:", err),
+  );
+  void runGoalTick(goal, "manual").catch((err) =>
+    console.error("[goal-actions] continued-goal check failed:", err),
+  );
   revalidatePath("/", "layout");
   return { ok: true };
 }
