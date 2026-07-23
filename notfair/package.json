@@ -1,6 +1,6 @@
 {
   "name": "notfair",
-  "version": "0.9.15",
+  "version": "0.9.16",
   "description": "Goal-driven, loop-powered marketing agents that crush your business goals 24/7 — on your own machine. Say 'cut CAC to $30' and a dedicated agent turns it into a server-verified metric, then moves the number check after check while you sleep. Rides your existing Claude Code or Codex login.",
   "license": "MIT",
   "bin": {

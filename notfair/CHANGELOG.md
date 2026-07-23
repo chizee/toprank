@@ -1,5 +1,13 @@
 # NotFair
 
+## 0.9.16 — 2026-07-22
+
+**NotFair now starts with the Node.js runtime that matches its installed native database module.** Global installs no longer land on a server-error page when the shell and npm installation use different Node.js versions.
+
+**Interrupted checks recover safely after a restart.** Finished turns are reconciled from their stored transcript, genuinely interrupted work is marked failed instead of running forever, and checks owned by another live NotFair process are left untouched.
+
+**Finished tool activity no longer keeps shimmering.** Missing tool-result events are closed at terminal turn boundaries and retain the correct success or failure state.
+
 ## 0.9.15 — 2026-07-21
 
 **Background updates no longer modify a running installation.** NotFair now downloads the exact npm release into its local update cache without installing it; only clicking **Update to v…** performs the global install, immediately restarts a managed server, and reloads the app. This removes the live-file replacement window that could leave Chrome requesting chunks from two different builds.
