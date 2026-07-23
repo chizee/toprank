@@ -27,7 +27,10 @@ import { createServer } from "node:net";
 import { Command } from "commander";
 import open from "open";
 
-import { syncStandaloneNativeBindings } from "./native-bindings.mjs";
+import {
+  resolveCompatibleNodeRuntime,
+  syncStandaloneNativeBindings,
+} from "./native-bindings.mjs";
 
 const CLI_PATH = fileURLToPath(import.meta.url);
 const __dirname = dirname(CLI_PATH);
@@ -94,6 +97,7 @@ program
     // Next.js standalone output omits .next/static and public by default; copy
     // them in if they're missing so the server can serve CSS/JS chunks.
     ensureStandaloneAssets();
+    const serverNode = resolveCompatibleNodeRuntime(PKG_ROOT);
     syncStandaloneNativeBindings(PKG_ROOT);
 
     const url = `http://127.0.0.1:${port}`;
@@ -110,7 +114,7 @@ program
     };
 
     if (opts.foreground) {
-      const child = spawn("node", [standalonePath], { stdio: "inherit", env });
+      const child = spawn(serverNode, [standalonePath], { stdio: "inherit", env });
       writeState(opts.dataDir, {
         pid: child.pid,
         port,
@@ -147,7 +151,7 @@ program
     // the server actually answers HTTP.
     mkdirSync(dirname(logFile(opts.dataDir)), { recursive: true });
     const fd = openSync(logFile(opts.dataDir), "a");
-    const child = spawn("node", [standalonePath], {
+    const child = spawn(serverNode, [standalonePath], {
       detached: true,
       stdio: ["ignore", fd, fd],
       env,

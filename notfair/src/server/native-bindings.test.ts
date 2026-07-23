@@ -1,9 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { syncStandaloneNativeBindings } from "../../bin/native-bindings.mjs";
+import {
+  resolveCompatibleNodeRuntime,
+  syncStandaloneNativeBindings,
+} from "../../bin/native-bindings.mjs";
 
 describe("syncStandaloneNativeBindings", () => {
   it("refreshes release-built bindings before a fresh CLI start", async () => {
@@ -43,6 +46,119 @@ describe("syncStandaloneNativeBindings", () => {
       expect(syncStandaloneNativeBindings(packageRoot)).toBe(0);
     } finally {
       await rm(packageRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the package prefix Node when the shell Node cannot load the installed binding", async () => {
+    const prefix = await mkdtemp(join(tmpdir(), "notfair-cli-runtime-"));
+    const packageRoot = join(prefix, "lib", "node_modules", "notfair");
+    const binding = join(
+      packageRoot,
+      "node_modules",
+      "better-sqlite3",
+      "build",
+      "Release",
+      "better_sqlite3.node",
+    );
+    const shellNode = join(prefix, "shell", "node");
+    const installedNode = join(prefix, "bin", "node");
+
+    try {
+      await Promise.all([
+        mkdir(dirname(binding), { recursive: true }),
+        mkdir(dirname(shellNode), { recursive: true }),
+        mkdir(dirname(installedNode), { recursive: true }),
+      ]);
+      await Promise.all([
+        writeFile(binding, "node-25-binding"),
+        writeFile(shellNode, "node-24"),
+        writeFile(installedNode, "node-25"),
+      ]);
+
+      expect(
+        resolveCompatibleNodeRuntime(packageRoot, {
+          execPath: shellNode,
+          probe: (candidate: string) => candidate === installedNode,
+        }),
+      ).toBe(installedNode);
+    } finally {
+      await rm(prefix, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the active Node when it can load the installed binding", async () => {
+    const prefix = await mkdtemp(join(tmpdir(), "notfair-cli-runtime-"));
+    const packageRoot = join(prefix, "lib", "node_modules", "notfair");
+    const binding = join(
+      packageRoot,
+      "node_modules",
+      "better-sqlite3",
+      "build",
+      "Release",
+      "better_sqlite3.node",
+    );
+    const shellNode = join(prefix, "shell", "node");
+    const probed: string[] = [];
+
+    try {
+      await Promise.all([
+        mkdir(dirname(binding), { recursive: true }),
+        mkdir(dirname(shellNode), { recursive: true }),
+      ]);
+      await Promise.all([
+        writeFile(binding, "node-25-binding"),
+        writeFile(shellNode, "node-25"),
+      ]);
+
+      expect(
+        resolveCompatibleNodeRuntime(packageRoot, {
+          execPath: shellNode,
+          probe: (candidate: string) => {
+            probed.push(candidate);
+            return candidate === shellNode;
+          },
+        }),
+      ).toBe(shellNode);
+      expect(probed).toEqual([shellNode]);
+    } finally {
+      await rm(prefix, { recursive: true, force: true });
+    }
+  });
+
+  it("fails with reinstall guidance when no available Node can load the binding", async () => {
+    const prefix = await mkdtemp(join(tmpdir(), "notfair-cli-runtime-"));
+    const packageRoot = join(prefix, "lib", "node_modules", "notfair");
+    const binding = join(
+      packageRoot,
+      "node_modules",
+      "better-sqlite3",
+      "build",
+      "Release",
+      "better_sqlite3.node",
+    );
+    const shellNode = join(prefix, "shell", "node");
+    const installedNode = join(prefix, "bin", "node");
+
+    try {
+      await Promise.all([
+        mkdir(dirname(binding), { recursive: true }),
+        mkdir(dirname(shellNode), { recursive: true }),
+        mkdir(dirname(installedNode), { recursive: true }),
+      ]);
+      await Promise.all([
+        writeFile(binding, "node-25-binding"),
+        writeFile(shellNode, "node-24"),
+        writeFile(installedNode, "node-23"),
+      ]);
+
+      expect(() =>
+        resolveCompatibleNodeRuntime(packageRoot, {
+          execPath: shellNode,
+          probe: () => false,
+        }),
+      ).toThrow("npm install -g notfair@latest");
+    } finally {
+      await rm(prefix, { recursive: true, force: true });
     }
   });
 });
