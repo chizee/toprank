@@ -1,5 +1,9 @@
 # NotFair
 
+## 0.9.18 — 2026-07-22
+
+**Streaming replies now stay visually quiet.** While the agent writes, chat shows only the animated **Writing the response** label—without a spinner, goal name, timer, tool subtitle, or activity history—so the status no longer competes with the response itself.
+
 ## 0.9.17 — 2026-07-22
 
 **Completed goals now get the celebration they deserve.** Achievements stay visible in the sidebar with a sparkling **Completed** badge until you open the congratulations experience, where you can set a more ambitious next milestone or archive the goal without losing its chat, checks, metrics, or evidence.

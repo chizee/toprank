@@ -42,12 +42,13 @@ describe("LiveTranscript streaming layout", () => {
       .closest("li");
     const statusItem = screen
       .getByRole("status", {
-        name: "Growth goal Writing the response",
+        name: "Writing the response",
       })
       .closest("li");
 
     expect(answerItem?.nextElementSibling).toBe(statusItem);
     expect(statusItem).toHaveAttribute("data-live-working-status");
     expect(statusItem).toHaveClass("!mt-2");
+    expect(statusItem).not.toHaveTextContent("Growth goal");
   });
 });

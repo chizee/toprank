@@ -33,6 +33,20 @@ export function WorkingIndicator({
   elapsedMs: number | null;
   mood: WorkingMood;
 }) {
+  if (mood === "writing") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label={headline}
+        data-run-state="running"
+        className="py-1.5 text-xs"
+      >
+        <span className="ns-shimmer-text font-medium">{headline}</span>
+      </div>
+    );
+  }
+
   const ended = mood === "ended";
   const visiblePhases = phases.slice(-3);
 

@@ -5,6 +5,37 @@ import { render, screen } from "@testing-library/react";
 import { WorkingIndicator } from "@/components/working-indicator";
 
 describe("WorkingIndicator completed state", () => {
+  it("shows only animated text while writing the response", () => {
+    const { container } = render(
+      <WorkingIndicator
+        agentDisplayName="Google Ads errors <2%"
+        headline="Writing the response"
+        subtitle="Ran query ✓"
+        phases={[
+          {
+            id: "query",
+            label: "Ran query",
+            state: "done",
+          },
+        ]}
+        elapsedMs={30_000}
+        mood="writing"
+      />,
+    );
+
+    const status = screen.getByRole("status", {
+      name: "Writing the response",
+    });
+    expect(status).toHaveTextContent(/^Writing the response$/);
+    expect(status.querySelector(".ns-shimmer-text")).toBeInTheDocument();
+    expect(status.querySelector("svg")).toBeNull();
+    expect(status.querySelector("ol")).toBeNull();
+    expect(screen.queryByText("Google Ads errors <2%")).toBeNull();
+    expect(screen.queryByText("Ran query ✓")).toBeNull();
+    expect(screen.queryByText("0:30")).toBeNull();
+    expect(container.querySelector(".animate-spin")).toBeNull();
+  });
+
   it("renders a completed turn without live motion or an increasing timer", () => {
     const { container } = render(
       <WorkingIndicator
